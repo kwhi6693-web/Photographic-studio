@@ -142,6 +142,8 @@ photographic-studio/          ← the skill itself (install this folder)
 ├── CHANGELOG.md
 └── SHA256SUMS.txt
 docs/images/                  ← illustrations for this page
+README.md · README.zh-CN.md · README.zh-TW.md
+LICENSE                       ← AGPL-3.0
 ```
 
 > The skill's own instructions and references are written in Chinese; any capable agent can follow them.

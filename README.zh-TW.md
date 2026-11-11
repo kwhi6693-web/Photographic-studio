@@ -142,6 +142,8 @@ photographic-studio/          ← Skill 本體（安裝這個目錄）
 ├── CHANGELOG.md
 └── SHA256SUMS.txt
 docs/images/                  ← 本頁的插圖
+README.md · README.zh-CN.md · README.zh-TW.md
+LICENSE                       ← AGPL-3.0
 ```
 
 ---
