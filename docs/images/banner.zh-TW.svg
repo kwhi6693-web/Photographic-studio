@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0d12"/>
+      <stop offset="1" stop-color="#161b26"/>
+    </linearGradient>
+    <radialGradient id="lamp" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#e9c46a" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#e9c46a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4d58d"/>
+      <stop offset="1" stop-color="#c8963e"/>
+    </linearGradient>
+    <linearGradient id="cobalt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3a5ba8"/>
+      <stop offset="1" stop-color="#1d2f63"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="420" fill="url(#bg)"/>
+  <!-- film perforations -->
+  <g fill="#232a38">
+    <rect x="0" y="0" width="1280" height="34"/>
+    <rect x="0" y="386" width="1280" height="34"/>
+  </g>
+  <g fill="#0b0d12">
+    <rect x="22" y="10" width="22" height="14" rx="3"/><rect x="82" y="10" width="22" height="14" rx="3"/><rect x="142" y="10" width="22" height="14" rx="3"/><rect x="202" y="10" width="22" height="14" rx="3"/><rect x="262" y="10" width="22" height="14" rx="3"/><rect x="322" y="10" width="22" height="14" rx="3"/><rect x="382" y="10" width="22" height="14" rx="3"/><rect x="442" y="10" width="22" height="14" rx="3"/><rect x="502" y="10" width="22" height="14" rx="3"/><rect x="562" y="10" width="22" height="14" rx="3"/><rect x="622" y="10" width="22" height="14" rx="3"/><rect x="682" y="10" width="22" height="14" rx="3"/><rect x="742" y="10" width="22" height="14" rx="3"/><rect x="802" y="10" width="22" height="14" rx="3"/><rect x="862" y="10" width="22" height="14" rx="3"/><rect x="922" y="10" width="22" height="14" rx="3"/><rect x="982" y="10" width="22" height="14" rx="3"/><rect x="1042" y="10" width="22" height="14" rx="3"/><rect x="1102" y="10" width="22" height="14" rx="3"/><rect x="1162" y="10" width="22" height="14" rx="3"/><rect x="1222" y="10" width="22" height="14" rx="3"/>
+    <rect x="22" y="396" width="22" height="14" rx="3"/><rect x="82" y="396" width="22" height="14" rx="3"/><rect x="142" y="396" width="22" height="14" rx="3"/><rect x="202" y="396" width="22" height="14" rx="3"/><rect x="262" y="396" width="22" height="14" rx="3"/><rect x="322" y="396" width="22" height="14" rx="3"/><rect x="382" y="396" width="22" height="14" rx="3"/><rect x="442" y="396" width="22" height="14" rx="3"/><rect x="502" y="396" width="22" height="14" rx="3"/><rect x="562" y="396" width="22" height="14" rx="3"/><rect x="622" y="396" width="22" height="14" rx="3"/><rect x="682" y="396" width="22" height="14" rx="3"/><rect x="742" y="396" width="22" height="14" rx="3"/><rect x="802" y="396" width="22" height="14" rx="3"/><rect x="862" y="396" width="22" height="14" rx="3"/><rect x="922" y="396" width="22" height="14" rx="3"/><rect x="982" y="396" width="22" height="14" rx="3"/><rect x="1042" y="396" width="22" height="14" rx="3"/><rect x="1102" y="396" width="22" height="14" rx="3"/><rect x="1162" y="396" width="22" height="14" rx="3"/><rect x="1222" y="396" width="22" height="14" rx="3"/>
+  </g>
+  <!-- the existing light: a warm lamp above the aperture -->
+  <circle cx="250" cy="210" r="190" fill="url(#lamp)"/>
+  <!-- aperture -->
+  <g transform="translate(250,210)">
+    <circle r="118" fill="none" stroke="#c8963e" stroke-width="3"/>
+    <circle r="104" fill="url(#cobalt)"/>
+    <g fill="url(#gold)" opacity="0.92">
+      <path d="M0,-104 L38,-30 L-30,-36 Z"/>
+      <path d="M0,-104 L38,-30 L-30,-36 Z" transform="rotate(60)"/>
+      <path d="M0,-104 L38,-30 L-30,-36 Z" transform="rotate(120)"/>
+      <path d="M0,-104 L38,-30 L-30,-36 Z" transform="rotate(180)"/>
+      <path d="M0,-104 L38,-30 L-30,-36 Z" transform="rotate(240)"/>
+      <path d="M0,-104 L38,-30 L-30,-36 Z" transform="rotate(300)"/>
+    </g>
+    <circle r="30" fill="#0b0d12"/>
+    <circle r="30" fill="none" stroke="#f4d58d" stroke-width="1.5" opacity="0.6"/>
+    <circle cx="-9" cy="-9" r="6" fill="#ffffff" opacity="0.55"/>
+  </g>
+  <!-- title -->
+  <text x="430" y="170" font-family="Georgia, 'Times New Roman', serif" font-size="66" fill="#f3eee4" letter-spacing="2">Photographic Studio</text>
+  <text x="432" y="232" font-family="'Songti SC','Noto Serif CJK TC','Source Han Serif SC',serif" font-size="34" fill="#e9c46a">一句「修」，一張成片。</text>
+  <text x="432" y="282" font-family="'PingFang SC','Noto Sans CJK TC','Microsoft YaHei',sans-serif" font-size="21" fill="#a9b1c3">讀片 · 導演單 · 只借 AI 的光與色 · 遵循自然光的物理</text>
+  <g font-family="'SF Mono','Menlo','Consolas',monospace" font-size="15" fill="#7d879c">
+    <text x="432" y="336">ISO 100   ƒ/8   1/125s   ·   non-portrait   ·   v1.0</text>
+  </g>
+</svg>
