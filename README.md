@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
+  <img src="https://img.shields.io/badge/license-AGPL--3.0-c8963e?style=flat-square" alt="AGPL-3.0">
 </p>
 
 <p align="center">
@@ -147,6 +148,13 @@ docs/images/                  ← illustrations for this page
 
 ---
 
+## 📜 License
+
+The skill — instructions, references and tools — is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+The example photographs in `photographic-studio/assets/taste/` are © the author and are **not** covered by this license; please do not reuse them without permission.
+
+---
+
 <p align="center">
-  <sub>Photographic Studio v1.0 · made for non-portrait photography · built together with Claude · photos © the author — please do not reuse without permission</sub>
+  <sub>Photographic Studio v1.0 · made for non-portrait photography · built together with Claude · code &amp; docs AGPL-3.0 · photos © the author</sub>
 </p>
