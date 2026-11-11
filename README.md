@@ -148,5 +148,5 @@ docs/images/                  ← illustrations for this page
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.0 · made for non-portrait photography · photos © the author — please do not reuse without permission</sub>
+  <sub>Photographic Studio v1.0 · made for non-portrait photography · built together with Claude · photos © the author — please do not reuse without permission</sub>
 </p>

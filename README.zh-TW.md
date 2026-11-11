@@ -146,5 +146,5 @@ docs/images/                  ← 本頁的插圖
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.0 · 為非人像攝影而做 · 照片 © 作者本人，未經許可請勿轉載</sub>
+  <sub>Photographic Studio v1.0 · 為非人像攝影而做 · 與 Claude 共同打造 · 照片 © 作者本人，未經許可請勿轉載</sub>
 </p>
