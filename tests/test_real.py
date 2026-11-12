@@ -31,18 +31,37 @@ def test_honest_edit_is_not_accused(tmp_path, name):
     assert physics(tmp_path, name, synth.good_edit(load(FILES[name]))).startswith('PHYSICALLY_PLAUSIBLE')
 
 
-CAUGHT = [(n, d) for n in PHOTOS for d in ('tone_inversion', 'flat_hdr', 'rim_glow')] + \
-         [('museum_glass_sunflowers', 'invented_spotlight'), ('02_night_tower', 'invented_spotlight'),
-          ('museum_glass_sunflowers', 'edge_halo'), ('museum_glass_orchid_panels', 'edge_halo'), ('02_night_tower', 'edge_halo'), ('05_bronze_ox', 'edge_halo')]
+CAUGHT = [(n, d) for n in PHOTOS for d in ('tone_inversion', 'flat_hdr', 'rim_glow', 'edge_halo')] + \
+         [('museum_glass_sunflowers', 'invented_spotlight'), ('02_night_tower', 'invented_spotlight')]
 GAPS = [
-    ('museum_glass_orchid_panels', 'invented_spotlight', 'glowing oval on the dark wall above the panels: physics_check passes'),
-    ('01_building', 'edge_halo', 'white band around the clock tower and the tower block: halo measures 0.8 L*, limit 6'),
-    ('interior_arcade', 'edge_halo', 'crunchy rims along the roof grid: halo 5.2, limit 6'),
-    ('museum_glass_lotus', 'edge_halo', 'white rims on the glass petals and stems: halo 5.5, limit 8'),
-    ('03_canal', 'edge_halo', 'crunchy, posterised edges on the clouds and branches'),
-    ('04_willow_lake', 'edge_halo', 'pale bands in the sky beside the willow strands'),
-    ('06_blue_vase', 'edge_halo', 'black outline around the vase and lid on the dark background'),
+    ('museum_glass_orchid_panels', 'invented_spotlight', 'glowing oval on a mid-dark wall (L* 35): wider than what counts as a dark background; widening it needs real G outputs to show approved lifts on mid-tone walls stay'),
 ]
+
+
+MUSEUM_L3 = {'exposure_ev': 0.32, 'contrast': 0.28, 'clarity': 0.40, 'vibrance': 0.45, 'highlights': -5}
+
+
+@pytest.mark.parametrize('name', PHOTOS)
+@pytest.mark.parametrize('params', [{'clarity': 0.6}, MUSEUM_L3], ids=['clarity0.6', 'museum_level3'])
+def test_strength_the_user_chose_is_not_called_a_halo(tmp_path, name, params):
+    """v1.0.2 edge-gain halo measure: grade.py at its maximum clarity, and the museum level-3 grade the user chose,
+    must pass on every photo; a halo is only what goes beyond that."""
+    pj = tmp_path / 'p.json'; pj.write_text(json.dumps(params))
+    run_tool('grade.py', FILES[name], tmp_path / 'g.png', pj)
+    v = json.loads(run_tool('physics_check.py', FILES[name], tmp_path / 'g.png').stdout)
+    assert v['checks']['halo']['ok'], v['checks']['halo']
+
+
+def test_approved_vase_keeps_g_without_rims(tmp_path, finish):
+    """Before v1.0.2 the museum level-3 grade stacked clarity 0.4 on G's own local contrast: harsh rims on the gold
+    (edge gain 0.86). Now finish.py lowers clarity first and keeps G's colour instead of falling back to N direct."""
+    from PIL import Image
+    sheet = Image.open(next((ROOT / 'photographic-studio' / 'assets' / 'taste').glob('06_*.jpg')))
+    w, h = sheet.size; right = sheet.crop((w - w // 2 + 6, 0, w, h)); src = FILES['06_blue_vase']
+    g = tmp_path / 'g.png'; right.resize(Image.open(src).size, Image.LANCZOS).save(g)
+    out, rec = finish(src, g, genre='museum')
+    v = json.loads(run_tool('physics_check.py', src, out).stdout)
+    assert v['checks']['halo']['ok'] and not rec['delivered'].startswith('n_direct'), (rec['delivered'], v['checks']['halo'])
 
 
 def edit(name, defect):

@@ -12,12 +12,11 @@ CAUGHT = [
     ('museum', 'invented_spotlight', {}), ('museum', 'tone_inversion', {}), ('museum', 'flat_hdr', {}),
     ('museum', 'dark_blotch', {'cx': 340, 'cy': 260}),
     ('night', 'invented_spotlight', {}), ('night', 'rim_glow', {}), ('night', 'tone_inversion', {}), ('night', 'removed_light', {}),
+    ('night', 'flat_hdr', {}), ('day', 'warm_shade', {}),
 ]
 GAPS = [
-    ('museum', 'rim_glow', {}, 'ring of light around an exhibit on a dark background: halo 4.65 under the limit 8, spotlight check passes'),
-    ('museum', 'removed_light', {}, "the exhibit's highlights pressed down: nothing in physics_check objects (intensity_check does)"),
-    ('day', 'warm_shade', {}, 'shade turned orange next to a neutral sunlit wall: shade_coolness passes'),
-    ('night', 'flat_hdr', {}, 'night lifted flat by 13 L*: physics_check passes (intensity_check does object)'),
+    ('museum', 'rim_glow', {}, 'ring of light around the synthetic exhibit: passes here, caught on all ten real photos (the synthetic exhibit is unlike real ones)'),
+    ('museum', 'removed_light', {}, "highlights pressed down: not separable from grade.py's own highlight recovery (-25 lowers the top 0.5% by up to 25 L*); look_transfer.py puts back light G removed"),
 ]
 
 

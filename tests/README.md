@@ -23,10 +23,11 @@ any other photo worse, and these tests are the means to show that.
 
 | Photo | Defect | What happens |
 |---|---|---|
-| orchid panels | glowing oval on the mid-dark wall (L* 35) | `physics_check.py` passes it; the wall is lighter than what `look_transfer.py` treats as a dark background, so `finish.py` removes it only by falling back to N direct |
-| clock tower, arcade, glass lotus, canal, willow, blue vase | white, black or crunchy rims along strong edges | `physics_check.py` passes them. The halo measure looks at a glow on the dark side and a dark rim on the bright side; these rims brighten the bright side, which may be why |
+| orchid panels | glowing oval on a mid-dark wall (L* 35) | `physics_check.py` passes it; the wall is lighter than what counts as a dark background, so `finish.py` removes it only by falling back to N direct. Widening that needs real G outputs |
 
-**Fixed in v1.0.2:** G's invented glow on a dark background used to reach the final (4–9 L* above its surroundings on
+**Fixed in v1.0.2:** edge halos on all ten photos (the old measure averaged over the whole frame at fixed pixel
+distances; a regional edge-gain measure now flags them, while `grade.py` clarity 0.6 and the museum level-3 grade pass);
+shade turned warmer than the light (the sky was counted as "lit"). G's invented glow on a dark background used to reach the final (4–9 L* above its surroundings on
 sunflowers, night tower, glass lotus, blue vase; once with a clean `DELIVER`). Now 0.8–1.8, with G's look kept.
 `test_real.py` also guards the six approved finals: fed in as G, the glow handling must leave them alone.
 
@@ -34,10 +35,8 @@ sunflowers, night tower, glass lotus, blue vase; once with a clean `DELIVER`). N
 
 | Scene | Defect | Note |
 |---|---|---|
-| museum | ring of light around the exhibit | caught on all six real photos: the synthetic exhibit is unlike real ones |
-| museum | exhibit highlights pressed down | `intensity_check.py` objects |
-| day | shade warmer than the sunlit wall | not tested on real photos (needs a mask of the shade) |
-| night | whole frame lifted flat | caught on the real night photo |
+| museum | ring of light around the exhibit | caught on all ten real photos: the synthetic exhibit is unlike real ones |
+| museum | exhibit highlights pressed down | not separable from `grade.py`'s own highlight recovery; `look_transfer.py` puts back light G removed |
 
 What did not go wrong: on all ten real photos, an unchanged photo and an honest global edit were never accused;
 a texture-wiped G still gave a final with the original's detail; the same input gave byte-identical output.

@@ -143,8 +143,9 @@ def warm_shade(a):
     h, w = a.shape[:2]
     y, x = np.mgrid[0:h, 0:w]
     m = ((y >= 0.375 * h) & (x < 0.5 * w))
-    b[..., 0] = np.where(m, b[..., 0] * 1.5, b[..., 0])
-    b[..., 2] = np.where(m, b[..., 2] * 0.55, b[..., 2])
+    b[..., 0] = np.where(m, b[..., 0] * 2.2, b[..., 0])      # strong enough that the shade ends up warmer than the light
+    b[..., 1] = np.where(m, b[..., 1] * 1.3, b[..., 1])
+    b[..., 2] = np.where(m, b[..., 2] * 0.3, b[..., 2])
     return np.clip(b, 0, 1)
 
 

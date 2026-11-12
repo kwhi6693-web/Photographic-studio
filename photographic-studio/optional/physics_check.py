@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v0.3.6 - physical plausibility check: does the edit obey how light behaves?
+"""Photographic Studio v1.0.2 - physical plausibility check: does the edit obey how light behaves?
 Usage: python3 physics_check.py ORIGINAL FINAL [RECEIPT_JSON]
 Compares final with original (a final of another size is resampled for measuring). Pure numpy + Pillow.
 Checks (each a number + pass/flag; the agent still judges by eye):
@@ -20,6 +20,30 @@ from ps_common import load_rgb, srgb_to_lab, blur, sha256
 
 def rank(x):
     r = np.empty(len(x)); r[np.argsort(x)] = np.arange(len(x)); return r
+
+
+EDGE_GAIN_LIMIT = 0.57   # v1.0.2, provisional: from 10 real photos (pass at most 0.51, visible rims at 0.62 and up)
+
+
+def edge_gain(Lo, Lf, grid=6):
+    """Largest regional unsharp-mask gain the edit added across strong edges, after removing a global tone curve."""
+    h, w = Lo.shape
+    bins = np.linspace(0, 100, 41); idx = np.clip(np.digitize(Lo, bins) - 1, 0, 39)
+    cnt = np.bincount(idx.ravel(), minlength=40); xs = (bins[:-1] + bins[1:]) / 2; med = np.zeros(40)
+    for i in np.nonzero(cnt > 50)[0]: med[i] = np.median((Lf - Lo)[idx == i])
+    good = cnt > 50
+    if good.any(): med = np.interp(xs, xs[good], med[good])
+    Rz = Lf - (Lo + np.interp(Lo, xs, med))
+    best = 0.0
+    for frac in (100, 50, 25):
+        H = Lo - blur(Lo, max(4, min(h, w) // frac)); band = np.abs(H) > 6
+        for i in range(grid):
+            for j in range(grid):
+                sl = (slice(i * h // grid, (i + 1) * h // grid), slice(j * w // grid, (j + 1) * w // grid))
+                m = band[sl]
+                if m.sum() < 300: continue
+                hh = H[sl][m]; best = max(best, float((hh * Rz[sl][m]).sum() / (hh * hh).sum()))
+    return round(best, 2)
 
 
 def main():
@@ -53,7 +77,14 @@ def main():
 
     # 3 shade coolness (daylight only): sunlit vs shade warmth order
     day = Lo.mean() >= 22
-    lit, shade = so > np.percentile(so, 70), so < np.percentile(so, 30)
+    # v1.0.2: leave the sky out - it is usually the brightest and the bluest area, so counted as "lit" it made the
+    #   sunlit areas look cool and the check skipped scenes where it mattered
+    skyish = (bo < -12) & (np.abs(Lo - blur(Lo, 4)) < 2.5); skyish[h // 2:] = False
+    land = ~skyish
+    if land.mean() > 0.3:
+        lit, shade = (so > np.percentile(so[land], 70)) & land, (so < np.percentile(so[land], 30)) & land
+    else:
+        lit, shade = so > np.percentile(so, 70), so < np.percentile(so, 30)
     if day and lit.mean() > 0.05 and shade.mean() > 0.05:
         do_, df_ = float(bo[lit].mean() - bo[shade].mean()), float(bf[lit].mean() - bf[shade].mean())
         ok = not (do_ > 1.0 and df_ < -1.0)
@@ -91,8 +122,16 @@ def main():
     # sign tells the kind: glow>0 dark side lifted at the edge (glow); glow<0 dark side pushed down (dark rim, over-sharpening);
     # rim>0 bright side dimmed at the edge; rim<0 bright side pushed up (bright rim). Any of them strong = visible halo.
     lim = 8.0 if night else 6.0
-    checks['halo'] = {'glow_on_dark_side_L': round(glow, 2), 'dark_rim_on_bright_side_L': round(rim, 2), 'limit': lim, 'ok': bool(abs(glow) <= lim and abs(rim) <= lim),
-                      'meaning': 'no glowing or dark rims hugging strong edges'}
+    # v1.0.2: the measure above averages over every edge in the frame and works at fixed pixel distances, so a strong
+    #   halo around one tower, or one as wide as its "far" ring, is missed. Also measure, region by region, how much
+    #   extra contrast the edit put across strong edges beyond a global tone curve (an unsharp-mask gain), at three
+    #   scales relative to the frame. grade.py clarity 0.6 (its maximum) and the museum level-3 grade stay at or below
+    #   0.51 on the ten test photos; an evenly applied gain of 1.0, where rims start to show by eye, measures 0.62 and up.
+    eg = edge_gain(Lo, Lf)
+    checks['halo'] = {'glow_on_dark_side_L': round(glow, 2), 'dark_rim_on_bright_side_L': round(rim, 2), 'limit': lim,
+                      'edge_contrast_gain': eg, 'edge_gain_limit': EDGE_GAIN_LIMIT,
+                      'ok': bool(abs(glow) <= lim and abs(rim) <= lim and eg <= EDGE_GAIN_LIMIT),
+                      'meaning': 'no glowing, dark or bright rims hugging strong edges'}
 
     # 7 artificial spotlight: a large smooth brightening confined to part of a dark background (an oval "glow" around
     #   the subject with no light source causing it). 8 local darkening patch: a strong dark blotch or off-centre vignette.
