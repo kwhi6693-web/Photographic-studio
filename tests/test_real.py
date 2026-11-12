@@ -95,23 +95,13 @@ def test_invented_glow_is_removed_orchid(tmp_path, finish):
     assert in_g > 15 and left < 3
 
 
-def test_invented_glow_is_removed_sunflowers(tmp_path, finish):
-    """v1.0.2: look_transfer.py measures the glow left on the output (G_GLOW_LEFT); finish.py then takes a safer route.
-    Before v1.0.2 about 7 L* of the glow was delivered here."""
-    in_g, left, rec = glow_left(tmp_path, finish, 'museum_glass_sunflowers')
+@pytest.mark.parametrize('name', ['museum_glass_sunflowers', '02_night_tower'])
+def test_invented_glow_is_removed_and_g_look_kept(tmp_path, finish, name):
+    """v1.0.2: the glow is held to the background's trend inside look_transfer.py, so finish.py does not have to fall back
+    to N direct. Before: about 7 L* (sunflowers) and 5 L* (night, receipt DELIVER) of the glow were delivered."""
+    in_g, left, rec = glow_left(tmp_path, finish, name)
     assert in_g > 15 and left < 3
-    assert any('G_GLOW_LEFT' in f for a in rec['attempts'] for f in a.get('look_transfer_flags', []))
-
-
-def test_known_gap_invented_glow_survives_night(tmp_path, finish):
-    """Seen by eye: a faint oval in the night sky (about 5 L* in its core, 1 L* around it); the receipt says DELIVER.
-    A robust trend fit removed it but also darkened the approved bronze-ox sample (19.2 approved, 17.7 before,
-    14.8 after), and a trend-free measure scores approved samples as high as this glow; neither was adopted."""
-    in_g, left, rec = glow_left(tmp_path, finish, '02_night_tower')
-    assert in_g > 15
-    if left >= 3:
-        pytest.xfail(f'{left:.1f} L* of the invented glow is delivered; receipt verdict {rec["verdict"][:40]}')
-    pytest.fail('this gap is closed: turn this test into a plain assertion')
+    assert not rec['delivered'].startswith('n_direct')
 
 
 TASTE = {'01_building': '01_building', '02_night': '02_night_tower', '03_canal': '03_canal', '04_willow_lake': '04_willow_lake',

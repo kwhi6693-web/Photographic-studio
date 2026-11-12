@@ -56,14 +56,12 @@ def test_light_g_invented_on_a_dark_background_is_mostly_blocked(tmp_path, scene
 
 
 @pytest.mark.parametrize('name', ['night', 'museum'])
-def test_known_gap_invented_light_leaves_a_trace(tmp_path, scene, finish, name):
-    """About a quarter of the invented glow survives (5.5 L* on black) and the receipt does not mention it.
-    3 L* is a provisional line for 'the eye cannot see it'; the user's eye decides, not this number."""
+def test_invented_light_leaves_no_visible_trace(tmp_path, scene, finish, name):
+    """Before v1.0.2 about 5.5 L* of the invented glow was delivered on black. 3 L* is a provisional line for
+    'the eye cannot see it'; the user's eye decides, not this number."""
     src = scene(name); g = synth.save(synth.invented_spotlight(G(synth.SCENES[name]())), tmp_path / 'g.png')
     out, _ = finish(src, g, genre='museum' if name == 'museum' else None)
-    if _dark_lift(src, out) >= 3:
-        pytest.xfail(f'residual glow {_dark_lift(src, out):.1f} L*')
-    pytest.fail('this gap is closed: turn this test into a plain assertion')
+    assert _dark_lift(src, out) < 3
 
 
 def test_light_g_removed_is_put_back(tmp_path, scene, finish):

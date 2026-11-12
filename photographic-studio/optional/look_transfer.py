@@ -20,6 +20,9 @@ NL, NA, NB = 21, 17, 17
 AB = 90.0
 
 
+GLOW_RAISE = 15.0   # v1.0.2: L* above the dark background's trend that only an invented glow reaches
+
+
 def register(src, g):
     hs, ws = src.shape[:2]; hg, wg = g.shape[:2]
     s = cv2.resize(src, (wg, hg), interpolation=cv2.INTER_AREA)
@@ -164,6 +167,20 @@ def main():
         hh, ww = delta.shape[:2]; yy, xx = np.mgrid[0:hh, 0:ww].astype(np.float32); xx /= ww; yy /= hh
         basis = np.stack([np.ones_like(xx), xx, yy, yy * yy], -1)
         sel = (flat > 0); sel[::1, :] &= ((np.arange(ww) % 3) == 0)[None, :]; sel &= ((np.arange(hh) % 3) == 0)[:, None]
+        # v1.0.2: a glow G invents stands 15-25 L* above the background's trend; a lift G gives a real surface there is a
+        # few L*. Leave such strongly raised pixels - and the fading rim around them - out of the trend fit, so the
+        # glow cannot pull the trend up around itself, and hold them to the trend at full weight even where the
+        # background is only partly dark. Tuned so that the six approved taste samples, fed in as G, stay unchanged.
+        sel0 = sel.copy()
+        for _ in range(3):
+            c0 = np.linalg.lstsq(basis[sel], delta[..., 0][sel], rcond=None)[0]
+            hi = ((delta[..., 0] - basis @ c0) > GLOW_RAISE).astype(np.float32)
+            keep = blur(hi, max(8, min(hh, ww) // 12)) < 0.02
+            if (sel0 & keep).sum() < 0.5 * sel0.sum(): break
+            sel = sel0 & keep
+        c0 = np.linalg.lstsq(basis[sel], delta[..., 0][sel], rcond=None)[0]
+        hi = ((delta[..., 0] - basis @ c0) > GLOW_RAISE).astype(np.float32)
+        wgt = np.maximum(wgt, np.clip(blur(hi, max(8, min(hh, ww) // 24)) * 4, 0, 1) * np.clip(dk * 2, 0, 1) * tx)
         trend_L = None
         for k in range(3):
             coef = np.linalg.lstsq(basis[sel], delta[..., k][sel], rcond=None)[0]

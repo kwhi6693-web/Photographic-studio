@@ -23,9 +23,12 @@ any other photo worse, and these tests are the means to show that.
 
 | Photo | Defect | What happens |
 |---|---|---|
-| night tower | G invents a glow in the black sky | `finish.py` delivers about 5 L* of it in the glow's core and the receipt says `DELIVER`. (The sunflower case, about 7 L* before, is fixed in v1.0.2.) |
-| orchid panels | glowing oval on the dark wall | `physics_check.py` passes it (`finish.py` still removes it, by falling back to N direct) |
+| orchid panels | glowing oval on the mid-dark wall (L* 35) | `physics_check.py` passes it; the wall is lighter than what `look_transfer.py` treats as a dark background, so `finish.py` removes it only by falling back to N direct |
 | clock tower, arcade, glass lotus, canal, willow, blue vase | white, black or crunchy rims along strong edges | `physics_check.py` passes them. The halo measure looks at a glow on the dark side and a dark rim on the bright side; these rims brighten the bright side, which may be why |
+
+**Fixed in v1.0.2:** G's invented glow on a dark background used to reach the final (4–9 L* above its surroundings on
+sunflowers, night tower, glass lotus, blue vase; once with a clean `DELIVER`). Now 0.8–1.8, with G's look kept.
+`test_real.py` also guards the six approved finals: fed in as G, the glow handling must leave them alone.
 
 **On synthetic scenes only:**
 
