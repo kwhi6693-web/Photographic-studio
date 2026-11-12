@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v0.3.8 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+"""Photographic Studio v1.0.2 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
 Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit (or the SOURCE itself for N-only)
   GRADE_JSON  director-brief parameters for grade.py ({} for none)
@@ -79,7 +79,7 @@ def main():
     tries += [('no_region_lift_no_vignette', safer(params), [], g), ('local0_safer_grade', safer(params), ['--local=0'], g),
               ('n_direct', safer(params), [], None)]
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
-    rec = {'tool': 'finish.py v1.0', 'genre': genre, 'attempts': []}
+    rec = {'tool': 'finish.py v1.0.2', 'genre': genre, 'attempts': []}
     best = None
     with tempfile.TemporaryDirectory() as td:
         td = Path(td); seen = set()
@@ -98,6 +98,7 @@ def main():
             run('grade.py', lt, fin, pj)
             if not fin.exists(): shutil.copy(lt, fin)
             bad, weak, iv, pv = problems(src, fin, genre)
+            if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak})
             score = (len(bad), len(weak), i)
             if best is None or score < best[0]: best = (score, fin, name, bad + weak)
