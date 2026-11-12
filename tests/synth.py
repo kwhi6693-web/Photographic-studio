@@ -91,34 +91,35 @@ def good_edit(a):
 # ---- defects (each breaks one stated rule; a checker should object) -------------------------------------------
 
 
-def invented_spotlight(a):
-    """A glowing oval on a part of the frame where the original has no light."""
-    y, x = np.mgrid[0:H, 0:W]
-    glow = np.exp(-(((x - 120) / 80.0) ** 2 + ((y - 120) / 60.0) ** 2))
+def invented_spotlight(a, cx=0.19, cy=0.25):
+    """A glowing oval on a part of the frame where the original has no light (cx, cy: fractions of the frame)."""
+    h, w = a.shape[:2]; s = w / 640.0
+    y, x = np.mgrid[0:h, 0:w]
+    glow = np.exp(-(((x - cx * w) / (80.0 * s)) ** 2 + ((y - cy * h) / (60.0 * s)) ** 2))
     return np.clip(a + 0.22 * glow[..., None], 0, 1)
 
 
 def rim_glow(a):
     """Light bleeding from bright things onto the dark around them (the 'fake ring of light' around an exhibit)."""
-    L = a.mean(-1)
-    return np.clip(a + 0.9 * np.maximum(_blur(L, 16) - L, 0)[..., None], 0, 1)
+    L = a.mean(-1); r = 16 * a.shape[1] / 640.0
+    return np.clip(a + 0.9 * np.maximum(_blur(L, r) - L, 0)[..., None], 0, 1)
 
 
 def edge_halo(a):
     """Bright rims hugging strong edges (over-done local contrast)."""
-    L = a.mean(-1)
-    return np.clip(a + 2.2 * (L - _blur(L, 14))[..., None] * (np.abs(L - _blur(L, 14)) > 0.02)[..., None], 0, 1)
+    L = a.mean(-1); r = 14 * a.shape[1] / 640.0
+    return np.clip(a + 2.2 * (L - _blur(L, r))[..., None] * (np.abs(L - _blur(L, 14)) > 0.02)[..., None], 0, 1)
 
 
 def tone_inversion(a):
     """Shadows lifted above the lights: the order of bright and dark areas flips."""
-    L = a.mean(-1, keepdims=True)
-    return np.clip(a * (0.35 / np.maximum(_blur(L[..., 0], 25), 0.02))[..., None], 0, 1)
+    L = a.mean(-1, keepdims=True); r = 25 * a.shape[1] / 640.0
+    return np.clip(a * (0.35 / np.maximum(_blur(L[..., 0], r), 0.02))[..., None], 0, 1)
 
 
 def flat_hdr(a):
     """Lit and shaded areas pulled to the same brightness."""
-    L = _blur(a.mean(-1), 30)[..., None]
+    L = _blur(a.mean(-1), 30 * a.shape[1] / 640.0)[..., None]
     return np.clip(a * (0.45 / np.maximum(L, 0.03)) ** 0.85, 0, 1)
 
 
@@ -128,17 +129,20 @@ def removed_light(a):
 
 
 def dark_blotch(a, cx=480, cy=330):
-    """An off-centre dark patch no light would cause (put it on something that is lit, or it shows nothing)."""
-    y, x = np.mgrid[0:H, 0:W]
-    hole = np.exp(-(((x - cx) / 90.0) ** 2 + ((y - cy) / 70.0) ** 2))
+    """An off-centre dark patch no light would cause (put it on something that is lit, or it shows nothing).
+    cx, cy in pixels of a 640x480 frame; scaled to the image."""
+    h, w = a.shape[:2]; s = w / 640.0
+    y, x = np.mgrid[0:h, 0:w]
+    hole = np.exp(-(((x - cx * s) / (90.0 * s)) ** 2 + ((y - cy * h / 480.0) / (70.0 * s)) ** 2))
     return np.clip(a * (1 - 0.55 * hole[..., None]), 0, 1)
 
 
 def warm_shade(a):
     """Shade turned warmer than the sunlit side."""
     b = a.copy()
-    y, x = np.mgrid[0:H, 0:W]
-    m = ((y >= 180) & (x < 320))
+    h, w = a.shape[:2]
+    y, x = np.mgrid[0:h, 0:w]
+    m = ((y >= 0.375 * h) & (x < 0.5 * w))
     b[..., 0] = np.where(m, b[..., 0] * 1.5, b[..., 0])
     b[..., 2] = np.where(m, b[..., 2] * 0.55, b[..., 2])
     return np.clip(b, 0, 1)
@@ -146,7 +150,7 @@ def warm_shade(a):
 
 def smoothed_texture(a):
     """Fine texture wiped (the 'AI look')."""
-    return np.stack([_blur(a[..., c], 2.5) for c in range(3)], -1)
+    return np.stack([_blur(a[..., c], 2.5 * a.shape[1] / 640.0) for c in range(3)], -1)
 
 
 def save(a, path):
