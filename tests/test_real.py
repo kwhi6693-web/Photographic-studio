@@ -31,9 +31,16 @@ def test_honest_edit_is_not_accused(tmp_path, name):
     assert physics(tmp_path, name, synth.good_edit(load(FILES[name]))).startswith('PHYSICALLY_PLAUSIBLE')
 
 
-CAUGHT = [(n, d) for n in PHOTOS for d in ('tone_inversion', 'flat_hdr', 'rim_glow', 'edge_halo')] + \
-         [('museum_glass_sunflowers', 'invented_spotlight'), ('02_night_tower', 'invented_spotlight')]
+CAUGHT = [(n, d) for n in PHOTOS for d in ('tone_inversion', 'flat_hdr', 'rim_glow')] + \
+         [('museum_glass_sunflowers', 'invented_spotlight'), ('02_night_tower', 'invented_spotlight'),
+          ('museum_glass_sunflowers', 'edge_halo'), ('museum_glass_orchid_panels', 'edge_halo'), ('02_night_tower', 'edge_halo'), ('05_bronze_ox', 'edge_halo')]
 GAPS = [
+    ('01_building', 'edge_halo', 'white band around the clock tower: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
+    ('interior_arcade', 'edge_halo', 'crunchy rims along the roof grid: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
+    ('museum_glass_lotus', 'edge_halo', 'white rims on petals and stems: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
+    ('03_canal', 'edge_halo', 'crunchy edges on clouds and branches: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
+    ('04_willow_lake', 'edge_halo', 'pale bands beside the willow strands: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
+    ('06_blue_vase', 'edge_halo', 'black outline around the vase: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
     ('museum_glass_orchid_panels', 'invented_spotlight', 'glowing oval on a mid-dark wall (L* 35): wider than what counts as a dark background; widening it needs real G outputs to show approved lifts on mid-tone walls stay'),
 ]
 
@@ -52,16 +59,19 @@ def test_strength_the_user_chose_is_not_called_a_halo(tmp_path, name, params):
     assert v['checks']['halo']['ok'], v['checks']['halo']
 
 
-def test_approved_vase_keeps_g_without_rims(tmp_path, finish):
-    """Before v1.0.2 the museum level-3 grade stacked clarity 0.4 on G's own local contrast: harsh rims on the gold
-    (edge gain 0.86). Now finish.py lowers clarity first and keeps G's colour instead of falling back to N direct."""
+def test_known_gap_vase_rims_from_stacked_clarity(tmp_path, finish):
+    """Seen by eye: with the approved vase as G, the museum level-3 grade stacks clarity 0.4 on G's own local contrast and
+    the gold edges turn harsh and bright (edge gain 0.86). A rule to catch this flagged real G shadow detail too, so it
+    was withdrawn; edge_contrast_gain_info only reports it."""
     from PIL import Image
     sheet = Image.open(next((ROOT / 'photographic-studio' / 'assets' / 'taste').glob('06_*.jpg')))
     w, h = sheet.size; right = sheet.crop((w - w // 2 + 6, 0, w, h)); src = FILES['06_blue_vase']
     g = tmp_path / 'g.png'; right.resize(Image.open(src).size, Image.LANCZOS).save(g)
     out, rec = finish(src, g, genre='museum')
-    v = json.loads(run_tool('physics_check.py', src, out).stdout)
-    assert v['checks']['halo']['ok'] and not rec['delivered'].startswith('n_direct'), (rec['delivered'], v['checks']['halo'])
+    eg = json.loads(run_tool('physics_check.py', src, out).stdout)['checks']['halo']['edge_contrast_gain_info']
+    if eg > 0.7:
+        pytest.xfail(f'edge gain {eg} delivered via {rec["delivered"]}')
+    pytest.fail('this gap is closed: turn this test into a plain assertion')
 
 
 def edit(name, defect):

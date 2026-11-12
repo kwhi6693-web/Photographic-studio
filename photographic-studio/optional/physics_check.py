@@ -22,9 +22,6 @@ def rank(x):
     r = np.empty(len(x)); r[np.argsort(x)] = np.arange(len(x)); return r
 
 
-EDGE_GAIN_LIMIT = 0.57   # v1.0.2, provisional: from 10 real photos (pass at most 0.51, visible rims at 0.62 and up)
-
-
 def edge_gain(Lo, Lf, grid=6):
     """Largest regional unsharp-mask gain the edit added across strong edges, after removing a global tone curve."""
     h, w = Lo.shape
@@ -122,16 +119,13 @@ def main():
     # sign tells the kind: glow>0 dark side lifted at the edge (glow); glow<0 dark side pushed down (dark rim, over-sharpening);
     # rim>0 bright side dimmed at the edge; rim<0 bright side pushed up (bright rim). Any of them strong = visible halo.
     lim = 8.0 if night else 6.0
-    # v1.0.2: the measure above averages over every edge in the frame and works at fixed pixel distances, so a strong
-    #   halo around one tower, or one as wide as its "far" ring, is missed. Also measure, region by region, how much
-    #   extra contrast the edit put across strong edges beyond a global tone curve (an unsharp-mask gain), at three
-    #   scales relative to the frame. grade.py clarity 0.6 (its maximum) and the museum level-3 grade stay at or below
-    #   0.51 on the ten test photos; an evenly applied gain of 1.0, where rims start to show by eye, measures 0.62 and up.
+    # v1.0.2: edge_contrast_gain_info is reported only. It catches strong edge halos the measure above misses, but on
+    #   real G outputs (2026-11-13 batch) it scored G's own shadow detail as high as visible halos, so it does not decide.
     eg = edge_gain(Lo, Lf)
     checks['halo'] = {'glow_on_dark_side_L': round(glow, 2), 'dark_rim_on_bright_side_L': round(rim, 2), 'limit': lim,
-                      'edge_contrast_gain': eg, 'edge_gain_limit': EDGE_GAIN_LIMIT,
-                      'ok': bool(abs(glow) <= lim and abs(rim) <= lim and eg <= EDGE_GAIN_LIMIT),
-                      'meaning': 'no glowing, dark or bright rims hugging strong edges'}
+                      'edge_contrast_gain_info': eg,
+                      'ok': bool(abs(glow) <= lim and abs(rim) <= lim),
+                      'meaning': 'no glowing or dark rims hugging strong edges'}
 
     # 7 artificial spotlight: a large smooth brightening confined to part of a dark background (an oval "glow" around
     #   the subject with no light source causing it). 8 local darkening patch: a strong dark blotch or off-centre vignette.

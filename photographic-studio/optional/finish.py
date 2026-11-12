@@ -5,8 +5,7 @@ Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--ge
   GRADE_JSON  director-brief parameters for grade.py ({} for none)
 Chain: look_transfer -> grade -> physics_check + intensity_check. An attempt passes only when the physics check finds
 no problem AND the strength is in range. Otherwise it retries, in order: (1) with --genre=museum and the subject too
-weak, the same grade raised to the user's chosen museum strength (level 3), then the same with clarity at most 0.1 (v1.0.2),
-(1b) the grade with clarity at most 0.1 (v1.0.2: G already brings local contrast), (2) the grade without positive region
+weak, the same grade raised to the user's chosen museum strength (level 3), (2) the grade without positive region
 lifts and without vignette, (3) look_transfer --local=0, (4) N direct: the original graded without G, (5) N direct at
 museum strength. The first attempt that passes is delivered; if none passes, the one with the fewest physics problems,
 then the fewest strength problems, is delivered and its problems are listed (v0.3.8). It never stops to ask.
@@ -44,12 +43,6 @@ def boost(params):
     return q
 
 
-def soft(params):
-    # v1.0.2: G already brings local contrast; clarity stacked on it puts rims on strong edges. Keep everything else.
-    q = json.loads(json.dumps(params)); q['clarity'] = min(float(q.get('clarity', 0)), 0.1)
-    return q
-
-
 def safer(params):
     q = json.loads(json.dumps(params))
     q.pop('vignette', None)
@@ -82,11 +75,10 @@ def main():
     txt = Path(gj).read_text(encoding='utf-8').strip() if Path(gj).exists() else ''
     params = json.loads(txt) if txt else {}   # v1.0: a missing or empty parameter file means no extra grading
     tries = [('default', params, [], g)]
-    if genre == 'museum': tries += [('museum_strength', boost(params), [], g), ('museum_strength_low_clarity', soft(boost(params)), [], g)]
-    tries += [('low_clarity', soft(params), [], g),
-              ('no_region_lift_no_vignette', safer(params), [], g), ('local0_safer_grade', safer(params), ['--local=0'], g),
+    if genre == 'museum': tries.append(('museum_strength', boost(params), [], g))
+    tries += [('no_region_lift_no_vignette', safer(params), [], g), ('local0_safer_grade', safer(params), ['--local=0'], g),
               ('n_direct', safer(params), [], None)]
-    if genre == 'museum': tries += [('n_direct_museum_strength', boost(safer(params)), [], None), ('n_direct_museum_strength_low_clarity', soft(boost(safer(params))), [], None)]
+    if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
     rec = {'tool': 'finish.py v1.0.2', 'genre': genre, 'attempts': []}
     best = None
     with tempfile.TemporaryDirectory() as td:
@@ -94,8 +86,6 @@ def main():
         for i, (name, p, ltopt, gsrc) in enumerate(tries):
             key = json.dumps([p, ltopt, gsrc is None], sort_keys=True)
             if key in seen: continue
-            # v1.0.2: lower clarity only to cure rims an earlier attempt actually had; otherwise keep the old ladder
-            if 'low_clarity' in name and not any('halo' in a.get('problems', []) for a in rec['attempts']): continue
             seen.add(key)
             lt = td / f'lt{i}.png'; fin = td / f'fin{i}.png'; pj = td / f'p{i}.json'
             pj.write_text(json.dumps(p), encoding='utf-8')

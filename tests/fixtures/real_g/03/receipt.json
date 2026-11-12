@@ -1,0 +1,47 @@
+{
+ "tool": "finish.py v1.0",
+ "genre": null,
+ "attempts": [
+  {
+   "name": "default",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 1.86: G added detail that is not in the photo",
+    "G_GLOW_NOT_CARRIED 0.033: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: chroma_ratio 1.095 < 1.2",
+   "problems": [],
+   "strength_problems": [
+    "chroma_ratio"
+   ]
+  },
+  {
+   "name": "local0_safer_grade",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 1.86: G added detail that is not in the photo",
+    "LOOK_ONLY_PARTLY_CAPTURED 0.443: much of what G did is redrawn content or fine relighting that original pixels cannot carry",
+    "G_GLOW_NOT_CARRIED 0.021: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: chroma_ratio 1.091 < 1.2",
+   "problems": [],
+   "strength_problems": [
+    "chroma_ratio"
+   ]
+  },
+  {
+   "name": "n_direct",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: chroma_ratio 1.059 < 1.2",
+   "problems": [],
+   "strength_problems": [
+    "chroma_ratio"
+   ]
+  }
+ ],
+ "delivered": "default",
+ "verdict": "DELIVER_WITH_FLAGS: chroma_ratio"
+}

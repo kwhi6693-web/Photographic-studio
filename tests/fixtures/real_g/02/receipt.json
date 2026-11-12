@@ -1,0 +1,76 @@
+{
+ "tool": "finish.py v1.0",
+ "genre": "museum",
+ "attempts": [
+  {
+   "name": "default",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 1.45: G added detail that is not in the photo",
+    "G_GLOW_NOT_CARRIED 0.018: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.165 < 1.3; subject_local_contrast_ratio 1.085 < 1.14",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio"
+   ]
+  },
+  {
+   "name": "museum_strength",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 1.45: G added detail that is not in the photo",
+    "G_GLOW_NOT_CARRIED 0.018: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "CHECK_BY_EYE: light_shade_sep",
+   "intensity": "OUT_OF_RANGE: lit_warmth_change 12.82 > 6.0",
+   "problems": [
+    "light_shade_sep"
+   ],
+   "strength_problems": [
+    "lit_warmth_change"
+   ]
+  },
+  {
+   "name": "local0_safer_grade",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 1.45: G added detail that is not in the photo"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.149 < 1.3; subject_local_contrast_ratio 1.048 < 1.14",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio"
+   ]
+  },
+  {
+   "name": "n_direct",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.075 < 1.3; subject_local_contrast_ratio 1.075 < 1.14",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio",
+    "no_visible_change"
+   ]
+  },
+  {
+   "name": "n_direct_museum_strength",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: lit_warmth_change 13.75 > 6.0",
+   "problems": [],
+   "strength_problems": [
+    "lit_warmth_change"
+   ]
+  }
+ ],
+ "delivered": "n_direct_museum_strength",
+ "verdict": "DELIVER_WITH_FLAGS: lit_warmth_change"
+}

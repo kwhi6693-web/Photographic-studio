@@ -1,0 +1,51 @@
+{
+ "tool": "finish.py v1.0",
+ "genre": null,
+ "attempts": [
+  {
+   "name": "default",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 2.64: G added detail that is not in the photo",
+    "LIFT_LIMITED 0.32: G brightened dark areas more than the original detail can carry",
+    "G_LIGHT_REMOVAL_NOT_CARRIED 0.012: G blacked out a real light patch; kept the original light there (v0.3.8)",
+    "G_GLOW_NOT_CARRIED 0.057: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: L_mean_change 11.44 > 5.0; highlight_p99_change 18.1 > 3.0",
+   "problems": [],
+   "strength_problems": [
+    "L_mean_change",
+    "highlight_p99_change"
+   ]
+  },
+  {
+   "name": "local0_safer_grade",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 2.64: G added detail that is not in the photo",
+    "LIFT_LIMITED 0.32: G brightened dark areas more than the original detail can carry",
+    "G_GLOW_NOT_CARRIED 0.056: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: L_mean_change 11.51 > 5.0; highlight_p99_change 19.21 > 3.0",
+   "problems": [],
+   "strength_problems": [
+    "L_mean_change",
+    "highlight_p99_change"
+   ]
+  },
+  {
+   "name": "n_direct",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: chroma_ratio 1.1 < 1.2",
+   "problems": [],
+   "strength_problems": [
+    "chroma_ratio"
+   ]
+  }
+ ],
+ "delivered": "n_direct",
+ "verdict": "DELIVER_WITH_FLAGS: chroma_ratio"
+}
