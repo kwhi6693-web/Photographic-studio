@@ -10,12 +10,12 @@
 
 | 级别 | 宿主具备 | 走法 | 成片标签 |
 |---|---|---|---|
-| T1 完整 | 看图 + G + 代码（含 OpenCV；v0.3.5 起不再需要 scikit-image） | 测量 → 读片 → 导演单 → G → 检查 → 贴回 → N 精修 → 构图 → 交付 | G… → N |
-| T2 调色 | 看图 + 代码（只需 numpy、Pillow），没有 G | 测量 → 读片 → 导演单 → N 直出（`grade.py`）→ 构图 → 交付 | N |
+| T1 完整 | 看图 + G + 代码（numpy、Pillow、OpenCV） | 测量 → 读片 → 导演单 → G → `finish.py`（光色迁移 → 精修 → 物理与力度检查，自动重做）→ 验收 → 构图 → 交付 | 原片像素 + G 光色 → N 精修 |
+| T2 调色 | 看图 + 代码，没有 G | 测量 → 读片 → 导演单 → `finish.py 原片 原片 …`（N 直出，含检查与自动重做；需要 OpenCV）→ 构图 → 交付 | N 直出 |
 | T3 生成 | 看图 + G，不能运行代码 | 读片 → 导演单 → G → 人眼复核 → 交付；不贴回、不测量，写明“未做确定性检查” | G（未检查） |
 | T4 顾问 | 只能看图 | 只输出读片结果、导演单和可照着做的调整建议 | 无成片 |
 
-- 只有 numpy 和 Pillow 时：`measure.py`、`grade.py` 可用；`check_g_output.py`、`text_restore.py`、`n_trim.py`、`reframe.py` 需要 OpenCV，不可用（v0.3.5 起全部工具只需要 numpy、Pillow、OpenCV）。此时 T1 按“T1 降级”处理：G 后只做人眼复核，不贴回、不重构构图，写明哪些步骤没做；T2 不重构构图。
+- 只有 numpy 和 Pillow、没有 OpenCV 时：`measure.py`、`grade.py`、`physics_check.py`、`intensity_check.py` 可用；`finish.py`、`look_transfer.py`、`check_g_output.py`、`text_restore.py`、`texture_blend.py`、`n_trim.py`、`reframe.py` 不可用。此时 T1 和 T2 都改为手动 N 直出：`grade.py` 出片后自己运行 `physics_check.py` 和 `intensity_check.py`，不合格就调参数重做；不做光色迁移、不重构构图，回执写明哪些步骤没做。
 - 级别在回执里写明。不得用低级别的结果冒充高级别（例如把 N 直出标成 G）。
 
 ## 3. 宿主无关的要求
@@ -27,4 +27,4 @@
 
 ## 4. 证据
 
-截至 v0.3.0：T1 只在 ChatGPT（网页端）上跑过；T2 在规则维护者的环境里用 4 张原片跑通；T3、T4 没有实测。其他 agent 上的表现没有证据。
+截至 v1.0：T1 在 ChatGPT iOS App 上实跑过；T2 在规则维护者的环境里跑通；T3、T4 没有实测。其他 agent 上的表现没有证据。

@@ -27,7 +27,7 @@ import json, sys
 from pathlib import Path
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, box, blur, guided, structure_corr, sha256, HUES, hue_weight
+from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, blur, guided, structure_corr, sha256, HUES, hue_weight
 
 clamps = []
 

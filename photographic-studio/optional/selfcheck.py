@@ -7,7 +7,7 @@ mods = {m: None for m in ('numpy', 'PIL', 'cv2', 'skimage', 'scipy')}
 for m in mods:
     try:
         mods[m] = getattr(importlib.import_module(m), '__version__', 'ok')
-    except Exception as e:
+    except Exception:
         mods[m] = None
 base = bool(mods['numpy'] and mods['PIL'])
 full = bool(base and mods['cv2'])   # v0.3.5: scikit-image is no longer needed

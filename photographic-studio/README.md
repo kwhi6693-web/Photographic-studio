@@ -1,6 +1,6 @@
-# Photographic Studio v1.0
+# Photographic Studio v1.0.1
 
-**规则文字已获用户批准（2026-11-12）。** 独立的非人像摄影后期 Skill：用户从手机相册发一张照片、说一句“修”，就得到一张有明显摄影表现力、仍然高度像原片、符合自然光规律、看不出 AI 痕迹的成片。面向任何能看图的 agent；在 ChatGPT iOS App 上实跑过。
+**v1.0 规则文字已获用户批准（2026-11-12）；v1.0.1 是用户委托维护者做的一致性修订，不改变修图效果。** 独立的非人像摄影后期 Skill：用户从手机相册发一张照片、说一句“修”，就得到一张有明显摄影表现力、仍然高度像原片、符合自然光规律、看不出 AI 痕迹的成片。面向任何能看图的 agent；在 ChatGPT iOS App 上实跑过。
 
 ## 它怎么工作
 
@@ -23,6 +23,8 @@
 - `assets/taste/`：用户认可的 6 组原片与成片对比。**这是用户自己的照片，转给他人前请确认。**
 - `CHANGELOG.md`：v0.1.1 – v0.3.8 的完整变更记录。
 - `SHA256SUMS.txt`：全部文件的校验值。
+- `LICENSE`：AGPL-3.0，适用于执行说明、参考文件和工具；`assets/taste/` 里的照片版权归作者，不在许可范围内。
+- 工具回执里的版本号是该工具**最后一次改动**的版本，所以各工具不同。
 
 ## 用法
 
@@ -47,3 +49,13 @@
 ## v1.0 相对 v0.3.8
 
 工具输出与 v0.3.8 相同（回归 49 项逐像素一致）。`finish.py` 有两处小改：参数文件为空时按“不加调色”处理（之前会报错）；成片与原片几乎没有差别（平均像素差 < 1.5）时记为力度问题 `no_visible_change`，防止“改了等于没改”被当作合格（用户采纳的成片最小也有 4.9）。规则重写：`SKILL.md` 和 `principles.md` 按现在的实际行为重写，去掉历代补丁之间的矛盾（例如“N 不得替代 G”“交付 G 并标为 G”等旧条目）；退役 5 个过时的参考文件（`original_workflow.md`、`aesthetic_standard.md`、`scene_playbooks.md`、`generative_guardrails.md`、`quality_review.md`，有用的内容并入总则）；删掉“改用文件方式上传”的提示，写明只支持相册上传；口味参照新增 3 组用户采纳的成片。
+
+## v1.0.1 相对 v1.0（2026-11-12）
+
+用户在全仓库检查后委托维护者处理。只改说明和标注，工具输出不变（回归 49 项逐像素一致）。
+
+- `intensity.md` 补上博物馆力度范围（之前只写在 `genres/still_life.md` 和工具里，而 `SKILL.md` 指向的是本文件）。
+- `capability_tiers.md`：T1、T2 的走法与 `SKILL.md` 对齐；写明 `finish.py` 需要 OpenCV，以及没有 OpenCV 时怎么手动做；证据一节改为 iOS App。
+- `flag_log_template.md`、`naturalness.md`：改掉“网页端”“只作保底”等过时说法，结果标签与 `delivery.md` 对齐。
+- 工具：`grade.py` 去掉没用到的导入，`selfcheck.py` 去掉没用到的变量，`reframe.py` 回执里的 “draft” 字样去掉。
+- 包内加入 `LICENSE`（AGPL-3.0），单独下载 Skill 目录时也带许可证。

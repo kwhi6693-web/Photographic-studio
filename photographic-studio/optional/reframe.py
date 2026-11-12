@@ -92,7 +92,7 @@ def main():
     if area < 0.70: warn.append('retained area < 0.70 (provisional limit): large resolution/field loss')
     if abs(Wo / Ho - W0 / H0) > 0.01: warn.append('aspect changed from source')
     Image.fromarray(np.ascontiguousarray(cur)).save(a.out, format='PNG', icc_profile=ImageCms.ImageCmsProfile(SRGB).tobytes())
-    log = {'tool': 'reframe.py (Photographic Studio v0.1.3 draft)', 'source_sha256': sha256(a.inp), 'output_sha256': sha256(a.out),
+    log = {'tool': 'reframe.py (Photographic Studio v0.1.3)', 'source_sha256': sha256(a.inp), 'output_sha256': sha256(a.out),
            'source_size': [W0, H0], 'output_size': [Wo, Ho], 'params': params,
            'area_retained': round(area, 4), 'aspect_source': round(W0 / H0, 4), 'aspect_output': round(Wo / Ho, 4),
            'resampling': 'Lanczos (persp/rotate), integer crop', 'generative': False, 'warnings': warn}
