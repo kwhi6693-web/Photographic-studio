@@ -6,6 +6,14 @@ import numpy as np
 from PIL import Image, ImageOps
 
 
+def daylight_sky(L):
+    """v1.0.2: True when the upper half of the frame holds open bright sky or daylight (L* > 75 on at least 8%).
+    A dark frame with daylight in it is a backlit day scene, not a night scene: its shadows are filled by the sky.
+    (Ten test photos plus five real runs: night and museum frames reach at most 4.6%; a backlit garden 10.8%.)"""
+    h = L.shape[0]
+    return bool((L[: h // 2] > 75).mean() >= 0.08)
+
+
 def sha256(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 

@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, srgb_to_lab, blur, sha256
+from ps_common import load_rgb, srgb_to_lab, blur, sha256, daylight_sky
 
 
 def rank(x):
@@ -131,7 +131,11 @@ def main():
     #   the subject with no light source causing it). 8 local darkening patch: a strong dark blotch or off-centre vignette.
     Ds = blur(Lf - Lo, max(8, min(h, w) // 40))
     darkbg = (blur(Lo, 3) < max(18.0, float(np.percentile(Lo, 20)))) & (np.abs(Lo - blur(Lo, 6)) < 2.5)
-    if darkbg.mean() > 0.05:
+    if daylight_sky(Lo):
+        # v1.0.2: with daylight in the frame, the dark areas are shade the sky fills; lifting them is fill light, not a
+        #   spotlight (a backlit garden's eaves were refused for this, 2026-11-13 batch)
+        checks['spotlight_glow'] = {'ok': None, 'note': 'daylight scene: shade lift is fill light'}
+    elif darkbg.mean() > 0.05:
         med = float(np.median(Ds[darkbg])); top = float(np.percentile(Ds[darkbg], 98))
         bump = top - med; hot = darkbg & (Ds > med + 0.5 * bump); area = float(hot.mean())
         # v0.3.8: light falling on a surface multiplies its pattern; a glow only adds haze. If the brightened dark area's

@@ -100,7 +100,11 @@ def main():
             bad, weak, iv, pv = problems(src, fin, genre)
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak})
-            score = (len(bad), len(weak), i)
+            # v1.0.2: a G route that passes the physics checks and visibly changes the photo beats N direct whatever the
+            #   strength ranges say: ranges trim the excess afterwards (step 6), they are not a reason to drop G's look.
+            #   (2026-11-13 batch: four of five photos lost G this way and came out nearly unchanged; the user
+            #   preferred the G route on all four.)
+            score = (len(bad), 0 if (gsrc is not None and 'no_visible_change' not in weak) else 1, len(weak), i)
             if best is None or score < best[0]: best = (score, fin, name, bad + weak)
             if not bad and not weak: break
         shutil.copy(best[1], out)

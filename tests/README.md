@@ -12,7 +12,7 @@ The tools are run unmodified, each as its own process, the way an agent runs the
 | `test_tools.py` | Every tool starts; grading is deterministic and keeps to its limits |
 | `test_pipeline.py` | The default route's promises: same input gives the same output, the final keeps the original's size and fine detail, light G invented is mostly blocked, light G removed is put back, a wrong scene is refused, an invisible edit is never a clean pass |
 | `test_checkers.py` | Which defects `physics_check.py` reports, and that it does not accuse an honest edit |
-| `test_real_g.py` | Five real G outputs from the owner's ChatGPT runs (`fixtures/real_g/`): each must take the same route as ChatGPT's v1.0.1 run, and the leftover-glow flag must stay quiet |
+| `test_real_g.py` | Five real G outputs from the owner's ChatGPT runs (`fixtures/real_g/`): each must keep the G route (v1.0.1 dropped it on four; the user preferred G on all four), pass the physics checks, and not raise the leftover-glow flag |
 | `test_real.py` | The same questions on the owner's ten real photos (`fixtures/real/`), including the originals of all six taste samples; every defect tested there was first judged by eye. It also feeds the six approved finals in as G and requires that the glow check stays quiet on them |
 
 ## Known gaps
@@ -25,8 +25,8 @@ any other photo worse, and these tests are the means to show that.
 | Photo | Defect | What happens |
 |---|---|---|
 | clock tower, arcade, glass lotus, canal, willow, blue vase | white, black or crunchy rims along strong edges | `physics_check.py` passes them. A regional edge-gain measure catches them, but it scored real G shadow detail (2026-11-13 batch) as high, so it is reported (`edge_contrast_gain_info`), not used |
+| orchid panels | invented glow on a mid-dark wall (L* ~30) | not caught. v1.0.1 removed it only by falling back to N direct; with the G route now preferred it is delivered (~17 L*). Three fixes each also hit approved or real G lifts. Not yet seen on a real G output |
 | blue vase, approved final as G | the museum level-3 grade stacks clarity 0.4 on G's own local contrast: harsh gold rims (edge gain 0.86) | delivered |
-| orchid panels | glowing oval on a mid-dark wall (L* 35) | `physics_check.py` passes it; the wall is lighter than what counts as a dark background. Widening that needs real G outputs on mid-tone walls |
 
 **Fixed in v1.0.2:** shade turned warmer than the light (the sky was counted as "lit"). G's invented glow on a dark background used to reach the final (4–9 L* above its surroundings on
 sunflowers, night tower, glass lotus, blue vase; once with a clean `DELIVER`). Now 0.8–1.8, with G's look kept.
