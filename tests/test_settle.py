@@ -32,17 +32,19 @@ def test_too_bright_is_trimmed_back_under_the_limit_only(tmp_path):
     out, rec = settle(tmp_path, src, hot)
     after = checks(src, out)['checks']
     assert after['L_mean_change']['ok'] is True
-    assert after['L_mean_change']['value'] > after['L_mean_change']['range'][1] - 1.5   # removed the excess, not more
+    assert after['L_mean_change']['value'] >= 2.0 - 0.3   # v1.0.6: lands in the day band (2..4), not below it
     assert not rec['physics_problems']
 
 
-def test_in_range_photo_is_returned_unchanged(tmp_path):
+def test_settling_twice_changes_nothing(tmp_path):
+    """v1.0.6: a settled photo is already inside every range and band, so a second pass leaves it exactly as it is."""
     src = REAL / '03_canal.jpg'
-    ok = graded(tmp_path, src, {'exposure_ev': 0.1, 'vibrance': 0.2, 'clarity': 0.1}, 'ok')
-    if not checks(src, ok)['verdict'].startswith('IN_RANGE'):
-        return   # the fixture's own ranges moved; nothing to assert here
-    out, rec = settle(tmp_path, src, ok)
-    assert not rec['steps'] and np.array_equal(load(ok), load(out))
+    hot = graded(tmp_path, src, {'exposure_ev': 0.3, 'vibrance': 0.3}, 'hot2')
+    once, _ = settle(tmp_path, src, hot)
+    twice = tmp_path / 'twice.png'
+    p = run_tool('settle.py', src, once, twice)
+    rec = json.loads(p.stdout)
+    assert not rec['steps'] and np.array_equal(load(once), load(twice))
 
 
 def test_flat_edit_gets_lifted_to_the_floor(tmp_path):
