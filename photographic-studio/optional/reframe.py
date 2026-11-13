@@ -16,7 +16,7 @@ Order of operations: perspective -> rotate (straighten) -> crop.
 
 No pixels are invented: the output is resampled (Lanczos) from the input only. It writes OUTPUT.png (lossless)
 and OUTPUT.png.json with source SHA-256, parameters, sizes, area retained, and warnings.
-Provisional limits (no evidence base yet): retained area >= 0.70, |rotate| <= 5 deg, keep original aspect."""
+Limits: retained area >= 0.80 (v1.0.5: the user's approved crops kept 0.84 and 0.87), |rotate| <= 5 deg, keep original aspect."""
 import sys, io, json, math, hashlib, argparse
 import numpy as np, cv2
 from PIL import Image, ImageCms, ImageOps
@@ -89,7 +89,7 @@ def main():
         cur = cur[int(round(y0)):int(round(y0 + ch)), int(round(x0)):int(round(x0 + cw))]
     Ho, Wo = cur.shape[:2]
     area = (Wo * Ho) / (W0 * H0)
-    if area < 0.70: warn.append('retained area < 0.70 (provisional limit): large resolution/field loss')
+    if area < 0.80: warn.append('retained area < 0.80 (v1.0.5 limit): do not deliver this crop; crop less or not at all')
     if abs(Wo / Ho - W0 / H0) > 0.01: warn.append('aspect changed from source')
     Image.fromarray(np.ascontiguousarray(cur)).save(a.out, format='PNG', icc_profile=ImageCms.ImageCmsProfile(SRGB).tobytes())
     log = {'tool': 'reframe.py (Photographic Studio v0.1.3)', 'source_sha256': sha256(a.inp), 'output_sha256': sha256(a.out),
