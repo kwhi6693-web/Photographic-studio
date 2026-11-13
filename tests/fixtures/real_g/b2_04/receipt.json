@@ -1,0 +1,31 @@
+{
+ "tool": "finish.py v1.0.2",
+ "genre": "museum",
+ "attempts": [
+  {
+   "name": "default",
+   "look_transfer_flags": [
+    "G_GLOW_NOT_CARRIED 0.012: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.254 < 1.3; subject_local_contrast_ratio 1.056 < 1.14",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio"
+   ]
+  },
+  {
+   "name": "museum_strength",
+   "look_transfer_flags": [
+    "G_GLOW_NOT_CARRIED 0.012: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "IN_RANGE",
+   "problems": [],
+   "strength_problems": []
+  }
+ ],
+ "delivered": "museum_strength",
+ "verdict": "DELIVER"
+}
