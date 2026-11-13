@@ -1,0 +1,53 @@
+{
+ "version": "2026-11-13",
+ "source": "First edition: written from established colour-grading practice and kept within this package's physics and intensity rules. The genre baselines come from the user's approved samples (references/taste_profile.md). Updated quarterly; the user approves every update.",
+ "styles": {
+  "natural_clear": {
+   "name": "自然通透",
+   "g_phrase": "natural, clear and fresh: true-to-life colours, clean whites, open but still dark shadows, no filter look",
+   "params": {"contrast": 0.08, "clarity": 0.12, "vibrance": 0.2, "shadows": 4, "highlights": -4},
+   "fits": "almost everything; the default when no style is asked for",
+   "avoid": "nothing in particular"
+  },
+  "warm_film": {
+   "name": "暖调胶片",
+   "g_phrase": "warm analogue film look: gentle warm highlights, slightly lifted blacks, soft contrast, colours a little muted",
+   "params": {"white_balance": {"temp": 0.22}, "levels": {"black": 4}, "contrast": 0.05, "saturation": 0.92, "vibrance": 0.1,
+              "tone_split": {"shadows": [-0.5, -1.5], "highlights": [1.0, 3.0]}},
+   "fits": "street, travel, daylight architecture, late-afternoon light",
+   "avoid": "museum showcases and night skies: lifted blacks turn a black background grey"
+  },
+  "cool_documentary": {
+   "name": "冷调纪实",
+   "g_phrase": "cool documentary look: neutral-to-cool balance, restrained colour, firm contrast, honest light",
+   "params": {"white_balance": {"temp": -0.18}, "saturation": 0.86, "contrast": 0.14, "clarity": 0.18,
+              "tone_split": {"shadows": [0.0, -2.5], "highlights": [0.0, 0.5]}},
+   "fits": "city, overcast days, concrete and steel, everyday scenes",
+   "avoid": "warm-lit interiors and sunsets: it fights the light that is there"
+  },
+  "low_key_cinema": {
+   "name": "暗调电影",
+   "g_phrase": "low-key cinematic look: deep shadows, controlled highlights, subtle cool shadows and warm lit areas, the subject carried by the light already in the scene",
+   "params": {"exposure_ev": -0.12, "contrast": 0.16, "highlights": -3, "vibrance": 0.1,
+              "tone_split": {"shadows": [-1.5, -3.0], "highlights": [1.0, 3.5]}, "vignette": {"amount": 4}},
+   "fits": "museum showcases, night, interiors with one main light",
+   "avoid": "bright daylight scenes: they turn murky"
+  },
+  "high_key_airy": {
+   "name": "高调清新",
+   "g_phrase": "bright and airy look: light, soft, open shadows, clean slightly cool whites, gentle colour",
+   "params": {"exposure_ev": 0.18, "shadows": 8, "contrast": -0.05, "saturation": 0.9, "vibrance": 0.15, "white_balance": {"temp": -0.05}},
+   "fits": "daylight interiors, still life by a window, white architecture, overcast sky",
+   "avoid": "dark showcases and night: it lifts what should stay dark"
+  },
+  "oriental_elegant": {
+   "name": "东方雅致",
+   "g_phrase": "quiet East Asian elegance: soft muted greens and greys, warm accents in reds and woods, gentle contrast like ink and lacquer",
+   "params": {"saturation": 0.9, "contrast": 0.06, "clarity": 0.1,
+              "hues": {"red": {"sat": 1.1}, "orange": {"sat": 1.05}, "green": {"sat": 0.85}},
+              "tone_split": {"shadows": [0.0, -0.5], "highlights": [0.5, 2.0]}},
+   "fits": "gardens, temples, lacquer, porcelain, calligraphy, wood",
+   "avoid": "neon night streets: it mutes what makes them"
+  }
+ }
+}

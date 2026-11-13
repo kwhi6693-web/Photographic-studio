@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-c8963e?style=flat-square" alt="version 1.1.0">
+  <img src="https://img.shields.io/badge/version-1.2.0-c8963e?style=flat-square" alt="version 1.2.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -108,6 +108,10 @@ Process this photo with the attached Photographic Studio
 |---|---|
 | `fix` · `修` | read → brief → edit → check → one finished photo |
 | `fine-tune` · `精修` | explores several directions and keeps the best (slower) |
+| `more versions` · `多出几版` | three versions (as briefed, bolder, a fitting named style) for you to pick |
+| `style: low-key cinema` · `风格：暗调电影` | one of six named styles: natural clear, warm film, cool documentary, low-key cinema, high-key airy, oriental elegant |
+| `like this` · `参考这张` + a reference image | takes the reference's look (not its content) |
+| `remember this` · `记住这张` / `not like this` · `不要这样` | saves a sample or a counter-example of your taste |
 | `too warm` · `a bit clearer` | rewrites the brief, redoes it, and remembers your taste |
 | `show receipt` · `看回执` | brief, prompt, parameters, check results |
 | `show flag log` · `看标记表` | a running log of flags across photos |
@@ -158,5 +162,5 @@ The example photographs in `photographic-studio/assets/taste/` are © the author
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.1.0 · made for non-portrait photography · built together with Claude · code &amp; docs AGPL-3.0 · photos © the author</sub>
+  <sub>Photographic Studio v1.2.0 · made for non-portrait photography · built together with Claude · code &amp; docs AGPL-3.0 · photos © the author</sub>
 </p>

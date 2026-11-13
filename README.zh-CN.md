@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-c8963e?style=flat-square" alt="version 1.1.0">
+  <img src="https://img.shields.io/badge/version-1.2.0-c8963e?style=flat-square" alt="version 1.2.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建筑·街景·风光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -108,6 +108,10 @@
 |---|---|
 | `修` | 读片 → 导演单 → 出片 → 检查 → 交一张成片 |
 | `精修` | 多出几个方向，比较后挑最好的一张（更慢） |
+| `多出几版` | 出三版（按导演单、更大胆、一种合适的风格）给你挑 |
+| `风格：暗调电影` | 六种风格任选：自然通透、暖调胶片、冷调纪实、暗调电影、高调清新、东方雅致 |
+| `参考这张` + 一张参考图 | 学参考图的风格，不搬它的内容 |
+| `记住这张` / `不要这样` | 记下一张你喜欢的成片，或一个你不要的结果 |
 | `太暖了` · `再通透一点` | 按你的话改导演单重做，并记住这条口味 |
 | `看回执` | 导演单、提示词、参数、检查结论 |
 | `看标记表` | 每张照片的处理标记汇总 |
@@ -156,5 +160,5 @@ Skill 本身（执行说明、参考文件和工具）采用 [GNU Affero General
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.1.0 · 为非人像摄影而做 · 与 Claude 共同打造 · 代码与文档 AGPL-3.0 · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.2.0 · 为非人像摄影而做 · 与 Claude 共同打造 · 代码与文档 AGPL-3.0 · 照片 © 作者本人</sub>
 </p>

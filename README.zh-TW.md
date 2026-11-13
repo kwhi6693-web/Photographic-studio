@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-c8963e?style=flat-square" alt="version 1.1.0">
+  <img src="https://img.shields.io/badge/version-1.2.0-c8963e?style=flat-square" alt="version 1.2.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建築·街景·風光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -108,6 +108,10 @@
 |---|---|
 | `修` | 讀片 → 導演單 → 出片 → 檢查 → 交一張成片 |
 | `精修` | 多出幾個方向，比較後挑最好的一張（更慢） |
+| `多出幾版` | 出三版（按導演單、更大膽、一種合適的風格）給你挑 |
+| `風格：暗調電影` | 六種風格任選：自然通透、暖調膠片、冷調紀實、暗調電影、高調清新、東方雅致 |
+| `參考這張` + 一張參考圖 | 學參考圖的風格，不搬它的內容 |
+| `記住這張` / `不要這樣` | 記下一張你喜歡的成片，或一個你不要的結果 |
 | `太暖了` · `再通透一點` | 按你的話改導演單重做，並記住這條口味 |
 | `看回執` | 導演單、提示詞、參數、檢查結論 |
 | `看標記表` | 每張照片的處理標記彙總 |
@@ -156,5 +160,5 @@ Skill 本身（執行說明、參考檔案和工具）採用 [GNU Affero General
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.1.0 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 AGPL-3.0 · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.2.0 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 AGPL-3.0 · 照片 © 作者本人</sub>
 </p>
