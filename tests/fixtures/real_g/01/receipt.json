@@ -1,0 +1,50 @@
+{
+ "tool": "finish.py v1.0",
+ "genre": null,
+ "attempts": [
+  {
+   "name": "default",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 1.66: G added detail that is not in the photo",
+    "G_GLOW_NOT_CARRIED 0.034: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "CHECK_BY_EYE: spotlight_glow",
+   "intensity": "OUT_OF_RANGE: lit_warmth_change 9.05 > 6.0",
+   "problems": [
+    "spotlight_glow"
+   ],
+   "strength_problems": [
+    "lit_warmth_change"
+   ]
+  },
+  {
+   "name": "local0_safer_grade",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 1.66: G added detail that is not in the photo",
+    "G_GLOW_NOT_CARRIED 0.018: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "CHECK_BY_EYE: spotlight_glow",
+   "intensity": "OUT_OF_RANGE: lit_warmth_change 8.93 > 6.0",
+   "problems": [
+    "spotlight_glow"
+   ],
+   "strength_problems": [
+    "lit_warmth_change"
+   ]
+  },
+  {
+   "name": "n_direct",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: sky_L_change 1.77 > 1.5",
+   "problems": [],
+   "strength_problems": [
+    "sky_L_change"
+   ]
+  }
+ ],
+ "delivered": "n_direct",
+ "verdict": "DELIVER_WITH_FLAGS: sky_L_change"
+}

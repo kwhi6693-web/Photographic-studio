@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, srgb_to_lab, blur, sha256
+from ps_common import load_rgb, srgb_to_lab, blur, sha256, daylight_sky
 
 ANCHORS = {   # (low, high); None = no limit. Units: L* and Lab b.
     'day':       {'L_mean_change': (1.0, 5.0), 'chroma_ratio': (1.08, 1.30), 'lit_warmth_change': (None, 4.0),
@@ -54,7 +54,7 @@ def main():
     lo, lf = srgb_to_lab(o), srgb_to_lab(f)
     Lo, Lf = lo[..., 0], lf[..., 0]
     Co, Cf = np.hypot(lo[..., 1], lo[..., 2]), np.hypot(lf[..., 1], lf[..., 2])
-    genre = opt.get('genre') or ('night' if Lo.mean() < 22 else 'lowcolour' if Co.mean() < 10 else 'day')
+    genre = opt.get('genre') or ('night' if Lo.mean() < 22 and not daylight_sky(Lo) else 'lowcolour' if Co.mean() < 10 else 'day')   # v1.0.2: daylight sky
     if genre == 'still_life': genre = 'museum'
     lit = Lo > 55
     tex = np.abs(Lo - blur(Lo, 4)); h = Lo.shape[0]

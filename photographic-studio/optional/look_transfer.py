@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v0.3.8 - look transfer: every output pixel is the ORIGINAL photo's pixel,
+"""Photographic Studio v1.0.2 - look transfer: every output pixel is the ORIGINAL photo's pixel,
 re-toned with the light and colour of the generative result G. Nothing G drew is kept, so no AI texture.
 Usage: python3 look_transfer.py SOURCE G_OUTPUT OUT_PNG [RECEIPT_JSON] [--strength 0..1] [--local 0..1]
 Output has the SOURCE's size and framing. Deterministic. Needs numpy, Pillow, OpenCV.
@@ -18,6 +18,9 @@ from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to
 
 NL, NA, NB = 21, 17, 17
 AB = 90.0
+
+
+GLOW_RAISE = 15.0   # v1.0.2: L* above the dark background's trend that only an invented glow reaches
 
 
 def register(src, g):
@@ -156,7 +159,7 @@ def main():
     surf = np.clip(blur(back(surf_g.astype(np.float32)), 4) * 1.5, 0, 1)
     dk = dk * (1 - surf)
     flat = (dk * tx > 0.5).astype(np.float32)
-    glow_area = 0.0
+    glow_area = 0.0; trend_L = None
     if flat.mean() > 0.03:
         wgt = np.clip(blur(dk * tx, 10) * 1.6, 0, 1) * dk           # smooth weight: no patchy edges
         # what G may do to a dark background is a broad, smooth change - a gradient (sky deeper at the top, brighter
@@ -164,9 +167,25 @@ def main():
         hh, ww = delta.shape[:2]; yy, xx = np.mgrid[0:hh, 0:ww].astype(np.float32); xx /= ww; yy /= hh
         basis = np.stack([np.ones_like(xx), xx, yy, yy * yy], -1)
         sel = (flat > 0); sel[::1, :] &= ((np.arange(ww) % 3) == 0)[None, :]; sel &= ((np.arange(hh) % 3) == 0)[:, None]
+        # v1.0.2: a glow G invents stands 15-25 L* above the background's trend; a lift G gives a real surface there is a
+        # few L*. Leave such strongly raised pixels - and the fading rim around them - out of the trend fit, so the
+        # glow cannot pull the trend up around itself, and hold them to the trend at full weight even where the
+        # background is only partly dark. Tuned so that the six approved taste samples, fed in as G, stay unchanged.
+        sel0 = sel.copy()
+        for _ in range(3):
+            c0 = np.linalg.lstsq(basis[sel], delta[..., 0][sel], rcond=None)[0]
+            hi = ((delta[..., 0] - basis @ c0) > GLOW_RAISE).astype(np.float32)
+            keep = blur(hi, max(8, min(hh, ww) // 12)) < 0.02
+            if (sel0 & keep).sum() < 0.5 * sel0.sum(): break
+            sel = sel0 & keep
+        c0 = np.linalg.lstsq(basis[sel], delta[..., 0][sel], rcond=None)[0]
+        hi = ((delta[..., 0] - basis @ c0) > GLOW_RAISE).astype(np.float32)
+        wgt = np.maximum(wgt, np.clip(blur(hi, max(8, min(hh, ww) // 24)) * 4, 0, 1) * np.clip(dk * 2, 0, 1) * tx)
+        trend_L = None
         for k in range(3):
             coef = np.linalg.lstsq(basis[sel], delta[..., k][sel], rcond=None)[0]
             trend = basis @ coef; tol = 1.5 if k == 0 else 1.0
+            if k == 0: trend_L = trend
             cl = np.minimum(delta[..., k], trend + tol) if k == 0 else np.clip(delta[..., k], trend - tol, trend + tol)  # deepening a dark background is allowed; adding light is not
             if k == 0: glow_area = float(((np.abs(delta[..., 0] - cl) > 2.0) & (wgt > 0.5)).mean())
             delta[..., k] = delta[..., k] * (1 - wgt) + cl * wgt
@@ -229,6 +248,19 @@ def main():
     if capped > 0.05: rec['flags'].append(f'LIFT_LIMITED {round(capped, 3)}: G brightened dark areas more than the original detail can carry')
     if m['structure_corr_with_source'] < 0.9: rec['flags'].append('STRUCTURE_LOW')
     m['invented_light_removed_area'] = round(glow_area, 3); m['deleted_light_restored_area'] = round(removed_area, 3)
+    # v1.0.2: check the result, not the intention - how much light above the background's smooth trend is left on the
+    # flat dark background of the OUTPUT (a glow G invented that the clamp did not fully remove)
+    glow_left = 0.0
+    if trend_L is not None:
+        # measured only inside the background, away from its edges: averaging only background pixels, so the real lift
+        # of a lit subject next to the background is not smeared into it and mistaken for a glow
+        wmask = (wgt > 0.5).astype(np.float32); rr = max(6, min(hs, ws) // 60)
+        den = blur(wmask, rr); inner = blur(wmask, 2 * rr) > 0.98
+        if inner.mean() > 0.01:
+            bump = blur((lab1[..., 0] - lab0[..., 0] - trend_L) * wmask, rr) / np.maximum(den, 1e-6)
+            glow_left = float(np.percentile(bump[inner], 99.5))
+    m['glow_left_L'] = round(glow_left, 2)
+    if glow_left > 2.5: rec['flags'].append(f'G_GLOW_LEFT {round(glow_left, 2)}: a glow G invented on the dark background is still {round(glow_left, 1)} L* above it in the output (v1.0.2)')
     if removed_area > 0.01: rec['flags'].append(f'G_LIGHT_REMOVAL_NOT_CARRIED {round(removed_area, 3)}: G blacked out a real light patch; kept the original light there (v0.3.8)')
     if glow_area > 0.01: rec['flags'].append(f'G_GLOW_NOT_CARRIED {round(glow_area, 3)}: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)')
     rec['verdict'] = 'DONE' + (' | FLAGS: ' + '; '.join(rec['flags']) if rec['flags'] else '') + ' - judge by eye against the brief'
