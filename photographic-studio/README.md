@@ -1,4 +1,4 @@
-# Photographic Studio v1.0.2
+# Photographic Studio v1.0.3
 
 **v1.0 规则文字已获用户批准（2026-11-12）；v1.0.1 是用户委托维护者做的一致性修订，不改变修图效果。** 独立的非人像摄影后期 Skill：用户从手机相册发一张照片、说一句“修”，就得到一张有明显摄影表现力、仍然高度像原片、符合自然光规律、看不出 AI 痕迹的成片。面向任何能看图的 agent；在 ChatGPT iOS App 上实跑过。
 
@@ -49,6 +49,10 @@
 ## v1.0 相对 v0.3.8
 
 工具输出与 v0.3.8 相同（回归 49 项逐像素一致）。`finish.py` 有两处小改：参数文件为空时按“不加调色”处理（之前会报错）；成片与原片几乎没有差别（平均像素差 < 1.5）时记为力度问题 `no_visible_change`，防止“改了等于没改”被当作合格（用户采纳的成片最小也有 4.9）。规则重写：`SKILL.md` 和 `principles.md` 按现在的实际行为重写，去掉历代补丁之间的矛盾（例如“N 不得替代 G”“交付 G 并标为 G”等旧条目）；退役 5 个过时的参考文件（`original_workflow.md`、`aesthetic_standard.md`、`scene_playbooks.md`、`generative_guardrails.md`、`quality_review.md`，有用的内容并入总则）；删掉“改用文件方式上传”的提示，写明只支持相册上传；口味参照新增 3 组用户采纳的成片。
+
+## v1.0.3 相对 v1.0.2（2026-11-13）
+
+只改 `optional/selfcheck.py`：自检只列出工具真正需要的库（numpy、Pillow、OpenCV）。以前还列出 scikit-image 和 scipy，宿主看到缺失会去额外安装，而 v0.3.5 起已经没有工具用它们。行为不变。
 
 ## v1.0.2 相对 v1.0.1（2026-11-12，待用户批准）
 

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Photographic Studio v0.3.0 - start-up self check. Usage: python3 -I selfcheck.py
+"""Photographic Studio v1.0.3 - start-up self check. Usage: python3 -I selfcheck.py
 Reports which tools of this package can run here and the suggested capability tier (see references/capability_tiers.md).
 It cannot see whether the host has an image-editing tool: the agent answers that part itself."""
 import importlib, json, sys
-mods = {m: None for m in ('numpy', 'PIL', 'cv2', 'skimage', 'scipy')}
+mods = {m: None for m in ('numpy', 'PIL', 'cv2')}   # v1.0.3: only what the tools import (scikit-image, scipy: not needed)
 for m in mods:
     try:
         mods[m] = getattr(importlib.import_module(m), '__version__', 'ok')
     except Exception:
         mods[m] = None
 base = bool(mods['numpy'] and mods['PIL'])
-full = bool(base and mods['cv2'])   # v0.3.5: scikit-image is no longer needed
+full = bool(base and mods['cv2'])
 r = {'python': sys.version.split()[0], 'modules': mods,
      'tools': {'measure.py': base, 'grade.py': base, 'n_trim.py': full, 'reframe.py': bool(base and mods['cv2']),
                'check_g_output.py': full, 'text_restore.py': full, 'texture_blend.py': bool(base and mods['cv2']), 'intensity_check.py': base, 'physics_check.py': base, 'finish.py': bool(base and mods['cv2']), 'look_transfer.py': bool(base and mods['cv2'])},
