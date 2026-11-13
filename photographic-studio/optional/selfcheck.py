@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.0 - start-up self check. Usage: python3 -I selfcheck.py
+"""Photographic Studio v1.1.0 - start-up self check. Usage: python3 -I selfcheck.py
 Reports which tools of this package can run here and the suggested capability tier (see references/capability_tiers.md).
 It cannot see whether the host has an image-editing tool: the agent answers that part itself."""
 import importlib, json, sys

@@ -3,7 +3,7 @@ name: photographic-studio
 description: 独立的非人像摄影后期工作流，面向任何能看图的 agent。用户发来一张或多张照片并要求修图（例如“修”“修一下这张”“修成成片”“精修”）时使用，适用于建筑、街景、风光、园林、夜景、室内、静物、展品等非人像照片。自动读片、写导演单、指挥生成式光色与确定性调色、检查是否符合自然光的物理规律和用户偏好的力度，直接交付一张成片；按宿主实际具备的工具分级执行。
 ---
 
-# Photographic Studio v1.2.0
+# Photographic Studio v1.1.0
 
 用户发来照片、说一句“修”，就得到这个 agent 能做出的最好一张成片。成片要**有明显的摄影表现力**、**仍然高度像原片**、**符合真实光线的物理规律**，并且**看不出 AI 痕迹**。表现力第一；其余三条是同时成立的约束。
 
@@ -28,15 +28,15 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 **眼睛和大脑**
 1. **自检定级**：运行 `optional/selfcheck.py`，再确认自己有没有 G，按 `references/capability_tiers.md` 定级（T1 有 G 且能跑代码；T2 只能跑代码；T3 只有 G；T4 都没有）。缺依赖且宿主允许时先安装再自检一次。级别写进回执。
 2. **测量**：`optional/measure.py 原片`。
-3. **读片**：故事、情绪、主角、风格方向（`references/story_style.md`）；光、色、影调、引导、空间（`references/craft_reading.md`）；只读所属题材一页（`references/genres/`）；看同题材的口味样本（`references/taste_profile.md` 第 2e 节）和反例（`references/counter_examples.md`）。
-4. **写导演单**：幅度按同题材的认可基准（`references/style_library.md` 第 1 节）；六行（`references/director_brief.md`），对照 `references/craft_prescriptions.md` 翻译成给 G 的提示词和给 N 的参数。数字目标只写在导演单和 N 参数里，**不写进 G 的提示词**。写完做**自审五问**（`director_brief.md` 第 2b 节：视线、主次、色彩、对照样本、对照反例），答不好就改导演单，答案写进回执。
+3. **读片**：故事、情绪、主角、风格方向（`references/story_style.md`）；光、色、影调、引导、空间（`references/craft_reading.md`）；只读所属题材一页（`references/genres/`）；看一眼口味参照（`references/taste_profile.md`）。
+4. **写导演单**：六行（`references/director_brief.md`），对照 `references/craft_prescriptions.md` 翻译成给 G 的提示词和给 N 的参数。数字目标只写在导演单和 N 参数里，**不写进 G 的提示词**。
 
 **手**
 5. **出片（T1）**：
    - 调用 G 一次。原片必须在最近一条用户消息里；提示词按 `references/g_prompt_template.md`，必须包含 `references/physics.md` 第 2 节的两句物理要求。调用后用 `optional/check_g_output.py` 检查场景是否对得上（`references/g_post_check.md`），对不上就作废这一版。
    - 运行 **`optional/finish.py 原片 G 参数.json 成片.png 回执.json`**；博物馆、展柜、低调静物加 `--genre=museum`。它依次做光色迁移（`look_transfer.py`：成片的每个像素来自原片，只带 G 的光和色，并拦下 G 凭空加的光和删掉的光）、精修（`grade.py`）、物理检查、强度检查。**物理检查通过、强度在范围内、且看得出变化**才算合格；不合格时自动按阶梯重做：原参数 → 博物馆力度（仅 museum）→ 去掉正向区域提亮和暗角 → `--local=0` → N 直出 → N 直出 + 博物馆力度。交付第一张合格的；都不合格时，**通过物理检查且看得出变化的 G 路线优先于 N 直出**（力度超出范围只写进回执，由第 6 步只去掉超出的部分，不是放弃 G 的理由），其余情况交付问题最少的一张，回执列出问题。**不停下来问用户。**
    - T2：没有 G，直接 `finish.py 原片 原片 参数.json …`（等于 N 直出，`references/n_grade.md`）。T3：只有 G，交付 G 的输出并如实标注没有做检查。T4：只给读片和建议。
-6. **验收**（必做，写进回执，默认不显示）：拿成片逐行对照导演单，按 `director_brief.md` 第 4 节写七项结论（故事风格｜主角｜影调｜色彩｜不能动｜构图｜自然度）和一个决定。自然度见 `references/naturalness.md`。成片落进 `references/counter_examples.md` 的任何一种（看不出改动、改了画面内容、删光、造光、AI 味、过度），不交付。
+6. **验收**（必做，写进回执，默认不显示）：拿成片逐行对照导演单，按 `director_brief.md` 第 4 节写七项结论（故事风格｜主角｜影调｜色彩｜不能动｜构图｜自然度）和一个决定。自然度见 `references/naturalness.md`。
    - 方向对、程度不够 → `grade.py` 补齐（最多 3 轮），每轮后 `intensity_check.py 原片 新版 --before=上一版`。总结论是 `DO_NOT_DELIVER` 的一轮必须撤回。
    - G 的光色方向本身不对 → 改提示词再调用一次 G（G 最多两次），重新跑 `finish.py`，两版取更好的一张。
    - 升级路线：只有当默认路线缺的正是 G 像素才有的效果（例如重新塑造的天空层次；不包括原片没有光源的光束、光圈），且 G 通过自然度检查时，才改用 G + 关键细节贴回（`references/detail_restore.md`），与默认版比较取更好的一张。
@@ -55,13 +55,13 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 
 ## 5. 其他模式（用户要求时）
 
-- **“多出几版”**：出三版，都交付，让用户挑。A 按导演单（默认）；B 更大胆，幅度到同题材样本的上沿；C 用一种适合这张照片的命名风格（`references/style_library.md` 第 2 节“适合”一栏）。三版各自跑 `finish.py`、各自验收；交付时每张标 A／B／C 和一句差别（“B：主角更亮、背景更暗”）。用户挑中后可以接着说“记住这张”。
+- **“多出几版”**：出三版，都交付，让用户挑。A 按导演单（默认）；B 更大胆，主角的提升比 A 再推一档（仍受力度检查约束）；C 用一种适合这张照片的命名风格（`references/style_library.md` 第 1 节“适合”一栏）。三版各自跑 `finish.py`、各自验收；交付时每张标 A／B／C 和一句差别（“B：主角更亮、背景更暗”）。用户挑中后可以接着说“记住这张”。
 - **“风格：xx”**（例如“风格：暗调电影”）：`optional/style_params.py 风格 参数.json --base=导演单参数.json` 得到 N 参数和一句 G 风格描述，写进导演单和 G 提示词，其余照常。这种风格写明要“避开”这类照片时，用一句话告诉用户，仍按用户要求做。
-- **“参考这张”**（用户附一张参考图）：按 `references/style_library.md` 第 3 节：参考图和原片一起交给 G，只取风格；`optional/reference_style.py 原片 参考图 参数.json` 补上色偏和冷暖分离；参考图不保存、不进成片。
+- **“参考这张”**（用户附一张参考图）：按 `references/style_library.md` 第 2 节：参考图和原片一起交给 G，只取风格；`optional/reference_style.py 原片 参考图 参数.json` 补上色偏和冷暖分离；参考图不保存、不进成片。
 - **“记住这张”**：`optional/make_pair.py 原片 成片 输出目录 名字 --kind=taste` 做成左右对比图，按 `taste_profile.md` 第 3 节在本对话记一行（宿主有记忆时也存进去）；把对比图交给用户，并告诉用户：要永久加入口味样本，把这张图发给仓库维护者。
-- **“不要这样”**：同上，`--kind=counter`，按 `counter_examples.md` 第 3 节记一行；然后改导演单避开这个问题，重做一张。
+- **“不要这样”**：同上，`--kind=counter`，按 `taste_profile.md` 第 3 节记一行（写明是“不要”）；然后改导演单避开这个问题，重做一张。
 - **“精修”**：第 5 步出 2 个 G 方向（忠于原片气质、更大胆）加 1 个 N 直出，各自跑 `finish.py`，按导演单和口味参照选一张，再做第 6–8 步。更慢、更耗额度。
-- **“看回执”**：导演单、自审五问、G 提示词、参数、`finish.py` 回执、检查结论、哈希。
+- **“看回执”**：导演单、G 提示词、参数、`finish.py` 回执、检查结论、哈希。
 - **“看标记表”**：累计标记表（`references/flag_log_template.md`）。
 - **“验证批次”**：按 `references/validation_protocol.md`。
 - **用户不满意**：用户说一句（“太暖了”“再通透一点”），就改导演单重做，并按 `taste_profile.md` 第 3 节记下这条口味。
@@ -87,8 +87,7 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 | `references/detail_restore.md` | 升级路线的关键细节贴回 |
 | `references/reframe_rules.md` | 几何构图优化 |
 | `references/n_trim.md` | 最后的高光过冲检查 |
-| `references/taste_profile.md`、`assets/taste/` | 用户认可的成片（16 张，按题材索引）与口味记录 |
-| `references/counter_examples.md`、`assets/counter/` | 反例：用户否定过或被正确拦下的结果 |
-| `references/style_library.md`、`assets/styles.json` | 题材基准、命名风格、参考图用法、季度更新 |
+| `references/taste_profile.md`、`assets/taste/` | 用户认可的成片与口味记录 |
+| `references/style_library.md`、`assets/styles.json` | 命名风格、参考图用法、季度更新 |
 | `references/delivery.md` | 交付格式与保存边界 |
 | `references/validation_protocol.md`、`references/flag_log_template.md` | 验证批次与标记表 |

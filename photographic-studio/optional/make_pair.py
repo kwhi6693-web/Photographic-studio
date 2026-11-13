@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.0 - "记住这张" / "不要这样": a before/after sheet in the format of assets/taste and assets/counter.
+"""Photographic Studio v1.1.0 - "记住这张" / "不要这样": a before/after sheet in the format of assets/taste.
 Usage: python3 -I make_pair.py ORIGINAL RESULT OUT_DIR NAME --kind=taste|counter [--genre=museum] [--crop=x0,y0,x1,y1]
 Writes OUT_DIR/NAME_before_after.jpg (taste) or OUT_DIR/NAME_before_bad.jpg (counter): original left, result right,
 both 900 px high, 12 px white gap; --crop (fractions of the frame) cuts both to the same detail. Prints JSON with the
-measured change (intensity_check.py) and a ready table row for references/taste_profile.md or counter_examples.md.
+measured change (intensity_check.py) and a ready table row for references/taste_profile.md.
 The host cannot change the installed package: the sheet and the row are what the user sends to the repository
 maintainer to make the sample permanent.
 """
@@ -38,9 +38,9 @@ def main(orig, res, out_dir, name, kind, genre=None, crop=None):
         change = f"L* {val('L_mean_change'):+.1f}，色度 ×{val('chroma_ratio'):.2f}，局部反差 ×{val('local_contrast_ratio'):.2f}"
     else:
         change = '（未量到）'
-    row = (f"| `{fn}` <照片> | <好在哪> | {change} |" if kind == 'taste' else f"| `{fn}` <照片> | <错在哪> | <怎么避免> |")
-    rep = {'tool': 'make_pair.py v1.2.0', 'file': str(Path(out_dir) / fn), 'kind': kind, 'size': list(sheet.size),
-           'measured_change': change, 'row_for_' + ('taste_profile.md' if kind == 'taste' else 'counter_examples.md'): row}
+    row = (f"| `{fn}` <照片> | <好在哪> | {change} |" if kind == 'taste' else f"不要｜<照片类型>｜<错在哪>｜<用户原话>｜<下次怎么避免>（对比图 {fn}）")
+    rep = {'tool': 'make_pair.py v1.1.0', 'file': str(Path(out_dir) / fn), 'kind': kind, 'size': list(sheet.size),
+           'measured_change': change, 'row_for_taste_profile.md': row}
     print(json.dumps(rep, ensure_ascii=False, indent=1))
     return rep
 

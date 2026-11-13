@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.0 - "风格：xx": grade parameters and a G phrase for a named style from assets/styles.json.
+"""Photographic Studio v1.1.0 - "风格：xx": grade parameters and a G phrase for a named style from assets/styles.json.
 Usage: python3 -I style_params.py STYLE OUT_PARAMS_JSON [--base=PARAMS_JSON]   (STYLE: key or Chinese name)
        python3 -I style_params.py --list
 With --base, the director's own parameters are kept and the style's are added on top (a style value replaces the same
@@ -40,7 +40,7 @@ def main(argv):
     base = json.loads(Path(opt['--base']).read_text(encoding='utf-8')) if '--base' in opt else {}
     params = merge(base, st['params'])
     Path(args[1]).write_text(json.dumps(params, ensure_ascii=False, indent=1), encoding='utf-8')
-    print(json.dumps({'tool': 'style_params.py v1.2.0', 'style': key, 'name': st['name'], 'g_phrase': st['g_phrase'],
+    print(json.dumps({'tool': 'style_params.py v1.1.0', 'style': key, 'name': st['name'], 'g_phrase': st['g_phrase'],
                       'fits': st['fits'], 'avoid': st['avoid'], 'params': params}, ensure_ascii=False, indent=1))
 
 

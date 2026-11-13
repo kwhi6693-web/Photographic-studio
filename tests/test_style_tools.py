@@ -1,4 +1,4 @@
-"""The v1.2.0 judging-layer tools: reference_style.py ("参考这张"), style_params.py ("风格：xx"), make_pair.py ("记住这张").
+"""The v1.1.0 judging-layer tools: reference_style.py ("参考这张"), style_params.py ("风格：xx"), make_pair.py ("记住这张").
 They only produce grade parameters or sheets; these tests check they are deterministic, stay inside their caps, push in
 the right direction, and that no named style breaks the physics checks on the real test photos."""
 import json, re

@@ -14,6 +14,3 @@ def check(doc, folder):
 def test_taste_samples_match_profile():
     check('taste_profile.md', 'taste')
 
-
-def test_counter_examples_match_doc():
-    check('counter_examples.md', 'counter')

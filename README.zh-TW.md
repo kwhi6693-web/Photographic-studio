@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.0-c8963e?style=flat-square" alt="version 1.2.0">
+  <img src="https://img.shields.io/badge/version-1.1.0-c8963e?style=flat-square" alt="version 1.1.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建築·街景·風光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -160,5 +160,5 @@ Skill 本身（執行說明、參考檔案和工具）採用 [GNU Affero General
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.2.0 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 AGPL-3.0 · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.1.0 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 AGPL-3.0 · 照片 © 作者本人</sub>
 </p>

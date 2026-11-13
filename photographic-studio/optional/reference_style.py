@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.0 - reference style ("参考这张"): grade parameters that move a photo toward a reference look.
+"""Photographic Studio v1.1.0 - reference style ("参考这张"): grade parameters that move a photo toward a reference look.
 Usage: python3 -I reference_style.py ORIGINAL REFERENCE OUT_PARAMS_JSON [--strength=0.6]
 Takes only the part of a look that does not depend on what is in the picture: the colour cast and the split toning,
 read on near-neutral pixels (clouds, walls, stone, grey shadows), plus a mild share of the reference's colourfulness.
@@ -93,7 +93,7 @@ def main(orig_p, ref_p, out_p, strength=0.6):
             if abs(v) >= 0.02: params = setter(path)(v)
         achieved = measure(params)
     Path(out_p).write_text(json.dumps(params, ensure_ascii=False, indent=1), encoding='utf-8')
-    rep = {'tool': 'reference_style.py v1.2.0', 'strength': strength, 'original': o, 'reference': r,
+    rep = {'tool': 'reference_style.py v1.1.0', 'strength': strength, 'original': o, 'reference': r,
            'target': {k: round(v, 2) for k, v in t.items()}, 'achieved_on_preview': achieved, 'params': params,
            'for_the_brief': {k: [o[k], r[k]] for k in ('contrast', 'dark', 'light')},
            'note': 'cast, split toning and a mild colourfulness share only; brightness and contrast are for the director to judge (for_the_brief: original, reference). Run finish.py with these params so the physics and intensity checks decide'}
