@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.4-c8963e?style=flat-square" alt="version 1.0.4">
+  <img src="https://img.shields.io/badge/version-1.0.5-c8963e?style=flat-square" alt="version 1.0.5">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建築·街景·風光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -136,6 +136,7 @@ photographic-studio/          ← Skill 本體（安裝這個目錄）
 │   ├── finish.py             ← 一步出片，含自動重做階梯
 │   ├── look_transfer.py      ← 原片畫素 + AI 光色
 │   ├── grade.py              ← 按導演單調色
+│   ├── settle.py             ← 一次完成力度校準
 │   ├── physics_check.py      ← 自然光物理檢查
 │   └── intensity_check.py    ← 力度檢查
 ├── assets/taste/             ← 口味參照：作者認可的前後對比
@@ -156,5 +157,5 @@ Skill 本身（執行說明、參考檔案和工具）採用 [GNU Affero General
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.0.4 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 AGPL-3.0 · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.0.5 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 AGPL-3.0 · 照片 © 作者本人</sub>
 </p>
