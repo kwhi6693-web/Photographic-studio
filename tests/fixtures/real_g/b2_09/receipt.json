@@ -1,0 +1,68 @@
+{
+ "tool": "finish.py v1.0.2",
+ "genre": "museum",
+ "attempts": [
+  {
+   "name": "default",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 1.57: G added detail that is not in the photo"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.13 < 1.3",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio"
+   ]
+  },
+  {
+   "name": "museum_strength",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 1.57: G added detail that is not in the photo"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: lit_warmth_change 7.47 > 6.0",
+   "problems": [],
+   "strength_problems": [
+    "lit_warmth_change"
+   ]
+  },
+  {
+   "name": "local0_safer_grade",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 1.57: G added detail that is not in the photo"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.13 < 1.3; subject_local_contrast_ratio 1.081 < 1.14",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio"
+   ]
+  },
+  {
+   "name": "n_direct",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.06 < 1.3; subject_local_contrast_ratio 1.091 < 1.14",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio"
+   ]
+  },
+  {
+   "name": "n_direct_museum_strength",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "IN_RANGE",
+   "problems": [],
+   "strength_problems": []
+  }
+ ],
+ "delivered": "default",
+ "verdict": "DELIVER_WITH_FLAGS: subject_chroma_ratio"
+}

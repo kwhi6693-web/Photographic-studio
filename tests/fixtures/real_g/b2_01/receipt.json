@@ -1,0 +1,87 @@
+{
+ "tool": "finish.py v1.0.2",
+ "genre": "museum",
+ "attempts": [
+  {
+   "name": "default",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 2.53: G added detail that is not in the photo",
+    "LIFT_LIMITED 0.168: G brightened dark areas more than the original detail can carry",
+    "G_GLOW_LEFT 2.93: a glow G invented on the dark background is still 2.9 L* above it in the output (v1.0.2)",
+    "G_GLOW_NOT_CARRIED 0.143: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 3.973 > 1.85; subject_L_change 9.11 > 7.0",
+   "problems": [
+    "invented_glow_left"
+   ],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_L_change"
+   ]
+  },
+  {
+   "name": "museum_strength",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 2.53: G added detail that is not in the photo",
+    "LIFT_LIMITED 0.168: G brightened dark areas more than the original detail can carry",
+    "G_GLOW_LEFT 2.93: a glow G invented on the dark background is still 2.9 L* above it in the output (v1.0.2)",
+    "G_GLOW_NOT_CARRIED 0.143: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "CHECK_BY_EYE: darkening_patch",
+   "intensity": "OUT_OF_RANGE: L_mean_change 5.63 > 5.0; subject_chroma_ratio 5.383 > 1.85; subject_L_change 12.47 > 7.0",
+   "problems": [
+    "darkening_patch",
+    "invented_glow_left"
+   ],
+   "strength_problems": [
+    "L_mean_change",
+    "subject_chroma_ratio",
+    "subject_L_change"
+   ]
+  },
+  {
+   "name": "local0_safer_grade",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 2.53: G added detail that is not in the photo",
+    "LIFT_LIMITED 0.163: G brightened dark areas more than the original detail can carry",
+    "G_GLOW_LEFT 2.92: a glow G invented on the dark background is still 2.9 L* above it in the output (v1.0.2)",
+    "G_GLOW_NOT_CARRIED 0.135: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 3.956 > 1.85; subject_L_change 9.26 > 7.0",
+   "problems": [
+    "invented_glow_left"
+   ],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_L_change"
+   ]
+  },
+  {
+   "name": "n_direct",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.104 < 1.3; subject_local_contrast_ratio 1.1 < 1.14",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio"
+   ]
+  },
+  {
+   "name": "n_direct_museum_strength",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "IN_RANGE",
+   "problems": [],
+   "strength_problems": []
+  }
+ ],
+ "delivered": "n_direct_museum_strength",
+ "verdict": "DELIVER"
+}
