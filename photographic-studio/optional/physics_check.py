@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.0.2 - physical plausibility check: does the edit obey how light behaves?
+"""Photographic Studio v1.0.4 - physical plausibility check: does the edit obey how light behaves?
 Usage: python3 physics_check.py ORIGINAL FINAL [RECEIPT_JSON]
 Compares final with original (a final of another size is resampled for measuring). Pure numpy + Pillow.
 Checks (each a number + pass/flag; the agent still judges by eye):
@@ -41,6 +41,17 @@ def edge_gain(Lo, Lf, grid=6):
                 if m.sum() < 300: continue
                 hh = H[sl][m]; best = max(best, float((hh * Rz[sl][m]).sum() / (hh * hh).sum()))
     return round(best, 2)
+
+
+def colour_explained(Lo, ao, bo, D):
+    """D minus the median change of all pixels with the same original colour (L*, a*, b* bins; bins with fewer than
+    200 pixels are left as they are)."""
+    q = lambda x, a, b, n: np.clip(((x - a) / (b - a) * n).astype(int), 0, n - 1)
+    key = (q(Lo, 0, 100, 10) * 256 + q(ao, -60, 60, 16) * 16 + q(bo, -60, 60, 16)).ravel()
+    cnt = np.bincount(key, minlength=2560); order = np.argsort(key, kind='stable'); ks = key[order]; ds = D.ravel()[order]
+    starts = np.searchsorted(ks, np.arange(2560)); med = np.zeros(2560, np.float32)
+    for k in np.nonzero(cnt > 200)[0]: med[k] = np.median(ds[starts[k]:starts[k] + cnt[k]])
+    return D - np.where(cnt[key] > 200, med[key], 0).reshape(D.shape)
 
 
 def main():
@@ -153,14 +164,24 @@ def main():
     else:
         checks['spotlight_glow'] = {'ok': None, 'note': 'no large dark background'}
     # a natural edge falloff is symmetric about the frame centre; what is left after removing the symmetric part is a blotch
-    Dl = blur(Lf - Lo, max(12, min(h, w) // 20))
+    # v1.0.4: also measure what is left after removing what the original pixel's colour explains (a grade that deepens
+    #   all of the sky or all of a red wall darkens every pixel of that colour; a blotch darkens one place and not the
+    #   rest of the same colour). Flag a very strong uneven darkening (< -20) whatever the colour says - removed lamps
+    #   darken all lamp-coloured pixels together - and a moderate one (< -14) only if the colour does not explain it
+    #   (< -9 after removing it). Provisional lines from four cases: real G sky/bronze deepening (-15.7/-7.4,
+    #   -14.9/-5.2) pass; removed night lamps (-24.4) and a museum frame lifted flat (-18.0/-11.1) are flagged.
     yy, xx = np.mgrid[0:h, 0:w]; rr = np.hypot((xx - w / 2) / (w / 2), (yy - h / 2) / (h / 2))
     bins = np.minimum((rr / 1.42 * 12).astype(int), 11)
-    prof = np.array([np.median(Dl[bins == k]) if (bins == k).any() else 0 for k in range(12)], np.float32)
-    resid = Dl - prof[bins]
-    low = float(np.percentile(resid, 0.5))
-    checks['darkening_patch'] = {'deepest_uneven_darkening_L': round(low, 2), 'ok': bool(low > -14.0),
-                                 'meaning': 'no dark blotch or off-centre vignette (an even edge falloff is fine)'}
+
+    def uneven_low(D):
+        Dl = blur(D, max(12, min(h, w) // 20))
+        prof = np.array([np.median(Dl[bins == k]) if (bins == k).any() else 0 for k in range(12)], np.float32)
+        return float(np.percentile(Dl - prof[bins], 0.5))
+    low = uneven_low(Lf - Lo)
+    low_c = uneven_low(colour_explained(Lo, lo[..., 1], lo[..., 2], Lf - Lo))
+    checks['darkening_patch'] = {'deepest_uneven_darkening_L': round(low, 2), 'not_explained_by_colour_L': round(low_c, 2),
+                                 'ok': bool(not (low <= -20.0 or (low <= -14.0 and low_c <= -9.0))),
+                                 'meaning': 'no dark blotch or off-centre vignette (an even edge falloff, or deepening all of one colour, is fine)'}
 
     # 6 highlight order: the top 1% brightest areas stay among the brightest
     tb = so >= np.percentile(so, 99)

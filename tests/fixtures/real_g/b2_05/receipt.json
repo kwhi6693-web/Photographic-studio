@@ -1,0 +1,85 @@
+{
+ "tool": "finish.py v1.0.2",
+ "genre": "museum",
+ "attempts": [
+  {
+   "name": "default",
+   "look_transfer_flags": [
+    "G_GLOW_LEFT 4.88: a glow G invented on the dark background is still 4.9 L* above it in the output (v1.0.2)",
+    "G_LIGHT_REMOVAL_NOT_CARRIED 0.025: G blacked out a real light patch; kept the original light there (v0.3.8)",
+    "G_GLOW_NOT_CARRIED 0.028: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "CHECK_BY_EYE: darkening_patch",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 0.876 < 1.3; subject_local_contrast_ratio 1.049 < 1.14",
+   "problems": [
+    "darkening_patch",
+    "invented_glow_left"
+   ],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio"
+   ]
+  },
+  {
+   "name": "museum_strength",
+   "look_transfer_flags": [
+    "G_GLOW_LEFT 4.88: a glow G invented on the dark background is still 4.9 L* above it in the output (v1.0.2)",
+    "G_LIGHT_REMOVAL_NOT_CARRIED 0.025: G blacked out a real light patch; kept the original light there (v0.3.8)",
+    "G_GLOW_NOT_CARRIED 0.028: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "CHECK_BY_EYE: halo, darkening_patch",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.075 < 1.3",
+   "problems": [
+    "halo",
+    "darkening_patch",
+    "invented_glow_left"
+   ],
+   "strength_problems": [
+    "subject_chroma_ratio"
+   ]
+  },
+  {
+   "name": "local0_safer_grade",
+   "look_transfer_flags": [
+    "G_GLOW_LEFT 4.69: a glow G invented on the dark background is still 4.7 L* above it in the output (v1.0.2)",
+    "G_LIGHT_REMOVAL_NOT_CARRIED 0.024: G blacked out a real light patch; kept the original light there (v0.3.8)",
+    "G_GLOW_NOT_CARRIED 0.019: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: local_contrast_ratio 0.988 < 1.0; subject_chroma_ratio 0.865 < 1.3; subject_local_contrast_ratio 1.02 < 1.14",
+   "problems": [
+    "invented_glow_left"
+   ],
+   "strength_problems": [
+    "local_contrast_ratio",
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio"
+   ]
+  },
+  {
+   "name": "n_direct",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.019 < 1.3; subject_local_contrast_ratio 1.102 < 1.14",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio"
+   ]
+  },
+  {
+   "name": "n_direct_museum_strength",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "IN_RANGE",
+   "problems": [],
+   "strength_problems": []
+  }
+ ],
+ "delivered": "n_direct_museum_strength",
+ "verdict": "DELIVER"
+}

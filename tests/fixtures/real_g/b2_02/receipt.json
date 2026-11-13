@@ -1,0 +1,71 @@
+{
+ "tool": "finish.py v1.0.2",
+ "genre": "museum",
+ "attempts": [
+  {
+   "name": "default",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 2.23: G added detail that is not in the photo",
+    "G_GLOW_NOT_CARRIED 0.091: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 2.061 > 1.85",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio"
+   ]
+  },
+  {
+   "name": "museum_strength",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 2.23: G added detail that is not in the photo",
+    "G_GLOW_NOT_CARRIED 0.091: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 2.817 > 1.85; subject_L_change 7.37 > 7.0",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_L_change"
+   ]
+  },
+  {
+   "name": "local0_safer_grade",
+   "look_transfer_flags": [
+    "G_SHARPER_THAN_SOURCE 2.23: G added detail that is not in the photo",
+    "G_GLOW_NOT_CARRIED 0.075: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 2.064 > 1.85",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio"
+   ]
+  },
+  {
+   "name": "n_direct",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "OUT_OF_RANGE: subject_chroma_ratio 1.072 < 1.3; subject_local_contrast_ratio 1.067 < 1.14",
+   "problems": [],
+   "strength_problems": [
+    "subject_chroma_ratio",
+    "subject_local_contrast_ratio"
+   ]
+  },
+  {
+   "name": "n_direct_museum_strength",
+   "look_transfer_flags": [
+    "N direct: G not used"
+   ],
+   "physics": "PHYSICALLY_PLAUSIBLE",
+   "intensity": "IN_RANGE",
+   "problems": [],
+   "strength_problems": []
+  }
+ ],
+ "delivered": "default",
+ "verdict": "DELIVER_WITH_FLAGS: subject_chroma_ratio"
+}
