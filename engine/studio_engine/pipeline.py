@@ -22,6 +22,10 @@ from .providers import ImageEditor, NotConfigured, ProviderError, VisionModel, m
 from .tools import ToolError, Tools
 
 VERSION = '2.2.0'
+
+
+class _SkipG(Exception):
+    """v1.0.9: the brief says the light is already good, so the image model is not called."""
 SERIOUS = ('tone_order', 'light_shade_sep', 'darkening_patch', 'spotlight_glow', 'halo', 'removed_light')
 
 
@@ -98,9 +102,14 @@ class Studio:
             # G: up to two calls; the second only when the first does not match the scene
             g = None
             try:
+                if brief.get('light_already_good'):   # v1.0.9: light already right -> N direct with the brief's light params
+                    rec['steps'].append({'step': 'g', 'skipped': 'light_already_good'})
+                    raise _SkipG()
                 g = self._g(src, prompts.g_prompt(brief), out, rec)
                 if g is None and rec['g_calls'] < self.cfg.g_max_calls:
                     g = self._g(src, prompts.g_prompt(brief, ['scene']), out, rec)
+            except _SkipG:
+                pass
             except (ProviderError, ToolError) as e:
                 rec['steps'].append({'step': 'g', 'error': str(e)[:400]})   # fall back to N direct
             t = time.time()

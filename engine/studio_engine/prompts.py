@@ -18,7 +18,7 @@ Return ONLY JSON matching the schema. Use the measurements as evidence; trust yo
 
 BRIEF_SCHEMA = {
     'type': 'object', 'additionalProperties': False,
-    'required': ['story', 'subject', 'genre', 'portrait', 'diagnoses', 'keep', 'g_intent', 'params'],
+    'required': ['story', 'subject', 'genre', 'portrait', 'diagnoses', 'keep', 'light_already_good', 'g_intent', 'params'],
     'properties': {
         'story': {'type': 'string', 'description': 'one line: the point of interest (a story is only one kind; also geometry/order, light, colour, texture, mood, space, minimalism) and the style direction'},
         'subject': {'type': 'string', 'description': 'what the subject is and where it is in the frame'},
@@ -29,6 +29,7 @@ BRIEF_SCHEMA = {
                                 'properties': {'problem': {'type': 'string'}, 'evidence': {'type': 'string'},
                                                'params': {'type': 'array', 'items': {'type': 'string'}, 'description': 'names of the params that fix it'}}}},
         'keep': {'type': 'string', 'description': 'what is already good in this photo and must not change'},
+        'light_already_good': {'type': 'boolean', 'description': 'v1.0.9: true when the light, colour and depth are already right and only a light refinement is needed; then the image model is not called'},
         'g_intent': {'type': 'string', 'description': 'English, 2-3 concrete light-and-colour intents for the image model, no numbers'},
         'params': {'type': 'object', 'additionalProperties': False,
                    'required': ['exposure_ev', 'contrast', 'highlights', 'shadows', 'clarity', 'vibrance', 'saturation', 'levels_black'],
@@ -85,6 +86,7 @@ def clamp_brief(b: dict) -> dict:
     if lb: p['levels'] = {'black': lb}
     b['params'] = p
     b['diagnoses'] = list(b.get('diagnoses') or [])
+    b['light_already_good'] = bool(b.get('light_already_good'))
     if b.get('genre') not in GENRES:
         b['genre'] = 'other'
     b['portrait'] = bool(b.get('portrait')) or b.get('genre') == 'portrait'

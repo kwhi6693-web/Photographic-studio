@@ -41,7 +41,7 @@
 
 | 诊断 | 判断依据 | 给 G 的说法（写进摄影意图） | N 的参数 |
 |---|---|---|---|
-| 光线已经很好（v1.0.9） | 光比、色彩、层次都已到位（例如逆光加斑驳日光） | keep the light as it is; only refine | 只做轻修：`highlights` −2…−4、`vibrance` ≤0.1、`clarity` ≤0.1；**不提亮、不加饱和** |
+| 光线已经很好（v1.0.9） | 光比、色彩、层次都已到位（例如逆光加斑驳日光） | （不调用 G） | 只做轻修：`highlights` −2…−4、`vibrance` ≤0.1、`clarity` ≤0.1；**不提亮、不加饱和**；**不调用 G，走 N 直出**（SKILL.md 第 5 步），否则 G 的光色会把它修重 |
 | 阴天光线平（v1.0.9） | 阴天、散射光，没有方向、没有影子 | gentle shape without inventing sun | `clarity` 0.1–0.2、`contrast` 0.05–0.1、轻微 `vignette` 2–4；**不加暖、不造阳光、不把阴天修成晴天** |
 | 逆光主体太暗 | 主体是剪影但本应看清 | open the subject's shadow side gently, keep the backlight and the rim | `shadows` 4–8；需要时 `regions` 提亮主体 lift ≤6、`edge_aware: true`，提完主体仍比逆光背景暗 |
 | 主体在阴影里（v1.0.9） | 主体落在阴影中而不是逆光剪影，四周反而受光 | let the subject read in its own soft light | `shadows` 3–6；需要时 `regions` 提亮主体 lift ≤5、`edge_aware: true`；提完仍是阴影里的亮度，不造光 |
