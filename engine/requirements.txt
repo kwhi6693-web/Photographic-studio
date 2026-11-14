@@ -1,0 +1,9 @@
+numpy==2.5.3
+pillow==12.3.0
+opencv-python-headless==5.0.0.93
+requests==2.34.2
+fastapi==0.162.7
+uvicorn==0.54.0
+python-multipart==0.0.32
+httpx==0.28.1
+pytest==9.1.1

@@ -13,5 +13,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: pip install -r tests/requirements.txt
-      - run: python -m pytest tests -q -rx
+      - run: pip install -r tests/requirements.txt -r engine/requirements.txt
+      - run: python -m pytest tests engine/tests -q -rx
