@@ -11,6 +11,9 @@ default attempt's sole problem is that nobody can see the change, the same grade
 original graded without G, (5) N direct at museum strength (again only when N direct's sole problem is no visible
 change). The first attempt that passes is delivered; if none passes, the one with the fewest physics problems,
 then the fewest strength problems, is delivered and its problems are listed (v0.3.8). It never stops to ask.
+v1.0.9: no stacked clarity - where G's light already raised the local contrast, the grade's clarity is reduced by the
+same amount (fully off once G added 25 % or more), so G's local contrast and N's clarity do not stack into hard,
+bright rims (the approved blue vase: gold rims with edge gain 0.86).
 Deterministic. Needs numpy, Pillow, OpenCV.
 """
 import json, sys, tempfile, shutil
@@ -41,6 +44,27 @@ def boost(params):
     for name, v in MUSEUM_L3['hues'].items():
         cur = hs.setdefault(name, {}); cur['sat'] = max(float(cur.get('sat', 1)), v['sat'])
     return q
+
+
+def local_contrast_gain(src, img):
+    """Mean local contrast (L*, 8 px scale) of img over that of src."""
+    if str(HERE) not in sys.path: sys.path.insert(0, str(HERE))
+    from ps_common import load_rgb, srgb_to_lab, blur
+    import numpy as np
+    from PIL import Image
+    o = load_rgb(src); f = load_rgb(img)
+    if f.shape != o.shape:
+        f = np.asarray(Image.fromarray(np.uint8(np.rint(f * 255))).resize((o.shape[1], o.shape[0]), Image.LANCZOS)).astype(np.float32) / 255
+    Lo, Lf = srgb_to_lab(o)[..., 0], srgb_to_lab(f)[..., 0]
+    return float(np.abs(Lf - blur(Lf, 8)).mean() / max(np.abs(Lo - blur(Lo, 8)).mean(), 1e-6))
+
+
+def unstack(params, gain):
+    """v1.0.9: clarity minus what G already added (G +25 % local contrast or more -> no clarity)."""
+    c = float(params.get('clarity', 0) or 0)
+    if c <= 0 or gain <= 1.0: return params, None
+    q = json.loads(json.dumps(params)); q['clarity'] = round(c * max(0.0, 1.0 - (gain - 1.0) / 0.25), 3)
+    return q, {'g_local_contrast_gain': round(gain, 3), 'clarity': [c, q['clarity']]}
 
 
 def safer(params):
@@ -101,11 +125,16 @@ def main():
                 r1 = run('look_transfer.py', src, gsrc, lt, *ltopt)
             if not lt.exists():
                 rec['attempts'].append({'name': name, 'result': r1.get('verdict')}); continue
+            unstacked = None
+            if gsrc is not None:
+                p, unstacked = unstack(p, local_contrast_gain(src, lt))
+                pj.write_text(json.dumps(p), encoding='utf-8')
             run('grade.py', lt, fin, pj)
             if not fin.exists(): shutil.copy(lt, fin)
             bad, weak, iv, pv = problems(src, fin, genre)
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
-            rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak})
+            rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak,
+                                    **({'clarity_unstacked': unstacked} if unstacked else {})})
             result[name] = (bad, weak)
             # v1.0.2: a G route that passes the physics checks and visibly changes the photo beats N direct whatever the
             #   strength ranges say: ranges trim the excess afterwards (step 6), they are not a reason to drop G's look.

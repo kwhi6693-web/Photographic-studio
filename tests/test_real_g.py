@@ -36,3 +36,15 @@ def test_route(tmp_path, case):
     if not EXPECTED[case].startswith('n_direct'):
         chosen = next(a for a in new['attempts'] if a['name'] == new['delivered'])
         assert chosen['problems'] == [], chosen['problems']
+
+
+def test_clarity_does_not_stack_on_g_local_contrast(tmp_path):
+    """v1.0.9: b2_02 (glass orchid frames): G's light already raised local contrast by about 29 %, so the brief's clarity
+    0.12 is switched off on the G route instead of stacking into hard rims; the route stays the same."""
+    d = RG / 'b2_02'
+    out, rec = tmp_path / 'f.png', tmp_path / 'f.json'
+    run_tool('finish.py', next(d.glob('original.*')), d / 'g.png', d / 'params.json', out, rec, '--genre=museum')
+    r = json.loads(rec.read_text())
+    a = next(x for x in r['attempts'] if x['name'] == 'default')
+    assert r['delivered'] == 'default'
+    assert a['clarity_unstacked']['g_local_contrast_gain'] > 1.25 and a['clarity_unstacked']['clarity'][1] == 0.0
