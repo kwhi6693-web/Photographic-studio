@@ -1,0 +1,26 @@
+# Photographic Studio engine - configuration template.
+# Copy to engine/config.toml (git-ignored) and fill in the keys, or set the environment variables
+# OPENAI_API_KEY / GEMINI_API_KEY instead. Never commit a real key.
+#
+# Model names change often: check the provider's model list before the first run.
+
+[vision]                      # reads the photo and writes the director brief (JSON)
+provider = "openai"           # openai | gemini | replay
+model = ""                    # e.g. a current GPT model that accepts images
+api_key = ""                  # <- leave empty here; prefer OPENAI_API_KEY
+price_per_call_usd = 0.01     # estimate for the cost report only
+
+[editor]                      # G: edits the original photo (light and colour direction)
+provider = "openai"           # openai | gemini | replay
+model = ""                    # e.g. gpt-image-2.5-sunburst (OpenAI) or a Gemini image model
+api_key = ""                  # <- leave empty here; prefer OPENAI_API_KEY / GEMINI_API_KEY
+size = "auto"                 # OpenAI: output size
+quality = "high"              # OpenAI: low | medium | high
+price_per_call_usd = 0.10     # estimate for the cost report only
+
+[engine]
+work_size = 1536              # long edge of the working image
+g_max_calls = 2               # G calls per photo, retries included
+timeout_s = 180               # per network call
+# tools_dir = "../photographic-studio/optional"
+# replay_dir = ""             # provider = "replay": a folder with params.json, g.png, receipt.json
