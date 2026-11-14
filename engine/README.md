@@ -52,8 +52,9 @@ same routes.
 ## Not done yet (by design, waiting for the API key or the app phase)
 
 - Live calls are untested until a key is configured; `selftest --live` is the first thing to run.
-- Speed (replay, CPU, no model latency): finish ≈ 25–30 s + settle ≈ 25–33 s per photo, plus the model calls.
-  The 60 s target needs the model calls to stay under ~10 s in total, or finish to get faster.
+- Speed target: **≤ 120 s per photo** (owner decision 2026-11-14), from upload to finished photo. Measured (replay,
+  CPU, no model latency): finish ≈ 25–30 s + settle ≈ 25–33 s; the model calls must fit in the remaining ~60 s.
+  The eval summary flags every run over 120 s.
 - HEIC/HEIF uploads need `pillow-heif` installed.
 - Crop/straighten (`reframe.py`) is not decided by the engine yet; the brief has no crop field.
 - Service: single process, in-memory queue, local disk, no accounts or payments.
