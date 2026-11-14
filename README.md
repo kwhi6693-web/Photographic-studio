@@ -190,7 +190,7 @@ The skill package has no place for an API key and does not contain the engine. T
    fix
    ```
 
-Tested so far in one such agent (its iPhone and web apps); other agents with image generation that support `SKILL.md` should work but are untested.
+Tested so far on image2.6 (iPhone and web apps); other agents with image generation that support `SKILL.md` should work but are untested.
 
 ### Option 2 · Engine (your own API key)
 
@@ -269,7 +269,7 @@ It looks at what the host can do first, then decides how to work:
 
 **Do I need an API key?** Not for the skill. Only for the engine.
 
-**Can I use it on my phone?** Yes — the skill was developed and tested in the iPhone app of an LLM agent with image generation.
+**Can I use it on my phone?** Yes — the skill was developed and tested on image2.6 in an iPhone app.
 
 **How long does one photo take?** In the agent app, measured: about 3–4 minutes per photo, one after another for a batch. The engine's target is 2 minutes or less per photo.
 
