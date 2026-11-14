@@ -308,8 +308,8 @@ API 金鑰特意留空：設定環境變數 `OPENAI_API_KEY` / `GEMINI_API_KEY`�
 ```text
 photographic-studio/          ← Skill 本體（安裝這個目錄）
 ├── SKILL.md                  ← 執行說明，入口
-├── references/               ← 總則、讀片與處方、六類題材、導演單、物理、力度、交付……
-│   └── genres/               ← 建築 · 街景 · 風光 · 夜景 · 室內 · 靜物與展品
+├── references/               ← 總則、讀片與處方、七類題材（含園林）、導演單、物理、力度、交付……
+│   └── genres/               ← 建築 · 街景 · 風光 · 園林 · 夜景 · 室內 · 靜物與展品
 ├── optional/                 ← 工具（numpy · Pillow · OpenCV）
 │   ├── finish.py             ← 一步出片，含自動重做階梯
 │   ├── look_transfer.py      ← 原片畫素 + AI 光色

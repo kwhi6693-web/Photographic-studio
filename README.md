@@ -309,7 +309,7 @@ API keys are left empty on purpose: set `OPENAI_API_KEY` / `GEMINI_API_KEY` or f
 photographic-studio/          ← the skill itself (install this folder)
 ├── SKILL.md                  ← entry point and instructions
 ├── references/               ← principles, reading & prescriptions, genres, brief, physics, strength, delivery…
-│   └── genres/               ← architecture · street · landscape · night · interior · still life & museum
+│   └── genres/               ← architecture · street · landscape · garden · night · interior · still life & museum
 ├── optional/                 ← tools (numpy · Pillow · OpenCV)
 │   ├── finish.py             ← one-step edit with an automatic retry ladder
 │   ├── look_transfer.py      ← original pixels + AI light & colour
