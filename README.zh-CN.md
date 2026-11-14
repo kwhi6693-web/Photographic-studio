@@ -125,6 +125,10 @@
 
 ---
 
+## ⚙️ 引擎（v2.0.0，原型）
+
+同一套流程写成代码，不依赖 ChatGPT：读片和 G 调用模型 API，其余全部用确定性工具；附评测程序和给未来 App 用的 HTTP 服务骨架。API 密钥特意留空，见 [`engine/README.md`](engine/README.md)。
+
 ## 🗂️ 仓库结构
 
 ```text

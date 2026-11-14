@@ -125,6 +125,10 @@ It looks at what the host can do first, then decides how to work:
 
 ---
 
+## ⚙️ Engine (v2.0.0, prototype)
+
+The same pipeline as code, without ChatGPT: model APIs for the brief and G, the deterministic tools for everything else, an evaluation harness and an HTTP service skeleton for the future app. API keys are left empty on purpose — see [`engine/README.md`](engine/README.md).
+
 ## 🗂️ Repository layout
 
 ```text
