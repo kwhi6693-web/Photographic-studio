@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="620" viewBox="0 0 1280 620">
+  <title>仓库架构</title>
+  <defs>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2130"/><stop offset="1" stop-color="#131823"/></linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c8963e"/></marker>
+  </defs>
+  <rect width="1280" height="620" rx="18" fill="#0d1017"/>
+  <g font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif">
+    <rect x="60" y="36" width="520" height="80" rx="14" fill="url(#card)" stroke="#2c3446" stroke-width="1"/><text x="320.0" y="70.0" text-anchor="middle" font-size="18" font-weight="600" fill="#f3eee4">ChatGPT app</text><text x="320.0" y="95.0" text-anchor="middle" font-size="14" fill="#a9b1c3">现在在用 · 自带 G</text>
+    <rect x="700" y="36" width="520" height="80" rx="14" fill="url(#card)" stroke="#2c3446" stroke-width="1"/><text x="960.0" y="70.0" text-anchor="middle" font-size="18" font-weight="600" fill="#f3eee4">模型 API</text><text x="960.0" y="95.0" text-anchor="middle" font-size="14" fill="#a9b1c3">OpenAI / Gemini · 密钥留空</text>
+    <line x1="320" y1="116" x2="320" y2="154" stroke="#c8963e" stroke-width="2" marker-end="url(#arr)"/><line x1="960" y1="116" x2="960" y2="154" stroke="#c8963e" stroke-width="2" marker-end="url(#arr)"/>
+    <rect x="60" y="158" width="520" height="92" rx="14" fill="url(#card)" stroke="#3a5ba8" stroke-width="1.5"/><text x="320.0" y="198.0" text-anchor="middle" font-size="18" font-weight="600" fill="#f3eee4">photographic-studio/  v1.0.8</text><text x="320.0" y="223.0" text-anchor="middle" font-size="14" fill="#a9b1c3">SKILL.md · 参考规则 · 口味样本</text>
+    <rect x="700" y="158" width="520" height="92" rx="14" fill="url(#card)" stroke="#3a5ba8" stroke-width="1.5"/><text x="960.0" y="198.0" text-anchor="middle" font-size="18" font-weight="600" fill="#f3eee4">engine/  v2.1.0</text><text x="960.0" y="223.0" text-anchor="middle" font-size="14" fill="#a9b1c3">流程代码 · 评测 · App 接口</text>
+    <line x1="320" y1="250" x2="320" y2="300" stroke="#c8963e" stroke-width="2" marker-end="url(#arr)"/><line x1="960" y1="250" x2="960" y2="300" stroke="#c8963e" stroke-width="2" marker-end="url(#arr)"/>
+    <rect x="60" y="304" width="1160" height="92" rx="14" fill="url(#card)" stroke="#c8963e" stroke-width="1.5"/><text x="640.0" y="344.0" text-anchor="middle" font-size="18" font-weight="600" fill="#e9c46a">optional/  共用的确定性工具</text><text x="640.0" y="369.0" text-anchor="middle" font-size="14" fill="#a9b1c3">光色迁移 · 出片阶梯 · 力度校准 · 全尺寸 · 物理与力度检查</text>
+    <line x1="640" y1="452" x2="640" y2="400" stroke="#c8963e" stroke-width="2" marker-end="url(#arr)"/>
+    <rect x="60" y="454" width="1160" height="80" rx="14" fill="url(#card)" stroke="#2c3446" stroke-width="1"/><text x="640.0" y="488.0" text-anchor="middle" font-size="18" font-weight="600" fill="#f3eee4">tests/ + GitHub Actions</text><text x="640.0" y="513.0" text-anchor="middle" font-size="14" fill="#a9b1c3">真实照片样例 · 每次提交自动跑</text>
+    <rect x="60" y="550" width="1160" height="50" rx="14" fill="url(#card)" stroke="#2c3446" stroke-width="1"/><text x="640.0" y="581.0" text-anchor="middle" font-size="15" fill="#a9b1c3">LICENSE：MIT · 照片版权归作者</text>
+  </g>
+</svg>

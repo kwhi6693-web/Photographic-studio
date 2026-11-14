@@ -10,6 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.8-c8963e?style=flat-square" alt="version 1.0.8">
+  <img src="https://img.shields.io/badge/engine-2.1.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.1.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建筑·街景·风光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -21,6 +22,17 @@
   它会像一位后期摄影师那样先读懂这张照片，再交给你一张——<br>
   <b>看得出提升、仍然是你拍的那一刻、光线讲得通、看不出 AI 痕迹</b>——的成片。
 </p>
+
+---
+
+## 🎯 解决什么问题
+
+给**喜欢拍照、但不想花时间修图**的人用。
+
+- 自己用 Lightroom 一类的软件修，每张都要技术和时间。
+- 一键增强要么几乎没变化，要么处理过度：塑料感、假 HDR、凭空加光、补出相机没拍到的细节。
+
+Photographic Studio 介于两者之间：**一句话，一张成片**。它先读懂照片，再修到明显更好，同时仍是你拍下的那一刻（每个像素都来自原片）、光线符合真实物理、看不出 AI 痕迹。适用于建筑、街景、风光、夜景、室内、静物与展品——**不处理人像**。
 
 ---
 
@@ -42,6 +54,36 @@
     <td><img src="photographic-studio/assets/taste/04_willow_lake_before_after.jpg" alt="垂柳与湖"><br><sub><b>垂柳与湖</b> · 克制的清透，晴日里的安静</sub></td>
   </tr>
 </table>
+
+---
+
+## 🔁 输入与输出示例
+
+**在对话里（skill）**——输入：一张照片加一个字。输出：一张成片、一行故事与风格、一个说明怎么做出来的标签。下面是测试中的两次真实交付：
+
+```text
+你：  （天窗下枯藤的照片）修
+它：  （成片）
+      故事：枯藤在几何天窗下投出交错影子｜风格：静谧现代室内，藤影与建筑几何对话
+      原片像素 + G 光色 → N 精修
+```
+
+```text
+你：  （灰墙前红枫的照片）修
+它：  （成片）
+      故事：晴日古墙前红枫与瓦影相映｜风格：清透园林建筑，灰砖衬红叶
+      N 直出          ← 图像模型两次都把天空压暗，被检查拦下，只用确定性调色出片
+```
+
+**在命令行里（引擎，原型）**——输入：一个照片文件。输出：一个文件夹，里面有 `final.png`（照片大于工作尺寸时为 `final_full.jpg`）、记录每一步耗时和估算模型费用的 `receipt.json`，以及中间文件。下面是一次真实运行（回放一张已记录的博物馆照片）：
+
+```text
+$ python -m studio_engine.cli run original.jpeg out/
+{ "status": "done", "final": "out/final.png", "route": "museum_strength", "seconds": 66.7, "cost_usd": 0.0 }
+steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0.3 s
+```
+
+（这里 `cost_usd` 为 0，是因为回放模式不发出付费调用；接上真实模型 API 后，回执里会显示估算费用。）
 
 ---
 
@@ -88,9 +130,9 @@
 
 ---
 
-## 🚀 开始使用
+## 🚀 安装
 
-**作为 Agent Skill 安装**：把 [`photographic-studio/`](photographic-studio) 整个目录安装到支持 `SKILL.md` 的宿主，然后：
+**作为 Agent Skill 安装**：把 [`photographic-studio/`](photographic-studio) 整个目录安装到支持 `SKILL.md` 的宿主（实测过的是 ChatGPT app；其他宿主应可使用，但尚未实测），然后：
 
 ```text
 （发一张照片）修
@@ -102,15 +144,38 @@
 按附件里的 Photographic Studio 处理这张照片
 ```
 
-### 口令
+**引擎（原型，Python 3.11+）**：
+
+```bash
+pip install -r engine/requirements.txt
+cp engine/config.example.toml engine/config.toml     # 填模型名；这个文件不会上传到 GitHub
+export OPENAI_API_KEY=...                            # 或 GEMINI_API_KEY=...（也可以填进 config.toml）
+cd engine && python -m studio_engine.cli selftest    # 显示配置情况；加 --live 发一次很小的真实调用
+```
+
+引擎目前还没有接真实的模型 API 跑过：至今还没有配置密钥。
+
+---
+
+## 🕹️ 使用方法
+
+### 在对话里（skill）
 
 | 你说 | 它做 |
 |---|---|
 | `修` | 读片 → 导演单 → 出片 → 检查 → 交一张成片 |
 | `精修` | 多出几个方向，比较后挑最好的一张（更慢） |
-| `太暖了` · `再通透一点` | 按你的话改导演单重做，并记住这条口味 |
+| `太暖了` · `再通透一点` | 按你的话改导演单重做；本次对话内记下这条口味 |
 | `看回执` | 导演单、提示词、参数、检查结论 |
 | `看标记表` | 每张照片的处理标记汇总 |
+
+### 在命令行里（引擎）
+
+| 命令 | 作用 |
+|---|---|
+| `python -m studio_engine.cli run 照片 输出目录` | 一张照片 → `输出目录/final.png` + `receipt.json` |
+| `python -m studio_engine.eval 照片目录 输出目录 --runs=2` | 目录里每张照片各跑 N 次 → 对比图 + `summary.md`（完成率、耗时、费用、两次之间的差别、超过 2 分钟的次数） |
+| `uvicorn service.app:app` | 给未来 App 用的 HTTP 接口：上传、查询、下载、删除（原型：还没有账号和支付） |
 
 ### 能力分级
 
@@ -125,9 +190,23 @@
 
 ---
 
-## ⚙️ 引擎（v2.0.0，原型）
+## 🏗️ 架构
 
-同一套流程写成代码，不依赖 ChatGPT：读片和 G 调用模型 API，其余全部用确定性工具；附评测程序和给未来 App 用的 HTTP 服务骨架。API 密钥特意留空，见 [`engine/README.md`](engine/README.md)。
+<p align="center">
+  <img src="docs/images/architecture.zh-CN.svg" alt="两个入口——ChatGPT skill 和引擎——共用一套确定性工具" width="100%">
+</p>
+
+两个入口，**同一套规则**。两边都调用 `photographic-studio/optional/` 里的同一套确定性工具，所以每次改进两边同时生效，测试也同时覆盖两边。
+
+| | ChatGPT 版（`photographic-studio/`） | 引擎（`engine/`） |
+|---|---|---|
+| 状态 | 日常在用 | 原型，等 API 密钥 |
+| 谁来执行步骤 | GPT 读 `SKILL.md` 自己执行 | 代码 |
+| G（光色模型） | 宿主自带的图像工具 | 图像编辑 API（OpenAI / Gemini，在 `config.toml` 里设置） |
+| 适合 | 现在修图 | 批量评测、全尺寸输出、未来 App 的后端 |
+| 目标耗时 | — | 每张 ≤ 2 分钟 |
+
+API 密钥特意留空：设置环境变量 `OPENAI_API_KEY` / `GEMINI_API_KEY`，或填进 `engine/config.toml`（不会上传到 GitHub）。详见 [`engine/README.md`](engine/README.md)。
 
 ## 🗂️ 仓库结构
 
@@ -141,11 +220,17 @@ photographic-studio/          ← Skill 本体（安装这个目录）
 │   ├── look_transfer.py      ← 原片像素 + AI 光色
 │   ├── grade.py              ← 按导演单调色
 │   ├── settle.py             ← 一次完成力度校准
+│   ├── full_res.py           ← 把修图带回原图尺寸
 │   ├── physics_check.py      ← 自然光物理检查
 │   └── intensity_check.py    ← 力度检查
 ├── assets/taste/             ← 口味参照：作者认可的前后对比
 ├── CHANGELOG.md
 └── SHA256SUMS.txt
+engine/                       ← 流程写成代码（原型）
+├── studio_engine/            ← 流程 · 模型接口 · 评测 · 命令行
+├── service/app.py            ← 给未来 App 用的 HTTP 接口
+└── config.example.toml       ← 模型和密钥（复制为 config.toml）
+tests/                        ← 测试与真实照片样例（每次提交自动跑）
 docs/images/                  ← 本页的插图
 README.md · README.zh-CN.md · README.zh-TW.md
 LICENSE                       ← MIT
