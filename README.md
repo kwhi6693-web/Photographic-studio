@@ -75,7 +75,7 @@ Photographic Studio sits in between: **one word, one finished photo**. It reads 
 | **Agent / host** | the AI app you chat with. It must be an **LLM agent with image generation**: it can look at a photo and edit it with its own image model |
 | **G** | the image model of your agent (or of an API). It makes a draft; **only its light and colour are used** |
 | **N** | this project's own tools: fixed rules, no AI; they make the actual finished photo from your original's pixels |
-| **Director's brief** | six lines the agent writes after reading the photo: story, subject, tone, colour, what must not change, crop |
+| **Director's brief** | what the agent writes after reading the photo: the point of interest (a story is one kind; also geometry, light, colour, texture, mood, space, minimalism), diagnoses, subject, tone, colour, what must not change, crop |
 | **Label** | how a photo was made: `original pixels + G light & colour → N refine` (normal) · `N direct` (no usable G draft, N only) · `G + detail restore` (rare upgrade route) |
 | **Receipt** | the record of one photo: brief, prompt, parameters, check results. Hidden unless you say `show receipt` |
 | **Capability tiers** | what the skill does when your agent can't edit images or run Python (T1–T4, below) |
@@ -87,19 +87,19 @@ Photographic Studio sits in between: **one word, one finished photo**. It reads 
 
 ## 🔁 Input &amp; output
 
-**In a chat (the skill)** — input: one photo and one word. Output: one finished photo, one line of story and style, and a label saying how it was made. Two real deliveries from the test runs:
+**In a chat (the skill)** — input: one photo and one word. Output: one finished photo, one line of point of interest and style, and a label saying how it was made. Two real deliveries from the test runs:
 
 ```text
 you:  (photo of a vine under a skylight)  修
 it:   (finished photo)
-      Story: a dead vine casts crossing shadows under a geometric skylight | Style: quiet modern interior, vine shadows in dialogue with the architecture
+      Point: a dead vine casts crossing shadows under a geometric skylight | Style: quiet modern interior, vine shadows in dialogue with the architecture
       original pixels + G light & colour → N refine
 ```
 
 ```text
 you:  (photo of red maples against a grey garden wall)  修
 it:   (finished photo)
-      Story: red maples and tile shadows on an old wall in clear weather | Style: crisp garden architecture, grey brick behind red leaves
+      Point: red maples and tile shadows on an old wall in clear weather | Style: crisp garden architecture, grey brick behind red leaves
       N direct          ← the image model darkened the sky twice, both drafts were rejected, so only deterministic grading was used
 ```
 
@@ -121,12 +121,12 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
   <img src="docs/images/pipeline.svg" alt="Read → Director's brief → Light & colour → Refine & check → One photo" width="100%">
 </p>
 
-**1 · Read the photo**　First it answers *what is this photo about?* — story, mood, subject, style. Then: where the light comes from, how the colours work, how space is layered.
+**1 · Read the photo**　First it answers *why is this photo worth looking at?* — its point of interest (a story is only one kind; also geometry, light, colour, texture, mood, space, minimalism), subject, mood, style. Then: where the light comes from, how the colours work, how space is layered.
 
 **2 · Write a director's brief**　Six lines of post-production intent, for example:
 
 ```text
-Story | style : a dark showcase; cobalt glaze and gold catch the exhibit light | low-key museum still life
+Point | style : a dark showcase; cobalt glaze and gold catch the exhibit light | low-key museum still life
 Subject       : the cobalt vase — amplify the lit volume and the gold relief; keep the background dark
 Tone          : keep the blacks, ease the highlights, open the subject's midtones, more local contrast
 Colour        : cobalt and warm gold lead; richer glaze and gilding; calm the plinth's colour cast
@@ -143,7 +143,7 @@ Composition   : keep — the line drawing, the vase and the reflection tell the 
 
 Not good enough? It quietly retries a safer step on its own until a result passes — **it never stops to ask you**.
 
-**5 · One photo**　You get exactly one image, with a single line: `story | style`.
+**5 · One photo**　You get exactly one image, with a single line: `point | style`.
 
 ---
 

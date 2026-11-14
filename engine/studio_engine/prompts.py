@@ -20,7 +20,7 @@ BRIEF_SCHEMA = {
     'type': 'object', 'additionalProperties': False,
     'required': ['story', 'subject', 'genre', 'portrait', 'diagnoses', 'keep', 'g_intent', 'params'],
     'properties': {
-        'story': {'type': 'string', 'description': 'one line: the story and the style direction'},
+        'story': {'type': 'string', 'description': 'one line: the point of interest (a story is only one kind; also geometry/order, light, colour, texture, mood, space, minimalism) and the style direction'},
         'subject': {'type': 'string', 'description': 'what the subject is and where it is in the frame'},
         'genre': {'type': 'string', 'enum': list(GENRES)},
         'portrait': {'type': 'boolean'},

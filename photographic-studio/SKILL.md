@@ -28,7 +28,7 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 **眼睛和大脑**
 1. **自检定级**：运行 `optional/selfcheck.py`，再确认自己有没有 G，按 `references/capability_tiers.md` 定级（T1 有 G 且能跑代码；T2 只能跑代码；T3 只有 G；T4 都没有）。缺依赖且宿主允许时先安装再自检一次。级别写进回执。
 2. **测量**：`optional/measure.py 原片`。
-3. **读片**：故事、情绪、主角、风格方向（`references/story_style.md`）；光、色、影调、引导、空间（`references/craft_reading.md`）；只读所属题材一页（`references/genres/`）。
+3. **读片**：看点（叙事只是一种，还有几何、光影、色彩、质感、氛围、空间、极简……）、主角、情绪、风格方向（`references/story_style.md`）；光、色、影调、引导、空间（`references/craft_reading.md`）；只读所属题材一页（`references/genres/`）。
 4. **逐条诊断，写导演单**（`references/director_brief.md` 第 1–2 节）：把 `references/craft_prescriptions.md` 的诊断表过一遍，只写这张照片确实有的问题和依据，也写出哪里已经很好、不该动；**N 参数只能来自这些诊断**，每个参数注明对应哪一条，按轻重取值，不用默认参数组。同一批两张照片参数完全相同就重新诊断。再翻译成给 G 的提示词。数字目标只写在导演单和 N 参数里，**不写进 G 的提示词**。
 
 **手**
@@ -41,8 +41,8 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
    - 有 △ 或 ✗：用 `grade.py` 只针对那一条补一轮（最多两轮），之后 `intensity_check.py 原片 新版 --before=上一版`，总结论是 `DO_NOT_DELIVER` 就撤回；补完重新逐条核对。肉眼看不出的差别不补。
    - G 的光色方向明显错了（例如该暖的变冷、主角被压暗）且第 5 步还没重调过 G → 改提示词再调用一次 G，重新跑 `finish.py` 和 `settle.py`，两版取更好的一张。小偏差不重调 G。
    - 升级路线：只有当默认路线缺的正是 G 像素才有的效果（例如重新塑造的天空层次；不包括原片没有光源的光束、光圈），且 G 通过自然度检查时，才改用 G + 关键细节贴回（`references/detail_restore.md`），与默认版比较取更好的一张。
-7. **构图与收尾**：按导演单做构图重构，目的是把照片呈现到最好（`references/reframe_rules.md`，`optional/reframe.py`）：允许裁切、改比例、拉直、透视矫正，**不允许扩展**；每张都从这张照片的故事出发，用审美判断怎么裁（收紧、留环境、留白、引导线、比例），不套固定裁法，结论可以是“不动”但要写理由；做了就再跑一次 `physics_check.py` 和 `intensity_check.py`（博物馆加 `--genre=museum`）；最后 `optional/n_trim.py` 检查高光过冲（`references/n_trim.md`）。
-8. **交付**：**只交付一张成片**——一张原生图片，加一行 `故事：……｜风格：……`，再加成片标签。宿主自动显示了 G 的中间稿时，在成片前写“上面那张是中间稿，以下是成片”。其余一概不显示（`references/delivery.md`）。
+7. **构图与收尾**：按导演单做构图重构，目的是把照片呈现到最好（`references/reframe_rules.md`，`optional/reframe.py`）：允许裁切、改比例、拉直、透视矫正，**不允许扩展**；每张都从这张照片的看点出发，用审美判断怎么裁（收紧、留环境、对齐线条、把框落在光上、留白、比例），不套固定裁法，结论可以是“不动”但要写理由；做了就再跑一次 `physics_check.py` 和 `intensity_check.py`（博物馆加 `--genre=museum`）；最后 `optional/n_trim.py` 检查高光过冲（`references/n_trim.md`）。
+8. **交付**：**只交付一张成片**——一张原生图片，加一行 `看点：……｜风格：……`，再加成片标签。宿主自动显示了 G 的中间稿时，在成片前写“上面那张是中间稿，以下是成片”。其余一概不显示（`references/delivery.md`）。
 
 **拿不到成片的情况只有**：主体是人像；原片读不了；T4；用户只要分析。用一句话说明。
 

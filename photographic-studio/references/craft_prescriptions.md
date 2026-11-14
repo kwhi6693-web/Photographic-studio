@@ -20,7 +20,7 @@
 | 空间扁平 | 前中后景明暗一样 | separate foreground, middle and distance with light and tone | 远景 `regions` 略降饱和、降反差（空气透视）；近景略压暗加反差 |
 | 边缘抢戏 | attention 的 edge_pull > 1.15；边上有亮斑 | quiet edges | `vignette`；或用 `reframe.py` 裁掉 |
 | 竖线倾斜、地平线歪 | 建筑线条汇聚；水平线不平 | （不交给 G） | `reframe.py` 拉直或透视矫正 |
-| 主体太小、周围空 | 主角占画面很小且四周无信息 | （不交给 G） | `reframe.py` 裁切，保留讲故事所需的环境 |
+| 主体太小、周围空 | 主角占画面很小且四周无信息 | （不交给 G） | `reframe.py` 裁切，保留成就看点所需的环境（极简看点时留白本身就是看点，不裁） |
 | 夜景灯光溢出 | 光源周围一片白 | control the glow around lights | `highlights` −6…−12；`hues.yellow/orange` lum −3…−6 |
 | 逆光主体太暗 | 主体是剪影但本应看清 | open the subject's shadow side gently, keep the backlight and the rim | `shadows` 4–8；需要时 `regions` 提亮主体 lift ≤6、`edge_aware: true`，提完主体仍比逆光背景暗 |
 
