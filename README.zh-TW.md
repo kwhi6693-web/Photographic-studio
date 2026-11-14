@@ -132,6 +132,18 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 
 ## 🚀 安裝
 
+**兩種獨立的用法，二選一：**
+
+| | Skill（`photographic-studio/` 目錄） | 引擎（`engine/` 目錄，需要整個倉庫） |
+|---|---|---|
+| 適合誰 | 有 AI agent 的任何人（實測：ChatGPT app） | 開發者；未來 App 的後端 |
+| API 金鑰 | **不需要**——用 agent 內建的圖像工具和 Python | **需要**——你自己的 OpenAI 或 Gemini 金鑰，費用由你支付 |
+| 怎麼用 | 發一張照片，說「修」 | 在自己的電腦或伺服器上用命令列或 HTTP 介面 |
+| 狀態 | 日常在用 | 原型；還沒有接真實 API 跑過 |
+
+Skill 包裡沒有填 API 金鑰的地方，也不包含引擎。
+
+
 **作為 Agent Skill 安裝**：把 [`photographic-studio/`](photographic-studio) 整個目錄安裝到支援 `SKILL.md` 的宿主（實測過的是 ChatGPT app；其他宿主應可使用，但尚未實測），然後：
 
 ```text
