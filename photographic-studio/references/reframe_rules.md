@@ -76,6 +76,7 @@
 1. 在 G 的生成与生成后检查全部完成之后进行。
 2. 按第 2a 节挑一两种手法，每种用 `optional/reframe.py` 出一个方案（顺序：透视 → 旋转 → 裁切，保存无损 PNG 和同名 `.json` 日志）。
 3. 按第 2b 节检查，和原构图并排比较，选出最好的一个，写下一行记录。
+   选定后按 `director_brief.md` 第 4b 节写构图核对（✓／△／✗），不过就换方案或退回原构图。
 4. 按 `references/g_post_check.md` 第 4b 节检查；重构后再跑一次 `physics_check.py` 和 `intensity_check.py`。
 5. 交付时在回执里记下参数、保留面积、输出尺寸。
 
