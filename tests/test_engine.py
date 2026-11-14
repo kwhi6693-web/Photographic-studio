@@ -30,7 +30,9 @@ def original(name):
     return next((REAL_G / name).glob('original.*'))
 
 
-@pytest.mark.parametrize('name,route', [('b1_01', 'default'), ('b2_06', 'museum_strength')])
+# v1.0.9: a museum photo below the strength floor is no longer raised to a fixed museum strength by the ladder -
+# how strong it is comes from the brief's diagnoses, so b2_06 now stays on its default route
+@pytest.mark.parametrize('name,route', [('b1_01', 'default'), ('b2_06', 'default')])
 def test_replay_reproduces_the_recorded_route(tmp_path, name, route):
     r = Studio(replay_cfg(name)).run(original(name), tmp_path / 'out')
     assert r.status == 'done', r.reason

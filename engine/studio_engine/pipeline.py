@@ -21,7 +21,7 @@ from .config import EngineConfig
 from .providers import ImageEditor, NotConfigured, ProviderError, VisionModel, make_editor, make_vision
 from .tools import ToolError, Tools
 
-VERSION = '2.1.0'
+VERSION = '2.2.0'
 SERIOUS = ('tone_order', 'light_shade_sep', 'darkening_patch', 'spotlight_glow', 'halo', 'removed_light')
 
 

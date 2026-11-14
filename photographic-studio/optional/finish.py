@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.0.2 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+"""Photographic Studio v1.0.9 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
 Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit (or the SOURCE itself for N-only)
   GRADE_JSON  director-brief parameters for grade.py ({} for none)
 Chain: look_transfer -> grade -> physics_check + intensity_check. An attempt passes only when the physics check finds
-no problem AND the strength is in range. Otherwise it retries, in order: (1) with --genre=museum and the subject too
+no problem AND nothing is over a strength limit (v1.0.9: a strength floor is not a failure - the photo's own
+parameters decide how light the edit is). Otherwise it retries, in order: (1) with --genre=museum and the subject too
 weak, the same grade raised to the user's chosen museum strength (level 3), (2) the grade without positive region
 lifts and without vignette, (3) look_transfer --local=0, (4) N direct: the original graded without G, (5) N direct at
 museum strength. The first attempt that passes is delivered; if none passes, the one with the fewest physics problems,
@@ -54,7 +55,8 @@ def problems(src, out, genre):
     ph = run('physics_check.py', src, out)
     bad = [k for k, v in ph.get('checks', {}).items() if k in PHYS_SERIOUS and v.get('ok') is False]
     it = run('intensity_check.py', src, out, *([f'--genre={genre}'] if genre else []))
-    weak = [k for k, v in it.get('checks', {}).items() if isinstance(v, dict) and v.get('ok') is False]
+    # v1.0.9: only an excess counts against an attempt; a light edit the brief chose for this photo is not 'too weak'
+    weak = [k for k, v in it.get('checks', {}).items() if isinstance(v, dict) and v.get('ok') is False and v.get('direction') == 'too strong']
     # v1.0: an edit nobody can see is a failure ("改了等于没改"), whatever the ranges say
     import numpy as np
     from PIL import Image
@@ -77,7 +79,7 @@ def main():
     tries += [('no_region_lift_no_vignette', safer(params), [], g), ('local0_safer_grade', safer(params), ['--local=0'], g),
               ('n_direct', safer(params), [], None)]
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
-    rec = {'tool': 'finish.py v1.0.2', 'genre': genre, 'attempts': []}
+    rec = {'tool': 'finish.py v1.0.9', 'genre': genre, 'attempts': []}
     best = None
     with tempfile.TemporaryDirectory() as td:
         td = Path(td); seen = set()

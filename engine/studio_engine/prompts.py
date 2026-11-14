@@ -11,23 +11,29 @@ BRIEF_SYSTEM = """You are the retoucher's eye of Photographic Studio. Read ONE p
 Goal: one finished photo that is clearly better yet still the same photo: real light, believable colour, no AI look.
 Rules:
 - Follow real light physics: keep the light direction and time of day; shadows stay darker and cooler than lit areas; never add a light source or a glow around the subject; dark backgrounds stay dark and clean.
-- Strength: natural but visible. Brightness usually +1..+5 L*, colour x1.08..x1.30 (museum subjects x1.30..x1.85).
+- Parameters come only from THIS photo's problems (v1.0.9). First list the problems the photo really has, each with what you see and a measurement as evidence (e.g. haze over water and walls even when black window frames make the dynamic range wide; blown highlights; washed sky; flat colour), and what is already good and must not change. Every parameter must serve one listed problem, sized to how bad it is; a parameter no problem asks for stays 0. If the light is already good, only refine lightly: do not brighten, do not add colour. There is no default parameter set.
 - The subject is lifted by quieting its surroundings, not by inventing light on it.
 - If people's faces/bodies are the main subject, set portrait=true (the service does not retouch portraits).
 Return ONLY JSON matching the schema. Use the measurements as evidence; trust your eyes when they disagree."""
 
 BRIEF_SCHEMA = {
     'type': 'object', 'additionalProperties': False,
-    'required': ['story', 'subject', 'genre', 'portrait', 'g_intent', 'params'],
+    'required': ['story', 'subject', 'genre', 'portrait', 'diagnoses', 'keep', 'g_intent', 'params'],
     'properties': {
         'story': {'type': 'string', 'description': 'one line: the story and the style direction'},
         'subject': {'type': 'string', 'description': 'what the subject is and where it is in the frame'},
         'genre': {'type': 'string', 'enum': list(GENRES)},
         'portrait': {'type': 'boolean'},
+        'diagnoses': {'type': 'array', 'description': 'v1.0.9: the problems this photo really has (empty if none)',
+                      'items': {'type': 'object', 'additionalProperties': False, 'required': ['problem', 'evidence', 'params'],
+                                'properties': {'problem': {'type': 'string'}, 'evidence': {'type': 'string'},
+                                               'params': {'type': 'array', 'items': {'type': 'string'}, 'description': 'names of the params that fix it'}}}},
+        'keep': {'type': 'string', 'description': 'what is already good in this photo and must not change'},
         'g_intent': {'type': 'string', 'description': 'English, 2-3 concrete light-and-colour intents for the image model, no numbers'},
         'params': {'type': 'object', 'additionalProperties': False,
-                   'required': ['exposure_ev', 'contrast', 'highlights', 'shadows', 'clarity', 'vibrance'],
+                   'required': ['exposure_ev', 'contrast', 'highlights', 'shadows', 'clarity', 'vibrance', 'saturation', 'levels_black'],
                    'properties': {'exposure_ev': {'type': 'number'}, 'contrast': {'type': 'number'},
+                                  'saturation': {'type': 'number'}, 'levels_black': {'type': 'number'},
                                   'highlights': {'type': 'number'}, 'shadows': {'type': 'number'},
                                   'clarity': {'type': 'number'}, 'vibrance': {'type': 'number'}}},
     },
@@ -35,7 +41,9 @@ BRIEF_SCHEMA = {
 
 # safe ranges for the N parameters the brief may set (grade.py units; n_grade.md)
 PARAM_RANGES = {'exposure_ev': (-0.4, 0.4), 'contrast': (-0.2, 0.25), 'highlights': (-15, 5),
-                'shadows': (-8, 12), 'clarity': (0.0, 0.25), 'vibrance': (-0.1, 0.4)}
+                'shadows': (-8, 12), 'clarity': (0.0, 0.25), 'vibrance': (-0.1, 0.4),
+                'saturation': (0.85, 1.15), 'levels_black': (0.0, 12.0)}   # v1.0.9: haze needs a black point
+NEUTRAL = {'saturation': 1.0}
 
 PHYSICS = ('Follow real light physics: keep the existing light direction and time of day, shadows stay darker and cooler '
            'than sunlit areas, sky graded naturally, reflections dimmer than the objects, no added light sources, no halos. '
@@ -70,10 +78,13 @@ def clamp_brief(b: dict) -> dict:
     p = dict(b.get('params') or {})
     for k, (lo, hi) in PARAM_RANGES.items():
         try:
-            p[k] = round(min(hi, max(lo, float(p.get(k, 0.0)))), 4)
+            p[k] = round(min(hi, max(lo, float(p.get(k, NEUTRAL.get(k, 0.0))))), 4)
         except (TypeError, ValueError):
-            p[k] = 0.0
+            p[k] = NEUTRAL.get(k, 0.0)
+    lb = p.pop('levels_black', 0.0)   # grade.py takes the black point as levels.black
+    if lb: p['levels'] = {'black': lb}
     b['params'] = p
+    b['diagnoses'] = list(b.get('diagnoses') or [])
     if b.get('genre') not in GENRES:
         b['genre'] = 'other'
     b['portrait'] = bool(b.get('portrait')) or b.get('genre') == 'portrait'

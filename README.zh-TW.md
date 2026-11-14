@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.8-c8963e?style=flat-square" alt="version 1.0.8">
+  <img src="https://img.shields.io/badge/version-1.0.9-c8963e?style=flat-square" alt="version 1.0.9">
   <img src="https://img.shields.io/badge/engine-2.1.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.1.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建築·街景·風光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
@@ -238,7 +238,7 @@ Skill 包裡沒有填 API 金鑰的地方，也不包含引擎；引擎也不需
 |---|---|
 | `修` | 讀片 → 導演單 → 出片 → 檢查 → 交一張成片 |
 | `精修` | 多出幾個方向，比較後挑最好的一張（更慢） |
-| `太暖了` · `再通透一點` | 按你的話改導演單重做；本次對話內記下這條口味 |
+| `太暖了` · `再通透一點` | 按你的話改這張照片的導演單重做（不當成以後所有照片的口味） |
 | `看回執` | 導演單、提示詞、參數、檢查結論 |
 | `看標記表` | 每張照片的處理標記彙總 |
 
@@ -314,11 +314,11 @@ photographic-studio/          ← Skill 本體（安裝這個目錄）
 │   ├── finish.py             ← 一步出片，含自動重做階梯
 │   ├── look_transfer.py      ← 原片畫素 + AI 光色
 │   ├── grade.py              ← 按導演單調色
-│   ├── settle.py             ← 一次完成力度校準
+│   ├── settle.py             ← 只去掉超出上限的部分，這張照片的參數說了算
 │   ├── full_res.py           ← 把修圖帶回原圖尺寸
 │   ├── physics_check.py      ← 自然光物理檢查
 │   └── intensity_check.py    ← 力度檢查
-├── assets/taste/             ← 口味參照：作者認可的前後對比
+├── assets/taste/             ← 早期的前後對比示例（歷史記錄，預設流程不讀）
 ├── CHANGELOG.md
 └── SHA256SUMS.txt
 engine/                       ← 流程寫成程式（原型）
@@ -341,5 +341,5 @@ Skill 本身（執行說明、參考檔案和工具）採用 [MIT 授權條款](
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.0.8 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.0.9 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
 </p>

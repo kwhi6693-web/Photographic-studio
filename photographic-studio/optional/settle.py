@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""Photographic Studio v2.1.0 - settle: step 6 strength calibration in one call.
-Usage: python3 -I settle.py ORIGINAL FINISHED OUT_PNG [RECEIPT_JSON] [--genre=museum] [--n-direct]
+"""Photographic Studio v2.2.0 - settle: step 6 safety trim in one call.
+Usage: python3 -I settle.py ORIGINAL FINISHED OUT_PNG [RECEIPT_JSON] [--genre=museum] [--n-direct] [--bands]
+v2.2.0 (v1.0.9, user 2026-11-14 "每张照片都有最适合它的参数"): by default settle ONLY removes what is over a limit
+(step 2 below). It no longer lifts a photo to a floor or pulls it into a common band, because that overrode the
+parameters chosen for this photo (a photo whose brief said "do not brighten" was brightened). The old behaviour
+(steps 1 and 3) is still available with --bands, for comparison only. --n-direct is accepted and ignored by default.
   --n-direct  finish.py delivered an N direct route (G not used): lift to the middle of each band, not its edge
   ORIGINAL   the original photo;  FINISHED  the image finish.py delivered (or any later version)
 Does what step 6 used to do by hand, round after round:
@@ -90,7 +94,8 @@ def main():
     src, fin, out = a[:3]; rec_p = a[3] if len(a) > 3 else None
     gopt = [f"--genre={opt['genre']}"] if opt.get('genre') else []
     center = opt.get('target') == 'center' or '--n-direct' in sys.argv
-    rec = {'tool': 'settle.py v2.1.0', 'steps': []}
+    rec = {'tool': 'settle.py v2.2.0', 'steps': [], 'mode': 'bands' if '--bands' in sys.argv else 'trim_only'}
+    bands = '--bands' in sys.argv
     with tempfile.TemporaryDirectory() as td:
         td = Path(td); n = [0]
 
@@ -125,7 +130,7 @@ def main():
         base_phys = serious(src, cur)
 
         # 1. too weak: smallest lift that reaches every floor it can (two passes: the sky first, then the rest)
-        for k_pass in range(2):
+        for k_pass in range(2 if bands else 0):
             weak = {k: v for k, v in failing(run('intensity_check.py', src, cur, *gopt), 'too weak').items() if k in UP}
             if not weak: break
             step = {}
@@ -187,7 +192,7 @@ def main():
 
         # 3. anchor into the narrow bands (v1.0.6; v1.0.7: no new out-of-range measure, shadows fallback, --n-direct)
         it3 = run('intensity_check.py', src, cur, *gopt)
-        for key, par0, blo, bhi in BANDS.get(it3.get('genre'), []):
+        for key, par0, blo, bhi in (BANDS.get(it3.get('genre'), []) if bands else []):
             meas = (lambda img, it, key=key: mid_L_change(src, img) if key == 'mid_L_change'
                     else (it.get('checks', {}).get(key) or {}).get('value') if it else None)
             v0 = meas(cur, it3)

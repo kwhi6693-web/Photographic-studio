@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.8-c8963e?style=flat-square" alt="version 1.0.8">
+  <img src="https://img.shields.io/badge/version-1.0.9-c8963e?style=flat-square" alt="version 1.0.9">
   <img src="https://img.shields.io/badge/engine-2.1.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.1.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
@@ -238,7 +238,7 @@ Tested so far on image2.6 (phone and web apps); agents that support `SKILL.md` c
 |---|---|
 | `fix` · `修` | read → brief → edit → check → one finished photo |
 | `fine-tune` · `精修` | explores several directions and keeps the best (slower) |
-| `too warm` · `a bit clearer` | rewrites the brief and redoes it; notes the taste for this conversation |
+| `too warm` · `a bit clearer` | rewrites this photo's brief and redoes it (not stored as a taste for other photos) |
 | `show receipt` · `看回执` | brief, prompt, parameters, check results |
 | `show flag log` · `看标记表` | a running log of flags across photos |
 
@@ -314,11 +314,11 @@ photographic-studio/          ← the skill itself (install this folder)
 │   ├── finish.py             ← one-step edit with an automatic retry ladder
 │   ├── look_transfer.py      ← original pixels + AI light & colour
 │   ├── grade.py              ← grading by the director's brief
-│   ├── settle.py             ← strength calibration in one call
+│   ├── settle.py             ← trims only what is over a limit; the photo's own parameters stand
 │   ├── full_res.py           ← carries an edit back to full resolution
 │   ├── physics_check.py      ← natural-light physics check
 │   └── intensity_check.py    ← strength check
-├── assets/taste/             ← taste references: before/after pairs approved by the author
+├── assets/taste/             ← early before/after examples (history; not read by the default flow)
 ├── CHANGELOG.md
 └── SHA256SUMS.txt
 engine/                       ← the pipeline as code (prototype)
@@ -343,5 +343,5 @@ The example and test photographs (`photographic-studio/assets/`, `tests/fixtures
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.0.8 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
+  <sub>Photographic Studio v1.0.9 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
 </p>

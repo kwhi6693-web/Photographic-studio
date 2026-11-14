@@ -1,11 +1,13 @@
-# 专业知识二：诊断到处方（v0.3.0）
+# 专业知识二：诊断到处方（v0.3.0；v1.0.9 逐张诊断用）
 
-读片找到问题后查这张表。每条给出对 G 的说法和 N（`grade.py`）的参数方向。数值是起点，按人眼调整；一张照片通常只需要其中三到五条。
+读片时把这张表从上到下过一遍，只取这张照片**确实有**的问题（`director_brief.md` 第 1 节）。每条给出对 G 的说法和 N（`grade.py`）的参数范围：**问题轻取下端，重取上端**；没有的问题不取。一张照片可能只有一两条，也可能一条都没有。
 
 | 诊断 | 判断依据 | 给 G 的说法（写进摄影意图） | N 的参数 |
 |---|---|---|---|
 | 主角不突出 | 眼睛先落在别处；主角和背景一样亮 | make the existing light on <主角> read clearly; quiet the surroundings; no spotlight, no glow | 先收周边：`vignette` 3–7（中心放在主角）、次要色 `hues` 收；主角只加 `clarity`／反差。只有主角本身受光时才可 `regions` 提亮 lift ≤4（v0.3.7：工具会让提亮只落在原本亮的地方；暗背景上禁止椭圆提亮） |
 | 画面发灰 | 动态范围 < 60；没有黑也没有白 | restore full tonal range with real blacks and clean whites | `levels` 定黑白场；`contrast` 0.10–0.20 |
+| 蒙雾、漏光（v1.0.9） | 景物上蒙着一层发白的雾，水面、墙面、远景发灰；**画面里有纯黑的窗框或边框时动态范围仍会很宽，不能据此判断“不灰”**，以眼睛为准；镜头漏光是一侧发亮的斜带 | clear the haze; deep, clean water and stone | `levels.black` 5–10、`contrast` 0.08–0.15、`saturation` 1.05–1.1；漏光一侧 `regions` gradient lift −4…−8 |
+| 光线已经很好（v1.0.9） | 光比、色彩、层次都已到位（例如逆光加斑驳日光） | keep the light as it is; only refine | 只做轻修：`highlights` −2…−4、`vibrance` ≤0.1、`clarity` ≤0.1；**不提亮、不加饱和** |
 | 天空发白或平 | 天空 L* > 78 且色度 < 14 | give the sky depth and gradient | `regions` gradient from top lift −4…−8；`hues.blue` sat 1.15–1.3、lum −2…−6；`highlights` −4…−8 |
 | 高光过曝 | 白色削波 > 0.5%；亮处没层次 | keep highlight detail | `highlights` −5…−12；不要再加 `exposure_ev` |
 | 暗部死黑（且有内容值得看） | L* < 20 的面积 > 35% | open the shadows while keeping them dark | `shadows` 4–10；`tone_split.shadows` 略偏冷 |
