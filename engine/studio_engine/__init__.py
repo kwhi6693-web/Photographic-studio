@@ -1,4 +1,4 @@
-"""Photographic Studio engine: the retouching pipeline as code (no ChatGPT agent needed).
+"""Photographic Studio engine: the retouching pipeline as code (no agent needed).
 
     from studio_engine import load_config, Studio
     result = Studio(load_config()).run('photo.jpg', 'out/')

@@ -1,5 +1,5 @@
 """Replay provider: answers from a recorded run (a folder with params.json, g.png and optionally receipt.json / brief.json),
-so the whole pipeline can run offline, in tests and in CI, and reproduce a real ChatGPT run exactly."""
+so the whole pipeline can run offline, in tests and in CI, and reproduce a real agent run exactly."""
 from __future__ import annotations
 
 import json

@@ -1,4 +1,4 @@
-"""The Photographic Studio pipeline as code: what SKILL.md asks the ChatGPT agent to do, step by step, without the agent.
+"""The Photographic Studio pipeline as code: what SKILL.md asks the agent to do, step by step, without the agent.
 
     studio.run(photo, out_dir) -> Result     one photo in, one finished photo out (or a clear reason why not)
 

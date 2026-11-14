@@ -28,7 +28,7 @@
 ## ⚡ Start in 30 seconds
 
 1. Download the [`photographic-studio/`](photographic-studio) folder.
-2. In ChatGPT (or another AI agent that accepts skills), install it — or zip it and attach it to a new chat.
+2. In an LLM agent with image generation (one that can see photos and edit them with its own image model), install it — or zip it and attach it to a new chat.
 3. Send a photo and say **fix**. You get one finished photo back. No settings, no API key.
 
 Everything below explains what it does, how, and the second, developer-only way to run it.
@@ -72,7 +72,7 @@ Photographic Studio sits in between: **one word, one finished photo**. It reads 
 | Word | Meaning |
 |---|---|
 | **Skill** | the `photographic-studio/` folder: instructions plus tools that an AI agent follows |
-| **Agent / host** | the AI app you chat with, e.g. ChatGPT |
+| **Agent / host** | the AI app you chat with. It must be an **LLM agent with image generation**: it can look at a photo and edit it with its own image model |
 | **G** | the image model of your agent (or of an API). It makes a draft; **only its light and colour are used** |
 | **N** | this project's own tools: fixed rules, no AI; they make the actual finished photo from your original's pixels |
 | **Director's brief** | six lines the agent writes after reading the photo: story, subject, tone, colour, what must not change, crop |
@@ -165,7 +165,7 @@ There are **two separate ways** to use Photographic Studio. They are different d
 | | Option 1 · Skill | Option 2 · Engine |
 |---|---|---|
 | What you download | the `photographic-studio/` folder | the whole repository (the `engine/` folder plus the skill's tools) |
-| Who it is for | anyone with an AI agent (tested: ChatGPT app) | developers; the future app's back end |
+| Who it is for | anyone with an LLM agent with image generation | developers; the future app's back end |
 | API key | **not needed** | **needed** — your own OpenAI or Gemini key |
 | Who pays for the AI | your agent subscription, as usual | you, per use, on your own API account |
 | Where your photos go | to your agent, as in any chat | to the model provider you configure |
@@ -175,7 +175,7 @@ The skill package has no place for an API key and does not contain the engine. T
 
 ### Option 1 · Skill (no API key)
 
-**What you need**: an AI agent that can take a photo. For the full result the agent should also be able to edit images with its own image model and run Python — see *Capability tiers* below for what happens when it can't.
+**What you need**: an **LLM agent with image generation** — it can look at a photo and edit it with its own image model. For the full result it should also be able to run Python; see *Capability tiers* below for what happens when it can't.
 
 **Steps**
 
@@ -190,7 +190,7 @@ The skill package has no place for an API key and does not contain the engine. T
    fix
    ```
 
-Tested in the ChatGPT app; other agents that support `SKILL.md` should work but are untested.
+Tested so far in one such agent (its iPhone and web apps); other agents with image generation that support `SKILL.md` should work but are untested.
 
 ### Option 2 · Engine (your own API key)
 
@@ -269,9 +269,9 @@ It looks at what the host can do first, then decides how to work:
 
 **Do I need an API key?** Not for the skill. Only for the engine.
 
-**Can I use it on my phone?** Yes — the skill was developed and tested in the ChatGPT iPhone app.
+**Can I use it on my phone?** Yes — the skill was developed and tested in the iPhone app of an LLM agent with image generation.
 
-**How long does one photo take?** In the ChatGPT app, measured: about 3–4 minutes per photo, one after another for a batch. The engine's target is 2 minutes or less per photo.
+**How long does one photo take?** In the agent app, measured: about 3–4 minutes per photo, one after another for a batch. The engine's target is 2 minutes or less per photo.
 
 **Can I send several photos at once?** Yes. It edits them one by one and delivers one finished photo each.
 
@@ -288,12 +288,12 @@ It looks at what the host can do first, then decides how to work:
 ## 🏗️ Architecture
 
 <p align="center">
-  <img src="docs/images/architecture.svg" alt="Two entry points — the ChatGPT skill and the engine — share one set of deterministic tools" width="100%">
+  <img src="docs/images/architecture.svg" alt="Two entry points — the skill (in an LLM agent with image generation) and the engine — share one set of deterministic tools" width="100%">
 </p>
 
 Two ways in, **one set of rules**. Both call the same deterministic tools in `photographic-studio/optional/`, so every improvement reaches both, and the tests cover both.
 
-| | ChatGPT skill (`photographic-studio/`) | Engine (`engine/`) |
+| | Skill in an LLM agent with image generation (`photographic-studio/`) | Engine (`engine/`) |
 |---|---|---|
 | Status | in daily use | prototype, waiting for an API key |
 | Who runs the steps | the agent, reading `SKILL.md` | code |
