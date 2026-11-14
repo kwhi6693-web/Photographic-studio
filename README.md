@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.5-c8963e?style=flat-square" alt="version 1.0.5">
+  <img src="https://img.shields.io/badge/version-1.0.7-c8963e?style=flat-square" alt="version 1.0.7">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -159,5 +159,5 @@ The example photographs in `photographic-studio/assets/taste/` are © the author
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.0.5 · made for non-portrait photography · built together with Claude · code &amp; docs AGPL-3.0 · photos © the author</sub>
+  <sub>Photographic Studio v1.0.7 · made for non-portrait photography · built together with Claude · code &amp; docs AGPL-3.0 · photos © the author</sub>
 </p>
