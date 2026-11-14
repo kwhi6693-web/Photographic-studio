@@ -132,6 +132,18 @@ Not good enough? It quietly retries a safer step on its own until a result passe
 
 ## 🚀 Installation
 
+**Two separate ways to use it — pick one:**
+
+| | Skill (`photographic-studio/` folder) | Engine (`engine/` folder, whole repository) |
+|---|---|---|
+| Who it is for | anyone with an AI agent (tested: ChatGPT app) | developers; the future app's back end |
+| API key | **not needed** — it uses the agent's own image tool and Python | **needed** — your own OpenAI or Gemini key; you pay for the usage |
+| How you use it | send a photo and say `fix` | command line or HTTP API on your own computer/server |
+| Status | in daily use | prototype; not yet run against a live API |
+
+The skill package has no place for an API key, and it does not contain the engine.
+
+
 **Install as an Agent Skill**: install the whole [`photographic-studio/`](photographic-studio) folder into a host that supports `SKILL.md` (tested in the ChatGPT app; other hosts should work but are untested), then:
 
 ```text
