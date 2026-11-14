@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建築·街景·風光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
-  <img src="https://img.shields.io/badge/license-AGPL--3.0-c8963e?style=flat-square" alt="AGPL-3.0">
+  <img src="https://img.shields.io/badge/license-MIT-c8963e?style=flat-square" alt="MIT">
 </p>
 
 <p align="center">
@@ -148,18 +148,18 @@ photographic-studio/          ← Skill 本體（安裝這個目錄）
 └── SHA256SUMS.txt
 docs/images/                  ← 本頁的插圖
 README.md · README.zh-CN.md · README.zh-TW.md
-LICENSE                       ← AGPL-3.0
+LICENSE                       ← MIT
 ```
 
 ---
 
 ## 📜 授權條款
 
-Skill 本身（執行說明、參考檔案和工具）採用 [GNU Affero General Public License v3.0](LICENSE) 授權。
-`photographic-studio/assets/taste/` 中的示例照片版權歸作者所有，**不在**此授權範圍內，未經許可請勿轉載。
+Skill 本身（執行說明、參考檔案和工具）採用 [MIT 授權條款](LICENSE)（2026-11-14 起；此前的版本為 AGPL-3.0）。
+示例與測試照片（`photographic-studio/assets/`、`tests/fixtures/`、`docs/images/`）版權歸作者所有，**不在**此授權範圍內，未經許可請勿轉載。
 
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.0.8 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 AGPL-3.0 · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.0.8 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
 </p>
