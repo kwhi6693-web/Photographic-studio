@@ -12,7 +12,7 @@ for m in mods:
 base = bool(mods['numpy'] and mods['PIL'])
 full = bool(base and mods['cv2'])
 r = {'python': sys.version.split()[0], 'modules': mods,
-     'tools': {'measure.py': base, 'grade.py': base, 'settle.py': bool(base and mods['cv2']), 'n_trim.py': full, 'reframe.py': bool(base and mods['cv2']),
+     'tools': {'measure.py': base, 'grade.py': base, 'settle.py': bool(base and mods['cv2']), 'full_res.py': bool(base and mods['cv2']), 'n_trim.py': full, 'reframe.py': bool(base and mods['cv2']),
                'check_g_output.py': full, 'text_restore.py': full, 'texture_blend.py': bool(base and mods['cv2']), 'intensity_check.py': base, 'physics_check.py': base, 'finish.py': bool(base and mods['cv2']), 'look_transfer.py': bool(base and mods['cv2'])},
      'suggested_tier_if_host_has_image_editing': 'T1' if full else ('T1-degraded (no automatic scene check, no restore)' if base else 'T3'),
      'suggested_tier_if_host_has_no_image_editing': 'T2' if base else 'T4',

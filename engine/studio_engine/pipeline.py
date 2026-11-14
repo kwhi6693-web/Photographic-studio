@@ -21,7 +21,7 @@ from .config import EngineConfig
 from .providers import ImageEditor, NotConfigured, ProviderError, VisionModel, make_editor, make_vision
 from .tools import ToolError, Tools
 
-VERSION = '2.0.0'
+VERSION = '2.1.0'
 SERIOUS = ('tone_order', 'light_shade_sep', 'darkening_patch', 'spotlight_glow', 'halo', 'removed_light')
 
 
@@ -44,6 +44,7 @@ class Studio:
     # -- helpers ---------------------------------------------------------------------------------
     def _working_copy(self, photo: Path, out: Path) -> Path:
         im = ImageOps.exif_transpose(Image.open(photo)).convert('RGB')
+        self._downscaled = max(im.size) > self.cfg.work_size
         if max(im.size) <= self.cfg.work_size and photo.suffix.lower() in ('.jpg', '.jpeg', '.png'):
             dst = out / ('original' + photo.suffix.lower()); shutil.copy(photo, dst); return dst
         s = self.cfg.work_size / max(im.size)
@@ -136,7 +137,15 @@ class Studio:
             shutil.copy(final, out / 'final.png')
             rec['final_intensity'] = self.tools.intensity(src, out / 'final.png', museum).get('verdict')
             rec['final_physics'] = self.tools.physics(src, out / 'final.png').get('verdict')
-            return done(Result('done', final=str(out / 'final.png'), route=route))
+            delivered = out / 'final.png'
+            if src.name == 'original.jpg' and src.suffix and self._downscaled:   # v2.1.0: back to full resolution
+                t = time.time()
+                fr_full = self.tools.run('full_res.py', photo, src, out / 'final.png', out / 'final_full.jpg')
+                rec['steps'].append({'step': 'full_res', 'seconds': round(time.time() - t, 1), 'verdict': fr_full.get('verdict'),
+                                     'size': fr_full.get('full_size')})
+                if (out / 'final_full.jpg').exists():
+                    delivered = out / 'final_full.jpg'
+            return done(Result('done', final=str(delivered), route=route))
         except NotConfigured as e:
             return done(Result('failed', reason=f'not configured: {e}'))
         except (ProviderError, ToolError, OSError) as e:

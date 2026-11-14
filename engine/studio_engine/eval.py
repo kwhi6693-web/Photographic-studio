@@ -22,6 +22,7 @@ from .config import load
 from .pipeline import Studio
 
 EXTS = ('.jpg', '.jpeg', '.png', '.heic', '.heif')
+TARGET_SECONDS = 120   # owner decision 2026-11-14: one photo within 2 minutes
 
 
 def _diff(a: str, b: str) -> float:
@@ -69,7 +70,8 @@ def evaluate(set_dir: str, out_dir: str, runs: int = 2, config: str | None = Non
     cost = [r[f'run{k}_cost_usd'] or 0 for r in rows for k in range(1, runs + 1)]
     md = [f'# Evaluation: {len(photos)} photos x {runs} runs', '',
           f'- finished: {len(done)}/{len(photos) * runs}',
-          f'- seconds per run: median {np.median(secs):.0f}, max {max(secs):.0f}' if secs else '- seconds: n/a',
+          (f'- seconds per run: median {np.median(secs):.0f}, max {max(secs):.0f}; over {TARGET_SECONDS} s: '
+           f'{sum(1 for x in secs if x > TARGET_SECONDS)}/{len(secs)}') if secs else '- seconds: n/a',
           f'- estimated cost: total ${sum(cost):.2f}, per run ${sum(cost) / max(1, len(cost)):.3f}',
           f'- run-to-run difference (mean |RGB|): ' + ', '.join(f"{r['photo']} {r['run_diff_max']}" for r in rows), '',
           'Score each sheet in sheets/: would you keep every run? Are the runs equally good?']
