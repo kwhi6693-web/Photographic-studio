@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.8-c8963e?style=flat-square" alt="version 1.0.8">
-  <img src="https://img.shields.io/badge/engine-2.1.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.1.0">
+  <img src="https://img.shields.io/badge/version-1.0.9-c8963e?style=flat-square" alt="version 1.0.9">
+  <img src="https://img.shields.io/badge/engine-2.2.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.2.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -75,7 +75,7 @@ Photographic Studio sits in between: **one word, one finished photo**. It reads 
 | **Agent / host** | the AI app you chat with. It must be an **LLM agent with image generation**: it can look at a photo and edit it with its own image model |
 | **G** | the image model of your agent (or of an API). It makes a draft; **only its light and colour are used** |
 | **N** | this project's own tools: fixed rules, no AI; they make the actual finished photo from your original's pixels |
-| **Director's brief** | six lines the agent writes after reading the photo: story, subject, tone, colour, what must not change, crop |
+| **Director's brief** | what the agent writes after reading the photo: the point of interest (a story is one kind; also geometry, light, colour, texture, mood, space, minimalism), diagnoses, subject, tone, colour, what must not change, crop |
 | **Label** | how a photo was made: `original pixels + G light & colour → N refine` (normal) · `N direct` (no usable G draft, N only) · `G + detail restore` (rare upgrade route) |
 | **Receipt** | the record of one photo: brief, prompt, parameters, check results. Hidden unless you say `show receipt` |
 | **Capability tiers** | what the skill does when your agent can't edit images or run Python (T1–T4, below) |
@@ -87,19 +87,19 @@ Photographic Studio sits in between: **one word, one finished photo**. It reads 
 
 ## 🔁 Input &amp; output
 
-**In a chat (the skill)** — input: one photo and one word. Output: one finished photo, one line of story and style, and a label saying how it was made. Two real deliveries from the test runs:
+**In a chat (the skill)** — input: one photo and one word. Output: one finished photo, one line of point of interest and style, and a label saying how it was made. Two real deliveries from the test runs:
 
 ```text
 you:  (photo of a vine under a skylight)  修
 it:   (finished photo)
-      Story: a dead vine casts crossing shadows under a geometric skylight | Style: quiet modern interior, vine shadows in dialogue with the architecture
+      Point: a dead vine casts crossing shadows under a geometric skylight | Style: quiet modern interior, vine shadows in dialogue with the architecture
       original pixels + G light & colour → N refine
 ```
 
 ```text
 you:  (photo of red maples against a grey garden wall)  修
 it:   (finished photo)
-      Story: red maples and tile shadows on an old wall in clear weather | Style: crisp garden architecture, grey brick behind red leaves
+      Point: red maples and tile shadows on an old wall in clear weather | Style: crisp garden architecture, grey brick behind red leaves
       N direct          ← the image model darkened the sky twice, both drafts were rejected, so only deterministic grading was used
 ```
 
@@ -121,12 +121,12 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
   <img src="docs/images/pipeline.svg" alt="Read → Director's brief → Light & colour → Refine & check → One photo" width="100%">
 </p>
 
-**1 · Read the photo**　First it answers *what is this photo about?* — story, mood, subject, style. Then: where the light comes from, how the colours work, how space is layered.
+**1 · Read the photo**　First it answers *why is this photo worth looking at?* — its point of interest (a story is only one kind; also geometry, light, colour, texture, mood, space, minimalism), subject, mood, style. Then: where the light comes from, how the colours work, how space is layered.
 
 **2 · Write a director's brief**　Six lines of post-production intent, for example:
 
 ```text
-Story | style : a dark showcase; cobalt glaze and gold catch the exhibit light | low-key museum still life
+Point | style : a dark showcase; cobalt glaze and gold catch the exhibit light | low-key museum still life
 Subject       : the cobalt vase — amplify the lit volume and the gold relief; keep the background dark
 Tone          : keep the blacks, ease the highlights, open the subject's midtones, more local contrast
 Colour        : cobalt and warm gold lead; richer glaze and gilding; calm the plinth's colour cast
@@ -143,7 +143,7 @@ Composition   : keep — the line drawing, the vase and the reflection tell the 
 
 Not good enough? It quietly retries a safer step on its own until a result passes — **it never stops to ask you**.
 
-**5 · One photo**　You get exactly one image, with a single line: `story | style`.
+**5 · One photo**　You get exactly one image, with a single line: `point | style`.
 
 ---
 
@@ -238,7 +238,7 @@ Tested so far on image2.6 (phone and web apps); agents that support `SKILL.md` c
 |---|---|
 | `fix` · `修` | read → brief → edit → check → one finished photo |
 | `fine-tune` · `精修` | explores several directions and keeps the best (slower) |
-| `too warm` · `a bit clearer` | rewrites the brief and redoes it; notes the taste for this conversation |
+| `too warm` · `a bit clearer` | rewrites this photo's brief and redoes it (not stored as a taste for other photos) |
 | `show receipt` · `看回执` | brief, prompt, parameters, check results |
 | `show flag log` · `看标记表` | a running log of flags across photos |
 
@@ -277,7 +277,7 @@ It looks at what the host can do first, then decides how to work:
 
 **Will it retouch portraits?** No. People as the main subject are out of scope.
 
-**Will it change what is in my photo?** No objects are added or removed, the framing stays (at most a light straighten or crop that keeps at least 80 % of the frame), and every pixel comes from your original.
+**Will it change what is in my photo?** No objects are added or removed, nothing outside your original frame is ever added (it may straighten, correct perspective or crop where that presents the photo better), and every pixel comes from your original.
 
 **What if I don't like the result?** Say what's wrong in a few words (`too warm`, `a bit clearer`): it rewrites the brief and redoes the photo.
 
@@ -309,16 +309,16 @@ API keys are left empty on purpose: set `OPENAI_API_KEY` / `GEMINI_API_KEY` or f
 photographic-studio/          ← the skill itself (install this folder)
 ├── SKILL.md                  ← entry point and instructions
 ├── references/               ← principles, reading & prescriptions, genres, brief, physics, strength, delivery…
-│   └── genres/               ← architecture · street · landscape · night · interior · still life & museum
+│   └── genres/               ← architecture · street · landscape · garden · night · interior · still life & museum
 ├── optional/                 ← tools (numpy · Pillow · OpenCV)
 │   ├── finish.py             ← one-step edit with an automatic retry ladder
 │   ├── look_transfer.py      ← original pixels + AI light & colour
 │   ├── grade.py              ← grading by the director's brief
-│   ├── settle.py             ← strength calibration in one call
+│   ├── settle.py             ← trims only what is over a limit; the photo's own parameters stand
 │   ├── full_res.py           ← carries an edit back to full resolution
 │   ├── physics_check.py      ← natural-light physics check
 │   └── intensity_check.py    ← strength check
-├── assets/taste/             ← taste references: before/after pairs approved by the author
+├── assets/taste/             ← early before/after examples (history; not read by the default flow)
 ├── CHANGELOG.md
 └── SHA256SUMS.txt
 engine/                       ← the pipeline as code (prototype)
@@ -343,5 +343,5 @@ The example and test photographs (`photographic-studio/assets/`, `tests/fixtures
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.0.8 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
+  <sub>Photographic Studio v1.0.9 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
 </p>

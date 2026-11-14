@@ -1,4 +1,6 @@
-# 强度：每次都落在用户喜欢的范围里（v0.3.6）
+# 强度上限（v0.3.6；v1.0.9 改为只用上限）
+
+> **v1.0.9**：本文件的范围来自早期一位用户的偏好。从 v1.0.9 起，力度由每张照片的诊断决定（`director_brief.md`），本文件只有**上限**仍在使用：`settle.py` 去掉超出上限的部分（防过曝、防过艳）。下限、窄范围和博物馆第 3 档不再是要达到的目标，下文保留作历史记录。
 
 ## 1. 为什么要有这一条
 
@@ -40,7 +42,7 @@
 | 主角提亮 | ≤ 7 L* |
 | 暗背景提亮 | ≤ 3 L* |
 
-参数起点和注意事项见 `genres/still_life.md`。用 `intensity_check.py 原片 成片 --genre=museum`；`finish.py --genre=museum` 力度不够时会自动加到这一档。
+参数范围和注意事项见 `genres/still_life.md`。用 `intensity_check.py 原片 成片 --genre=museum`；v1.0.9 起 `finish.py --genre=museum` 只在修得肉眼看不出变化时才自动加力。
 
 ## 3. 怎么用（验收时必做）
 

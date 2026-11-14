@@ -1,11 +1,11 @@
 ---
 name: photographic-studio
-description: 独立的非人像摄影后期工作流，面向任何能看图的 agent。用户发来一张或多张照片并要求修图（例如“修”“修一下这张”“修成成片”“精修”）时使用，适用于建筑、街景、风光、园林、夜景、室内、静物、展品等非人像照片。自动读片、写导演单、指挥生成式光色与确定性调色、检查是否符合自然光的物理规律和用户偏好的力度，直接交付一张成片；按宿主实际具备的工具分级执行。
+description: 独立的非人像摄影后期工作流，面向任何能看图的 agent。用户发来一张或多张照片并要求修图（例如“修”“修一下这张”“修成成片”“精修”）时使用，适用于建筑、街景、风光、园林、夜景、室内、静物、展品等非人像照片。自动读片、写导演单、指挥生成式光色与确定性调色、按每张照片自己的问题定参数，检查是否符合自然光的物理规律、有没有过度，直接交付一张成片；按宿主实际具备的工具分级执行。
 ---
 
-# Photographic Studio v1.0.8
+# Photographic Studio v1.0.9
 
-用户发来照片、说一句“修”，就得到这个 agent 能做出的最好一张成片。成片要**有明显的摄影表现力**、**仍然高度像原片**、**符合真实光线的物理规律**，并且**看不出 AI 痕迹**。表现力第一；其余三条是同时成立的约束。
+用户发来照片、说一句“修”，就得到这个 agent 能做出的最好一张成片。**每张照片的参数都按这张照片自己的问题来定**（v1.0.9），不套用统一的力度或默认参数。成片要**有明显的摄影表现力**、**仍然高度像原片**、**符合真实光线的物理规律**，并且**看不出 AI 痕迹**。表现力第一；其余三条是同时成立的约束。
 
 本文件是唯一的执行说明。`references/principles.md` 是总则；其他参考文件给细节。参考文件里留有版本号和日期，只说明那条规则从哪来；**与本文件或总则冲突时，以本文件和总则为准**。
 
@@ -28,39 +28,40 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 **眼睛和大脑**
 1. **自检定级**：运行 `optional/selfcheck.py`，再确认自己有没有 G，按 `references/capability_tiers.md` 定级（T1 有 G 且能跑代码；T2 只能跑代码；T3 只有 G；T4 都没有）。缺依赖且宿主允许时先安装再自检一次。级别写进回执。
 2. **测量**：`optional/measure.py 原片`。
-3. **读片**：故事、情绪、主角、风格方向（`references/story_style.md`）；光、色、影调、引导、空间（`references/craft_reading.md`）；只读所属题材一页（`references/genres/`）；看一眼口味参照（`references/taste_profile.md`）。
-4. **写导演单**：六行（`references/director_brief.md`），对照 `references/craft_prescriptions.md` 翻译成给 G 的提示词和给 N 的参数。数字目标只写在导演单和 N 参数里，**不写进 G 的提示词**。
+3. **读片**：看点（叙事只是一种，还有几何、光影、色彩、质感、氛围、空间、极简……）、主角、情绪、风格方向（`references/story_style.md`）；光、色、影调、引导、空间（`references/craft_reading.md`）；只读所属题材一页（`references/genres/`）。
+4. **逐条诊断，写导演单**（`references/director_brief.md` 第 1–2 节）：把 `references/craft_prescriptions.md` 的诊断表过一遍，只写这张照片确实有的问题和依据，也写出哪里已经很好、不该动；**N 参数只能来自这些诊断**，每个参数注明对应哪一条，按轻重取值，不用默认参数组。同一批两张照片参数完全相同就重新诊断。再翻译成给 G 的提示词。数字目标只写在导演单和 N 参数里，**不写进 G 的提示词**。
 
 **手**
 5. **出片（T1）**：
    - 调用 G 一次。原片必须在最近一条用户消息里；提示词按 `references/g_prompt_template.md`，必须包含 `references/physics.md` 第 2 节的两句物理要求。调用后用 `optional/check_g_output.py` 检查场景是否对得上（`references/g_post_check.md`），对不上就作废这一版，改提示词重调一次（G 最多两次；只有场景对不上才重调，光色的小偏差交给后面的 N）。
+   - **光线已经很好时不调用 G**（v1.0.9）：导演单诊断里有“光线已经很好”（处方表第 3 类），就**不调用 G**，直接 `finish.py 原片 原片 参数.json …`，只用导演单定的轻量参数，成片标签写 `N 直出（光线已经很好）`；后面的“G 被拦下时重调”“G 方向错了重调”都不适用。原因（v1.0.9 实测，石拱桥）：导演单只给了轻量参数，但默认路线把 G 的光色带了进来，G 一次压暗 5.9、重调后又提亮 7.6、色彩 ×1.74，成片比诊断要求的强得多，耗时 335 秒。
    - **G 被拦下时重调一次**（v1.0.7）：`finish.py` 交付的路线是 N 直出（`n_direct` 开头）、而 G 只调用过一次时，读回执里 G 路线的问题（例如整体或天空被压暗、删掉了真实的光、局部变暗），在提示词里写明“不要压暗整体和天空、保留原有的光、只把光和色彩集中到主角上”，再调用一次 G、重跑 `finish.py`。两次都被拦下才交付 N 直出。
-   - 运行 **`optional/finish.py 原片 G 参数.json 成片.png 回执.json`**；博物馆、展柜、低调静物加 `--genre=museum`。它依次做光色迁移（`look_transfer.py`：成片的每个像素来自原片，只带 G 的光和色，并拦下 G 凭空加的光和删掉的光）、精修（`grade.py`）、物理检查、强度检查。**物理检查通过、强度在范围内、且看得出变化**才算合格；不合格时自动按阶梯重做：原参数 → 博物馆力度（仅 museum）→ 去掉正向区域提亮和暗角 → `--local=0` → N 直出 → N 直出 + 博物馆力度。交付第一张合格的；都不合格时，**通过物理检查且看得出变化的 G 路线优先于 N 直出**（力度超出范围只写进回执，由第 6 步只去掉超出的部分，不是放弃 G 的理由），其余情况交付问题最少的一张，回执列出问题。**不停下来问用户。**
+   - 运行 **`optional/finish.py 原片 G 参数.json 成片.png 回执.json`**；博物馆、展柜、低调静物加 `--genre=museum`。它依次做光色迁移（`look_transfer.py`：成片的每个像素来自原片，只带 G 的光和色，并拦下 G 凭空加的光和删掉的光）、精修（`grade.py`）、物理检查、强度检查。**物理检查通过、没有超出强度上限、且看得出变化**才算合格（v1.0.9：低于强度下限不算不合格，轻重由这张照片的诊断决定）；不合格时自动按阶梯重做：原参数 → 博物馆力度（仅 museum）→ 去掉正向区域提亮和暗角 → `--local=0` → N 直出 → N 直出 + 博物馆力度。交付第一张合格的；都不合格时，**通过物理检查且看得出变化的 G 路线优先于 N 直出**（超出上限只写进回执，由第 6 步只去掉超出的部分，不是放弃 G 的理由），其余情况交付问题最少的一张，回执列出问题。**不停下来问用户。**
    - T2：没有 G，直接 `finish.py 原片 原片 参数.json …`（等于 N 直出，`references/n_grade.md`）。T3：只有 G，交付 G 的输出并如实标注没有做检查。T4：只给读片和建议。
-6. **力度校准与验收**（必做，写进回执，默认不显示）：先运行 **`optional/settle.py 原片 finish成片 新版.png 回执.json`**（博物馆加 `--genre=museum`；最终交付的是 N 直出时加 `--n-direct`，把整体提到范围中间而不是下沿），一次调用完成力度校准：不够的补到下限，超出的只去掉超出部分，会损失表现力就保留并记标记，不引入物理问题；最后把整体亮度、中间调、暖色、色彩和反差拉进用户认可成片所在的窄范围（v1.0.6，让同一张照片每次修出来更一致）。然后拿新版逐行对照导演单，按 `director_brief.md` 第 4 节写七项结论（故事风格｜主角｜影调｜色彩｜不能动｜构图｜自然度）和一个决定。自然度见 `references/naturalness.md`。
-   - 力度上的“不够”和“超出”已由 `settle.py` 处理，不再手动来回微调。只有看得出、`settle.py` 管不到的问题（例如导演单要求的某个局部没做到）才用 `grade.py` 补**一轮**，之后 `intensity_check.py 原片 新版 --before=上一版`；总结论是 `DO_NOT_DELIVER` 就撤回。肉眼看不出的差别不补。
+6. **防超限与逐条验收**（必做，写进回执，默认不显示）：先运行 **`optional/settle.py 原片 finish成片 新版.png 回执.json`**（博物馆加 `--genre=museum`）。v1.0.9 起它**只去掉超出上限的部分**，不再把照片往统一的亮度、色彩区间里拉，这张照片的参数说了算。然后按 `director_brief.md` 第 4 节**逐条核对诊断**：每条诊断 ✓／△／✗ 并写看到的事实，“不该动”的地方被动了记 ✗，再看自然度（`references/naturalness.md`）和物理。
+   - 有 △ 或 ✗：用 `grade.py` 只针对那一条补一轮（最多两轮），之后 `intensity_check.py 原片 新版 --before=上一版`，总结论是 `DO_NOT_DELIVER` 就撤回；补完重新逐条核对。肉眼看不出的差别不补。
    - G 的光色方向明显错了（例如该暖的变冷、主角被压暗）且第 5 步还没重调过 G → 改提示词再调用一次 G，重新跑 `finish.py` 和 `settle.py`，两版取更好的一张。小偏差不重调 G。
    - 升级路线：只有当默认路线缺的正是 G 像素才有的效果（例如重新塑造的天空层次；不包括原片没有光源的光束、光圈），且 G 通过自然度检查时，才改用 G + 关键细节贴回（`references/detail_restore.md`），与默认版比较取更好的一张。
-7. **构图与收尾**：按导演单做几何构图优化（`references/reframe_rules.md`，`optional/reframe.py`：只裁剪、拉直、透视矫正）；做了就再跑一次 `physics_check.py` 和 `intensity_check.py`（博物馆加 `--genre=museum`）；最后 `optional/n_trim.py` 检查高光过冲（`references/n_trim.md`）。
-8. **交付**：**只交付一张成片**——一张原生图片，加一行 `故事：……｜风格：……`，再加成片标签。宿主自动显示了 G 的中间稿时，在成片前写“上面那张是中间稿，以下是成片”。其余一概不显示（`references/delivery.md`）。
+7. **构图与收尾**：按导演单做构图重构，目的是把照片呈现到最好（`references/reframe_rules.md`，`optional/reframe.py`）：允许裁切、改比例、拉直、透视矫正，**不允许扩展**；每张都从这张照片的看点出发：挑最适合的一到两种手法，各出一个方案，和原构图比较，选出最好的一个（不套固定裁法，不全用手法；裁了就必查边缘、地平线、主体完整），结论可以是“不动”但要写理由；之后按 `director_brief.md` 第 4b 节核对构图（看点是否比原构图更清楚、边缘、地平线、主体完整），不过就换方案或退回原构图；做了就再跑一次 `physics_check.py` 和 `intensity_check.py`（博物馆加 `--genre=museum`）；最后 `optional/n_trim.py` 检查高光过冲（`references/n_trim.md`）。
+8. **交付**：**只交付一张成片**——一张原生图片，加一行 `看点：……｜风格：……`，再加成片标签。宿主自动显示了 G 的中间稿时，在成片前写“上面那张是中间稿，以下是成片”。其余一概不显示（`references/delivery.md`）。
 
 **拿不到成片的情况只有**：主体是人像；原片读不了；T4；用户只要分析。用一句话说明。
 
 ## 4. 必须遵守的几条
 
 - **不造光，也不删光**（`references/physics.md`）：加亮只落在原本有光的地方；暗背景保持原片的暗和干净，不出现光圈、椭圆亮区、聚光灯效果；也不把原片里真实的光斑、反光、釉光压掉。
-- **力度按用户偏好**（`references/intensity.md`）：下限是表现力底线，必须达到；上限只去掉超出的部分。博物馆题材按主角判断（用户选定的第 3 档）。
+- **力度按这张照片**（v1.0.9）：轻重由导演单的诊断决定，光线本来好的照片可以只轻修；`references/intensity.md` 的上限只用来去掉超出的部分（防过曝、防过艳），下限不再是必须达到的目标。
 - **人眼看不出即可**：所有判断以整图正常观看为准，200% 只用来确认已发现的问题。
 - **不得改动或替代工具**：工具报错或缺失时如实报告，不写临时脚本修改工具。
 - **如实标注**：N 的结果不标成 G；没做的检查不说做了。
 
 ## 5. 其他模式（用户要求时）
 
-- **“精修”**：第 5 步出 2 个 G 方向（忠于原片气质、更大胆）加 1 个 N 直出，各自跑 `finish.py`，按导演单和口味参照选一张，再做第 6–8 步。更慢、更耗额度。
+- **“精修”**：第 5 步出 2 个 G 方向（忠于原片气质、更大胆）加 1 个 N 直出，各自跑 `finish.py`，按导演单的诊断逐条核对，选修得最到位的一张，再做第 6–8 步。更慢、更耗额度。
 - **“看回执”**：导演单、G 提示词、参数、`finish.py` 回执、检查结论、哈希。
 - **“看标记表”**：累计标记表（`references/flag_log_template.md`）。
 - **“验证批次”**：按 `references/validation_protocol.md`。
-- **用户不满意**：用户说一句（“太暖了”“再通透一点”），就改导演单重做，并按 `taste_profile.md` 第 3 节记下这条口味。
+- **用户不满意**：用户说一句（“太暖了”“再通透一点”），就改这张照片的导演单重做。不把这句话当成以后所有照片的口味记下来（v1.0.9）。
 
 ## 6. 上传与尺寸
 
@@ -72,17 +73,17 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 |---|---|
 | `references/principles.md` | 总则：目标、三条原则、作废与保底、标记 |
 | `references/capability_tiers.md` | 按宿主能力分四级 |
-| `references/story_style.md` | 读片：故事、情绪、主角、风格方向 |
-| `references/craft_reading.md`、`references/craft_prescriptions.md`、`references/genres/` | 读片要点、诊断到处方、六类题材 |
-| `references/director_brief.md` | 导演单六行、翻译成指挥、验收七项 |
+| `references/story_style.md` | 读片：看点（叙事只是一种）、情绪、主角、风格方向 |
+| `references/craft_reading.md`、`references/craft_prescriptions.md`、`references/genres/` | 读片要点、诊断到处方（含处理不了的问题）、七类题材（v1.0.9 新增园林） |
+| `references/director_brief.md` | 逐条诊断、导演单、翻译成指挥、逐条验收 |
 | `references/g_prompt_template.md`、`references/g_post_check.md` | G 的提示词与生成后检查 |
 | `references/physics.md` | 自然光的物理原则与检查 |
-| `references/intensity.md` | 用户偏好的力度范围与校准 |
+| `references/intensity.md` | 力度上限（只用于去掉超出的部分） |
 | `references/n_grade.md` | `grade.py` 参数与用法 |
 | `references/naturalness.md` | 自然度：AI 味的检查与局部修补 |
 | `references/detail_restore.md` | 升级路线的关键细节贴回 |
 | `references/reframe_rules.md` | 几何构图优化 |
 | `references/n_trim.md` | 最后的高光过冲检查 |
-| `references/taste_profile.md`、`assets/taste/` | 用户认可的成片与口味记录 |
+| `references/taste_profile.md`、`assets/taste/` | 早期认可的成片（历史记录；v1.0.9 起默认流程不读） |
 | `references/delivery.md` | 交付格式与保存边界 |
 | `references/validation_protocol.md`、`references/flag_log_template.md` | 验证批次与标记表 |

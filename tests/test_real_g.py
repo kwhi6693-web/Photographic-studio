@@ -12,9 +12,11 @@ CASES = sorted(p.name for p in RG.iterdir() if p.is_dir())
 
 # The route each must take. b2_01: G repainted the screen (peonies that are not in the photo) and its colour came
 # through as blotches; b2_05: G darkened a real light beam on the wall. Both were checked by eye; N direct is right.
+# v1.0.9: museum photos are no longer raised to the fixed museum strength because a subject measure is under a floor,
+# so the museum cases keep the same route without the '_museum_strength' step (G kept where it passes, N direct where not).
 EXPECTED = {'b1_01': 'default', 'b1_02': 'default', 'b1_03': 'default', 'b1_04': 'default', 'b1_05': 'default',
-            'b2_01': 'n_direct_museum_strength', 'b2_02': 'default', 'b2_03': 'default', 'b2_04': 'museum_strength', 'b2_05': 'n_direct_museum_strength',
-            'b2_06': 'museum_strength', 'b2_07': 'museum_strength', 'b2_08': 'default', 'b2_09': 'default',
+            'b2_01': 'n_direct', 'b2_02': 'default', 'b2_03': 'default', 'b2_04': 'default', 'b2_05': 'n_direct',
+            'b2_06': 'default', 'b2_07': 'default', 'b2_08': 'default', 'b2_09': 'default',
             'b2_10': 'default'}
 
 
