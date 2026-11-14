@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.0.6 - settle: step 6 strength calibration in one call.
-Usage: python3 -I settle.py ORIGINAL FINISHED OUT_PNG [RECEIPT_JSON] [--genre=museum]
+"""Photographic Studio v1.0.7 - settle: step 6 strength calibration in one call.
+Usage: python3 -I settle.py ORIGINAL FINISHED OUT_PNG [RECEIPT_JSON] [--genre=museum] [--n-direct]
+  --n-direct  finish.py delivered an N direct route (G not used): lift to the middle of each band, not its edge
   ORIGINAL   the original photo;  FINISHED  the image finish.py delivered (or any later version)
 Does what step 6 used to do by hand, round after round:
   1. too weak (intensity_check.py says a floor is not reached): adds the smallest amount of exposure / vibrance /
@@ -33,7 +34,7 @@ BANDS = {
     'night':     [('L_mean_change', 'exposure_ev', 1.2, 3.2), ('lit_warmth_change', 'temp', -1.5, 4.5), ('local_contrast_ratio', 'contrast', 1.03, 1.35), ('mid_L_change', 'exposure_ev', 0.5, 2.5)],
     'museum':    [('subject_L_change', 'exposure_ev', -1.0, 3.5), ('lit_warmth_change', 'temp', -1.5, 4.0), ('subject_chroma_ratio', 'saturation', 1.35, 1.75), ('subject_local_contrast_ratio', 'contrast', 1.14, 1.40), ('mid_L_change', 'exposure_ev', 0.5, 3.0)],
 }
-SPAN = {'exposure_ev': (-0.6, 0.6), 'temp': (-0.9, 0.9), 'saturation': (0.6, 1.5), 'contrast': (-0.4, 0.4)}
+SPAN = {'shadows': (-10.0, 15.0), 'exposure_ev': (-0.6, 0.6), 'temp': (-0.9, 0.9), 'saturation': (0.6, 1.5), 'contrast': (-0.4, 0.4)}
 DOWN = {'L_mean_change': {'exposure_ev': -0.3}, 'subject_L_change': {'exposure_ev': -0.3}, 'background_L_change': {'shadows': -6},
         'chroma_ratio': {'saturation': -0.25}, 'subject_chroma_ratio': {'saturation': -0.25},
         'lit_warmth_change': {'white_balance.temp': -0.35}, 'highlight_p99_change': {'highlights': -10},
@@ -87,7 +88,8 @@ def main():
     if len(a) < 3: sys.exit(__doc__)
     src, fin, out = a[:3]; rec_p = a[3] if len(a) > 3 else None
     gopt = [f"--genre={opt['genre']}"] if opt.get('genre') else []
-    rec = {'tool': 'settle.py v1.0.6', 'steps': []}
+    center = opt.get('target') == 'center' or '--n-direct' in sys.argv
+    rec = {'tool': 'settle.py v1.0.7', 'steps': []}
     with tempfile.TemporaryDirectory() as td:
         td = Path(td); n = [0]
 
@@ -163,34 +165,50 @@ def main():
                 entry['undone'] = 'any trim loses expressiveness: kept as it was'
             rec['steps'].append(entry)
 
-        # 3. anchor into the narrow bands (v1.0.6)
+        # 3. anchor into the narrow bands (v1.0.6; v1.0.7: no new out-of-range measure, shadows fallback, --n-direct)
         it3 = run('intensity_check.py', src, cur, *gopt)
-        for key, par, blo, bhi in BANDS.get(it3.get('genre'), []):
-            meas = (lambda img, it, key=key: mid_L_change(src, img) if key == 'mid_L_change' else (it.get('checks', {}).get(key) or {}).get('value') if it else None)
+        for key, par0, blo, bhi in BANDS.get(it3.get('genre'), []):
+            meas = (lambda img, it, key=key: mid_L_change(src, img) if key == 'mid_L_change'
+                    else (it.get('checks', {}).get(key) or {}).get('value') if it else None)
             v0 = meas(cur, it3)
             if v0 is None: continue
             edge = blo if (blo is not None and v0 < blo) else bhi if (bhi is not None and v0 > bhi) else None
+            # N direct (G not used) has nothing from G to carry it: lift to the middle of the band (never warmth)
+            if center and par0 != 'temp' and blo is not None and bhi is not None and v0 < (blo + bhi) / 2:
+                edge = (blo + bhi) / 2
             if edge is None: continue
-            mk = (lambda x, par=par: {'white_balance': {'temp': round(x, 4)}} if par == 'temp' else {par: round(x, 4)})
-            lo_, hi_ = SPAN[par]
-            if par == 'saturation': lo_, hi_ = (lo_, 1.0) if v0 > edge else (1.0, hi_)
-            else: lo_, hi_ = (lo_, 0.0) if v0 > edge else (0.0, hi_)
-            best = None
-            for _ in range(7):
-                m = (lo_ + hi_) / 2; o, it = graded(cur, mk(m))
-                if o is None: break
-                v = meas(o, it)
-                if v is None: break
-                best = (m, o, v)
-                if v < edge: lo_ = m
-                else: hi_ = m
-            if best is None: continue
-            entry = {'direction': 'anchor', 'for': [key], 'from': v0, 'band': [blo, bhi], 'params': mk(best[0]), 'to': best[2]}
-            new_phys = [k for k in serious(src, best[1]) if k not in base_phys]
-            if new_phys: entry['undone'] = 'new physics problem: ' + ', '.join(new_phys)
-            else:
-                cur = td / f'anchor_{key}.png'; shutil.copy(best[1], cur); it3 = run('intensity_check.py', src, cur, *gopt)
-            rec['steps'].append(entry)
+            for par in ([par0, 'shadows'] if par0 == 'exposure_ev' else [par0]):   # exposure blocked by sky/highlights -> shadows
+                v0 = meas(cur, it3)
+                tol = 0.15 if key.endswith('_change') else 0.01
+                if v0 is None or abs(v0 - edge) <= tol or (par == 'shadows' and edge < v0): break
+                if par == 'shadows' and abs(v0 - edge) <= 3 * tol: break
+                up = edge > v0
+                bad_before = set(failing(it3, 'too strong')) | set(failing(it3, 'too weak'))
+                mk = (lambda x, par=par: {'white_balance': {'temp': round(x, 4)}} if par == 'temp' else {par: round(x, 4)})
+                lo_, hi_ = SPAN[par]
+                neutral = 1.0 if par == 'saturation' else 0.0
+                lo_, hi_ = (neutral, hi_) if up else (lo_, neutral)
+                best = None
+                for _ in range(7):
+                    m = (lo_ + hi_) / 2; o, it = graded(cur, mk(m))
+                    if o is None: break
+                    v = meas(o, it)
+                    if v is None: break
+                    breaks = (set(failing(it, 'too strong')) | set(failing(it, 'too weak'))) - bad_before   # never push another measure out of range
+                    if breaks:
+                        if up: hi_ = m
+                        else: lo_ = m
+                        continue
+                    best = (m, o, v)
+                    if v < edge: lo_ = m
+                    else: hi_ = m
+                if best is None: continue
+                entry = {'direction': 'anchor', 'for': [key], 'from': v0, 'band': [blo, bhi], 'params': mk(best[0]), 'to': best[2]}
+                new_phys = [k for k in serious(src, best[1]) if k not in base_phys]
+                rec['steps'].append(entry)
+                if new_phys:
+                    entry['undone'] = 'new physics problem: ' + ', '.join(new_phys); break
+                cur = td / f'anchor_{key}_{par}.png'; shutil.copy(best[1], cur); it3 = run('intensity_check.py', src, cur, *gopt)
 
         shutil.copy(cur, out)
         itf = run('intensity_check.py', src, out, *gopt)
