@@ -132,40 +132,73 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 
 ## 🚀 安裝
 
-**兩種獨立的用法，二選一：**
+Photographic Studio 有**兩種獨立的用法**，下載的東西不同，要求也不同。大多數人用方式一就夠了。
 
-| | Skill（`photographic-studio/` 目錄） | 引擎（`engine/` 目錄，需要整個倉庫） |
+| | 方式一 · Skill | 方式二 · 引擎 |
 |---|---|---|
+| 下載什麼 | `photographic-studio/` 目錄 | 整個倉庫（`engine/` 目錄加上 skill 的工具） |
 | 適合誰 | 有 AI agent 的任何人（實測：ChatGPT app） | 開發者；未來 App 的後端 |
-| API 金鑰 | **不需要**——用 agent 內建的圖像工具和 Python | **需要**——你自己的 OpenAI 或 Gemini 金鑰，費用由你支付 |
-| 怎麼用 | 發一張照片，說「修」 | 在自己的電腦或伺服器上用命令列或 HTTP 介面 |
+| API 金鑰 | **不需要** | **需要**——你自己的 OpenAI 或 Gemini 金鑰 |
+| AI 的費用誰付 | 照常包含在你的 agent 訂閱裡 | 你自己，按用量從你的 API 帳戶扣 |
+| 照片送到哪裡 | 送給你的 agent，和平時聊天一樣 | 送給你設定的模型服務商 |
 | 狀態 | 日常在用 | 原型；還沒有接真實 API 跑過 |
 
-Skill 包裡沒有填 API 金鑰的地方，也不包含引擎。
+Skill 包裡沒有填 API 金鑰的地方，也不包含引擎；引擎也不需要 agent。
 
+### 方式一 · Skill（不需要 API 金鑰）
 
-**作為 Agent Skill 安裝**：把 [`photographic-studio/`](photographic-studio) 整個目錄安裝到支援 `SKILL.md` 的宿主（實測過的是 ChatGPT app；其他宿主應可使用，但尚未實測），然後：
+**需要什麼**：一個能接收照片的 AI agent。要得到完整效果，agent 還要能用內建的圖像模型改圖、能執行 Python；做不到時會怎樣，見下面的「能力分級」。
 
-```text
-（發一張照片）修
-```
+**步驟**
 
-**不能安裝的宿主**：把目錄打包成 zip，作為附件發過去，說一句：
+1. 下載 [`photographic-studio/`](photographic-studio) 目錄（或它的 zip 安裝包）。
+2. 如果你的 agent 支援安裝 skill（`SKILL.md`），就安裝這個目錄。
+   如果不支援，或者不想安裝：把目錄打包成 zip，在新對話裡作為附件發過去，說一句：
+   ```text
+   按附件裡的 Photographic Studio 處理這張照片
+   ```
+3. 發一張照片，說：
+   ```text
+   修
+   ```
 
-```text
-按附件裡的 Photographic Studio 處理這張照片
-```
+實測過的是 ChatGPT app；其他支援 `SKILL.md` 的 agent 應可使用，但尚未實測。
 
-**引擎（原型，Python 3.11+）**：
+### 方式二 · 引擎（使用你自己的 API 金鑰）
 
-```bash
-pip install -r engine/requirements.txt
-cp engine/config.example.toml engine/config.toml     # 填模型名；這個檔案不會上傳到 GitHub
-export OPENAI_API_KEY=...                            # 或 GEMINI_API_KEY=...（也可以填進 config.toml）
-cd engine && python -m studio_engine.cli selftest    # 顯示設定情況；加 --live 發一次很小的真實呼叫
-```
+**需要什麼**：Python 3.11 或更新版本；OpenAI 或 Google Gemini 的 API 金鑰；要用的模型名稱（以服務商目前的模型列表為準）。一個模型負責讀片、寫導演單，一個模型負責改圖（G），兩者可以來自同一家服務商。
 
-引擎目前還沒有接真實的模型 API 跑過：至今還沒有設定金鑰。
+**步驟**
+
+1. 下載倉庫並安裝相依套件：
+   ```bash
+   git clone https://github.com/kwhi6693-web/Photographic-studio.git
+   cd Photographic-studio
+   pip install -r engine/requirements.txt
+   ```
+2. 建立設定檔，填上兩個模型名（`[vision]` 和 `[editor]`）：
+   ```bash
+   cp engine/config.example.toml engine/config.toml
+   ```
+   `engine/config.toml` 已被 git 忽略，不會上傳到 GitHub。
+3. 提供金鑰——建議用環境變數（也可以填進 `config.toml` 的 `api_key`）：
+   ```bash
+   export OPENAI_API_KEY=...        # 或 GEMINI_API_KEY=...
+   ```
+4. 先檢查設定，再給每個模型發一次很小的真實呼叫：
+   ```bash
+   cd engine
+   python -m studio_engine.cli selftest           # 顯示設定情況，不產生費用
+   python -m studio_engine.cli selftest --live    # 每個模型發一次很小的真實呼叫
+   ```
+
+**需要知道的**
+
+- 沒有金鑰時不會發出任何呼叫：`selftest` 顯示「NOT CONFIGURED」，修圖會直接停下並說明「not configured」，不會跑到一半才失敗。
+- 換服務商或換模型，只改 `config.toml`（`provider = "openai" | "gemini"`、`model = ...`），不用改程式。
+- 費用：每次執行都會在 `receipt.json` 裡寫一個估算費用，按 `config.toml` 裡的 `price_per_call_usd` 計算；實際以服務商的帳單為準。建議為這個專案單獨建一個金鑰，設好每月花費上限，測完就作廢。
+- 隱私：這種用法會把你的照片送給你設定的模型服務商，適用該服務商的條款。
+- 狀態：引擎已經用「重放真實執行記錄」的方式離線測試過；還沒有接真實的模型 API 跑過。
 
 ---
 
