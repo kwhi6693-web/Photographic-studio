@@ -25,6 +25,17 @@
 
 ---
 
+## 🎯 What problem it solves
+
+For people who **love taking photos but don't want to spend time on post-processing**.
+
+- Doing it yourself (Lightroom and the like) takes skill and time for every photo.
+- One-tap enhance buttons either change almost nothing, or over-process: plastic textures, fake HDR, invented light, details the camera never saw.
+
+Photographic Studio sits in between: **one word, one finished photo**. It reads the photo first, then edits it so that it is clearly better, still the moment you captured (every pixel comes from your original), with light that obeys real physics, and no AI look. Architecture, street, landscape, night, interiors, still life and museum pieces — **not portraits**.
+
+---
+
 ## 🎞️ Before &amp; after
 
 > Left: original. Right: finished. All photos were taken by the author; every result here was picked and approved by the author.
@@ -43,6 +54,36 @@
     <td><img src="photographic-studio/assets/taste/04_willow_lake_before_after.jpg" alt="Willows over a lake"><br><sub><b>Willows over a lake</b> · restrained clarity, the quiet of a clear day</sub></td>
   </tr>
 </table>
+
+---
+
+## 🔁 Input &amp; output
+
+**In a chat (the skill)** — input: one photo and one word. Output: one finished photo, one line of story and style, and a label saying how it was made. Two real deliveries from the test runs:
+
+```text
+you:  (photo of a vine under a skylight)  修
+it:   (finished photo)
+      Story: a dead vine casts crossing shadows under a geometric skylight | Style: quiet modern interior, vine shadows in dialogue with the architecture
+      original pixels + G light & colour → N refine
+```
+
+```text
+you:  (photo of red maples against a grey garden wall)  修
+it:   (finished photo)
+      Story: red maples and tile shadows on an old wall in clear weather | Style: crisp garden architecture, grey brick behind red leaves
+      N direct          ← the image model darkened the sky twice, both drafts were rejected, so only deterministic grading was used
+```
+
+**On the command line (the engine, prototype)** — input: a photo file. Output: a folder with `final.png` (or `final_full.jpg` for photos larger than the working size), `receipt.json` with every step, its time and the estimated model cost, plus the intermediate files. A real run, replaying a recorded museum photo:
+
+```text
+$ python -m studio_engine.cli run original.jpeg out/
+{ "status": "done", "final": "out/final.png", "route": "museum_strength", "seconds": 66.7, "cost_usd": 0.0 }
+steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0.3 s
+```
+
+(`cost_usd` is 0 here because the replay provider makes no paid call; with a real model API the receipt shows the estimate.)
 
 ---
 
@@ -89,9 +130,9 @@ Not good enough? It quietly retries a safer step on its own until a result passe
 
 ---
 
-## 🚀 Getting started
+## 🚀 Installation
 
-**Install as an Agent Skill**: install the whole [`photographic-studio/`](photographic-studio) folder into any host that supports `SKILL.md`, then:
+**Install as an Agent Skill**: install the whole [`photographic-studio/`](photographic-studio) folder into a host that supports `SKILL.md` (tested in the ChatGPT app; other hosts should work but are untested), then:
 
 ```text
 (send a photo) fix
@@ -103,15 +144,38 @@ Not good enough? It quietly retries a safer step on its own until a result passe
 Process this photo with the attached Photographic Studio
 ```
 
-### What you can say
+**The engine (prototype, Python 3.11+)**:
+
+```bash
+pip install -r engine/requirements.txt
+cp engine/config.example.toml engine/config.toml     # set the model names; this file is git-ignored
+export OPENAI_API_KEY=...                            # or GEMINI_API_KEY=... (or put the key in config.toml)
+cd engine && python -m studio_engine.cli selftest    # shows what is configured; --live makes one small real call
+```
+
+The engine has not yet been run against a live model API: no key has been configured so far.
+
+---
+
+## 🕹️ Usage
+
+### In a chat (the skill)
 
 | You say | It does |
 |---|---|
 | `fix` · `修` | read → brief → edit → check → one finished photo |
 | `fine-tune` · `精修` | explores several directions and keeps the best (slower) |
-| `too warm` · `a bit clearer` | rewrites the brief, redoes it, and remembers your taste |
+| `too warm` · `a bit clearer` | rewrites the brief and redoes it; notes the taste for this conversation |
 | `show receipt` · `看回执` | brief, prompt, parameters, check results |
 | `show flag log` · `看标记表` | a running log of flags across photos |
+
+### On the command line (the engine)
+
+| Command | Does |
+|---|---|
+| `python -m studio_engine.cli run PHOTO OUT_DIR` | one photo → `OUT_DIR/final.png` + `receipt.json` |
+| `python -m studio_engine.eval SET_DIR OUT_DIR --runs=2` | every photo in a folder, N times each → comparison sheets + `summary.md` (finish rate, time, cost, run-to-run difference, runs over 2 minutes) |
+| `uvicorn service.app:app` | HTTP API for the future app: upload, poll, download, delete (prototype: no accounts or payments) |
 
 ### Capability tiers
 
