@@ -88,3 +88,15 @@ def test_service_upload_poll_download_delete(tmp_path, monkeypatch):
     assert c.get(f'/jobs/{jid}/result').status_code == 200
     assert c.delete(f'/jobs/{jid}').status_code == 200 and c.get(f'/jobs/{jid}').status_code == 404
     assert c.post('/jobs', files={'photo': ('p.gif', b'x', 'image/gif')}).status_code == 415
+
+
+def test_large_photo_comes_back_at_full_resolution(tmp_path):
+    """v2.1.0: the pipeline works at work_size; full_res.py carries the edit back to the original's size, keeping its detail."""
+    cfg = replay_cfg('b1_01'); cfg.work_size = 640
+    src = original('b1_01')
+    r = Studio(cfg).run(src, tmp_path / 'out')
+    assert r.status == 'done', r.reason
+    assert r.final.endswith('final_full.jpg')
+    assert Image.open(r.final).size == Image.open(src).size
+    step = [s for s in r.receipt['steps'] if s['step'] == 'full_res'][0]
+    assert step['verdict'] == 'PASS'

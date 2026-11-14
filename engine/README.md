@@ -1,4 +1,4 @@
-# Photographic Studio engine (v2.0.0)
+# Photographic Studio engine (v2.1.0)
 
 The retouching pipeline as code. Same rules and the same deterministic tools as the ChatGPT skill
 (`photographic-studio/optional/*.py` stay the single source of truth), but the steps are run by code and the two
@@ -14,6 +14,7 @@ judgement calls go to model APIs:
 | G rejected → second G | code | names the problems in the prompt (v1.0.7) |
 | settle | `settle.py` | strength calibration + anchoring (`--n-direct` when G was not used) |
 | n_trim | `n_trim.py` | clipping guard |
+| full resolution | `full_res.py` | when the photo is larger than `work_size`: the edit is carried back to the original size, detail from the original |
 
 Every run writes `receipt.json` (steps, seconds, model calls, estimated cost) next to `final.png`.
 
@@ -51,7 +52,8 @@ same routes.
 ## Not done yet (by design, waiting for the API key or the app phase)
 
 - Live calls are untested until a key is configured; `selftest --live` is the first thing to run.
-- Full-resolution output: the pipeline works at a 1536 px long edge. Applying the result to 12–48 MP originals is
-  the next engine task.
+- Speed (replay, CPU, no model latency): finish ≈ 25–30 s + settle ≈ 25–33 s per photo, plus the model calls.
+  The 60 s target needs the model calls to stay under ~10 s in total, or finish to get faster.
+- HEIC/HEIF uploads need `pillow-heif` installed.
 - Crop/straighten (`reframe.py`) is not decided by the engine yet; the brief has no crop field.
 - Service: single process, in-memory queue, local disk, no accounts or payments.

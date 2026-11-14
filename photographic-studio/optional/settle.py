@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.0.7 - settle: step 6 strength calibration in one call.
+"""Photographic Studio v2.1.0 - settle: step 6 strength calibration in one call.
 Usage: python3 -I settle.py ORIGINAL FINISHED OUT_PNG [RECEIPT_JSON] [--genre=museum] [--n-direct]
   --n-direct  finish.py delivered an N direct route (G not used): lift to the middle of each band, not its edge
   ORIGINAL   the original photo;  FINISHED  the image finish.py delivered (or any later version)
@@ -20,7 +20,10 @@ Deterministic. Needs numpy, Pillow (and what grade.py, intensity_check.py, physi
 import json, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
+from PIL import Image
+
 HERE = Path(__file__).resolve().parent
+SEARCH_EDGE = 640   # v2.1.0: long edge of the copies the parameter search runs on
 PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep')
 # full step for each measure; the tool uses the smallest fraction of it that is enough
 UP = {'L_mean_change': {'exposure_ev': 0.25}, 'chroma_ratio': {'vibrance': 0.35}, 'subject_chroma_ratio': {'vibrance': 0.35},
@@ -55,11 +58,9 @@ def mid_L_change(src, img):
 
 
 def run(tool, *args):
-    p = subprocess.run([sys.executable, '-B', str(HERE / tool), *map(str, args)], capture_output=True, text=True)
-    try:
-        return json.loads(p.stdout)
-    except Exception:
-        return {'verdict': 'TOOL_ERROR', 'stderr': p.stderr[-400:]}
+    if str(HERE) not in sys.path: sys.path.insert(0, str(HERE))
+    from ps_common import run_tool
+    return run_tool(tool, *args)
 
 
 def params_for(step, t):
@@ -89,7 +90,7 @@ def main():
     src, fin, out = a[:3]; rec_p = a[3] if len(a) > 3 else None
     gopt = [f"--genre={opt['genre']}"] if opt.get('genre') else []
     center = opt.get('target') == 'center' or '--n-direct' in sys.argv
-    rec = {'tool': 'settle.py v1.0.7', 'steps': []}
+    rec = {'tool': 'settle.py v2.1.0', 'steps': []}
     with tempfile.TemporaryDirectory() as td:
         td = Path(td); n = [0]
 
@@ -99,7 +100,26 @@ def main():
             if not o.exists(): return None, None
             return o, run('intensity_check.py', src, o, *gopt, *([f'--before={before}'] if before else []))
 
-        cur = td / 'start.png'; shutil.copy(fin, cur)
+        # v2.1.0: search on small copies (SEARCH_EDGE px), apply each accepted step once at full size
+        src_full, cur_full = src, td / 'start_full.png'
+        shutil.copy(fin, cur_full)
+
+        def small(path, name):
+            im = Image.open(path).convert('RGB'); k = SEARCH_EDGE / max(im.size)
+            if k < 1: im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
+            o = td / name; im.save(o); return o
+
+        src = str(small(src_full, 'src_small.png'))
+        cur = small(cur_full, 'start.png')
+        n_acc = [0]
+
+        def accept(p):
+            nonlocal cur, cur_full
+            n_acc[0] += 1; pj = td / f'acc{n_acc[0]}.json'; o = td / f'full{n_acc[0]}.png'
+            pj.write_text(json.dumps(p), encoding='utf-8'); run('grade.py', cur_full, o, pj)
+            if o.exists():
+                cur_full = o; cur = small(o, f'small{n_acc[0]}.png')
+
         it0 = run('intensity_check.py', src, cur, *gopt)
         rec['start'] = it0.get('verdict')
         base_phys = serious(src, cur)
@@ -127,7 +147,7 @@ def main():
             rec['steps'].append(entry)
             if new_phys:
                 entry['undone'] = 'new physics problem: ' + ', '.join(new_phys); break
-            cur = td / f'after_up{k_pass}.png'; shutil.copy(best[1], cur)
+            accept(params_for(step, best[0]))
 
         # 2. too strong: smallest trim that brings the measures under their limits, without losing expressiveness
         it1 = run('intensity_check.py', src, cur, *gopt)
@@ -160,7 +180,7 @@ def main():
                 new_phys = [k for k in serious(src, pick[1]) if k not in base_phys]
                 entry.update(params=params_for(step, pick[0]), result=pick[2].get('verdict'))
                 if new_phys: entry['undone'] = 'new physics problem: ' + ', '.join(new_phys)
-                else: cur = td / 'after_down.png'; shutil.copy(pick[1], cur)
+                else: accept(params_for(step, pick[0]))
             else:
                 entry['undone'] = 'any trim loses expressiveness: kept as it was'
             rec['steps'].append(entry)
@@ -208,12 +228,12 @@ def main():
                 rec['steps'].append(entry)
                 if new_phys:
                     entry['undone'] = 'new physics problem: ' + ', '.join(new_phys); break
-                cur = td / f'anchor_{key}_{par}.png'; shutil.copy(best[1], cur); it3 = run('intensity_check.py', src, cur, *gopt)
+                accept(mk(best[0])); it3 = run('intensity_check.py', src, cur, *gopt)
 
-        shutil.copy(cur, out)
-        itf = run('intensity_check.py', src, out, *gopt)
+        shutil.copy(cur_full, out)
+        itf = run('intensity_check.py', src_full, out, *gopt)
         rec['final'] = itf.get('verdict')
-        rec['physics_problems'] = serious(src, out)
+        rec['physics_problems'] = serious(src_full, out)
         rec['grade_calls'] = n[0]
     t = json.dumps(rec, ensure_ascii=False, indent=1)
     if rec_p: Path(rec_p).write_text(t, encoding='utf-8')

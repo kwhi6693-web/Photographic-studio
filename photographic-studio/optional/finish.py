@@ -19,11 +19,9 @@ PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'ligh
 
 
 def run(tool, *args):
-    p = subprocess.run([sys.executable, '-B', str(HERE / tool), *map(str, args)], capture_output=True, text=True)
-    try:
-        return json.loads(p.stdout)
-    except Exception:
-        return {'verdict': 'TOOL_ERROR', 'stderr': p.stderr[-400:]}
+    if str(HERE) not in sys.path: sys.path.insert(0, str(HERE))
+    from ps_common import run_tool
+    return run_tool(tool, *args)
 
 
 MUSEUM_L3 = {'exposure_ev': 0.32, 'contrast': 0.28, 'clarity': 0.40,  # level 3 had 0.55; 0.40 avoids bright rims on bright-on-black edges

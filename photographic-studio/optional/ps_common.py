@@ -141,3 +141,35 @@ def lab2rgb(lab):
     m = lin > 0.0031308
     rgb[m] = 1.055 * np.power(lin[m], 1 / 2.4) - 0.055
     return np.clip(rgb, 0, 1).astype(dt)
+
+
+# v2.1.0: run a sibling tool in this process when it can (no interpreter start-up per call), else in a separate one.
+_TOOL_MODS = {}
+_INPROC = ('grade.py', 'intensity_check.py', 'physics_check.py', 'look_transfer.py')
+
+
+def run_tool(tool, *args):
+    import contextlib, importlib, io, json, subprocess, sys
+    from pathlib import Path
+    here = Path(__file__).resolve().parent
+    if tool in _INPROC:
+        try:
+            name = tool[:-3]
+            if str(here) not in sys.path: sys.path.insert(0, str(here))
+            if name not in _TOOL_MODS: _TOOL_MODS[name] = importlib.import_module(name)
+            m, buf = _TOOL_MODS[name], io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                if name == 'grade':
+                    m.main(*map(str, args[:3]), *(map(str, args[3:4])))
+                else:
+                    old = sys.argv; sys.argv = [tool, *map(str, args)]
+                    try: m.main()
+                    finally: sys.argv = old
+            return json.loads(buf.getvalue())
+        except Exception:
+            pass
+    p = subprocess.run([sys.executable, '-B', str(here / tool), *map(str, args)], capture_output=True, text=True)
+    try:
+        return json.loads(p.stdout)
+    except Exception:
+        return {'verdict': 'TOOL_ERROR', 'stderr': p.stderr[-400:]}
