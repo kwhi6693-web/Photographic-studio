@@ -21,7 +21,7 @@ Every candidate is a grade.py pass on FINISHED with one scaled parameter set (bi
 It never touches what is in range, never lowers a measure below its limit, and never stops to ask.
 Deterministic. Needs numpy, Pillow (and what grade.py, intensity_check.py, physics_check.py need).
 """
-import json, shutil, subprocess, sys, tempfile
+import json, shutil, sys, tempfile
 from pathlib import Path
 
 from PIL import Image
@@ -152,10 +152,10 @@ def main():
             rec['steps'].append(entry)
             if new_phys:
                 entry['undone'] = 'new physics problem: ' + ', '.join(new_phys); break
-            accept(params_for(step, best[0]))
+            accept(params_for(step, best[0])); it0 = None   # the image changed: measure again below
 
         # 2. too strong: smallest trim that brings the measures under their limits, without losing expressiveness
-        it1 = run('intensity_check.py', src, cur, *gopt)
+        it1 = it0 or run('intensity_check.py', src, cur, *gopt)   # trim-only mode: reuse the first measurement
         over = {k: v for k, v in failing(it1, 'too strong').items() if k in DOWN}
         if over:
             step = {}
@@ -191,7 +191,7 @@ def main():
             rec['steps'].append(entry)
 
         # 3. anchor into the narrow bands (v1.0.6; v1.0.7: no new out-of-range measure, shadows fallback, --n-direct)
-        it3 = run('intensity_check.py', src, cur, *gopt)
+        it3 = run('intensity_check.py', src, cur, *gopt) if bands else {}   # only the --bands mode anchors
         for key, par0, blo, bhi in (BANDS.get(it3.get('genre'), []) if bands else []):
             meas = (lambda img, it, key=key: mid_L_change(src, img) if key == 'mid_L_change'
                     else (it.get('checks', {}).get(key) or {}).get('value') if it else None)

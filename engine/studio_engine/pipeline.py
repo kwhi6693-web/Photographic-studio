@@ -2,7 +2,7 @@
 
     studio.run(photo, out_dir) -> Result     one photo in, one finished photo out (or a clear reason why not)
 
-Order (SKILL.md v1.0.7): measure -> brief (vision model) -> portrait? stop -> G (image model) -> scene check (retry once)
+Order (SKILL.md v1.0.9; no crop step yet): measure -> brief (vision model) -> portrait? stop -> G (image model) -> scene check (retry once)
 -> finish.py (route ladder) -> G rejected? re-call G once with the problems named -> settle.py -> n_trim.py -> final.
 Every step is timed and written to receipt.json; model usage and estimated cost too.
 """
@@ -26,7 +26,6 @@ VERSION = '2.2.0'
 
 class _SkipG(Exception):
     """v1.0.9: the brief says the light is already good, so the image model is not called."""
-SERIOUS = ('tone_order', 'light_shade_sep', 'darkening_patch', 'spotlight_glow', 'halo', 'removed_light')
 
 
 @dataclass

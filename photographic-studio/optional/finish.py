@@ -5,14 +5,15 @@ Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--ge
   GRADE_JSON  director-brief parameters for grade.py ({} for none)
 Chain: look_transfer -> grade -> physics_check + intensity_check. An attempt passes only when the physics check finds
 no problem AND nothing is over a strength limit (v1.0.9: a strength floor is not a failure - the photo's own
-parameters decide how light the edit is). Otherwise it retries, in order: (1) with --genre=museum and the subject too
-weak, the same grade raised to the user's chosen museum strength (level 3), (2) the grade without positive region
-lifts and without vignette, (3) look_transfer --local=0, (4) N direct: the original graded without G, (5) N direct at
-museum strength. The first attempt that passes is delivered; if none passes, the one with the fewest physics problems,
+parameters decide how light the edit is). Otherwise it retries, in order: (1) with --genre=museum, only when the
+default attempt's sole problem is that nobody can see the change, the same grade raised to museum strength (level 3),
+(2) the grade without positive region lifts and without vignette, (3) look_transfer --local=0, (4) N direct: the
+original graded without G, (5) N direct at museum strength (again only when N direct's sole problem is no visible
+change). The first attempt that passes is delivered; if none passes, the one with the fewest physics problems,
 then the fewest strength problems, is delivered and its problems are listed (v0.3.8). It never stops to ask.
 Deterministic. Needs numpy, Pillow, OpenCV.
 """
-import json, subprocess, sys, tempfile, shutil
+import json, sys, tempfile, shutil
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -82,8 +83,13 @@ def main():
     rec = {'tool': 'finish.py v1.0.9', 'genre': genre, 'attempts': []}
     best = None
     with tempfile.TemporaryDirectory() as td:
-        td = Path(td); seen = set()
+        td = Path(td); seen = set(); result = {}
         for i, (name, p, ltopt, gsrc) in enumerate(tries):
+            if name.endswith('museum_strength'):
+                # v1.0.9: museum strength is only a rescue for an edit nobody can see. A stronger grade cannot fix a
+                # physics problem or an excess, so it is not tried for those (it was a floor-lift before v1.0.9).
+                base = result.get('n_direct' if name.startswith('n_direct') else 'default')
+                if base != ([], ['no_visible_change']): continue
             key = json.dumps([p, ltopt, gsrc is None], sort_keys=True)
             if key in seen: continue
             seen.add(key)
@@ -100,6 +106,7 @@ def main():
             bad, weak, iv, pv = problems(src, fin, genre)
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak})
+            result[name] = (bad, weak)
             # v1.0.2: a G route that passes the physics checks and visibly changes the photo beats N direct whatever the
             #   strength ranges say: ranges trim the excess afterwards (step 6), they are not a reason to drop G's look.
             #   (2026-11-13 batch: four of five photos lost G this way and came out nearly unchanged; the user

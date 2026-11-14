@@ -4,7 +4,6 @@ for 'not configured' behaviour: no key, no call."""
 import json
 import sys
 
-import numpy as np
 import pytest
 from PIL import Image
 

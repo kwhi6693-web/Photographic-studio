@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.9-c8963e?style=flat-square" alt="version 1.0.9">
-  <img src="https://img.shields.io/badge/engine-2.1.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.1.0">
+  <img src="https://img.shields.io/badge/engine-2.2.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.2.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建筑·街景·风光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -277,7 +277,7 @@ Skill 包里没有填 API 密钥的地方，也不包含引擎；引擎也不需
 
 **能修人像吗？** 不能。以人为主角的照片不在处理范围内。
 
-**会改动照片里的内容吗？** 不会增删任何东西，取景保持不变（最多轻微拉直或裁剪，至少保留 80% 的画面），每个像素都来自原片。
+**会改动照片里的内容吗？** 不会增删任何东西，不会加入原片之外的画面（可以拉直、透视矫正或按审美裁剪，但从不扩展画面），每个像素都来自原片。
 
 **不满意怎么办？** 用几个字说哪里不对（「太暖了」「再通透一点」），它会改导演单重修。
 
@@ -296,7 +296,7 @@ Skill 包里没有填 API 密钥的地方，也不包含引擎；引擎也不需
 | | Skill 版（在生图大模型 agent 里，`photographic-studio/`） | 引擎（`engine/`） |
 |---|---|---|
 | 状态 | 日常在用 | 原型，等 API 密钥 |
-| 谁来执行步骤 | GPT 读 `SKILL.md` 自己执行 | 代码 |
+| 谁来执行步骤 | agent 读 `SKILL.md` 自己执行 | 代码 |
 | G（光色模型） | 宿主自带的图像工具 | 图像编辑 API（OpenAI / Gemini，在 `config.toml` 里设置） |
 | 适合 | 现在修图 | 批量评测、全尺寸输出、未来 App 的后端 |
 | 目标耗时 | — | 每张 ≤ 2 分钟 |

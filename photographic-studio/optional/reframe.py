@@ -65,6 +65,8 @@ def main():
     if a.persp:
         v = [float(x) for x in a.persp.split(',')]
         if len(v) != 8: sys.exit('--persp needs 8 numbers')
+        if not all(0.0 <= x <= 1.0 for x in v):   # a point outside the frame would stretch edge pixels into new area
+            sys.exit('--persp points must lie inside the frame (0..1): reframing never extends the photo')
         src = np.float32([[v[0] * W0, v[1] * H0], [v[2] * W0, v[3] * H0], [v[4] * W0, v[5] * H0], [v[6] * W0, v[7] * H0]])
         dst = np.float32([[0, 0], [W0, 0], [W0, H0], [0, H0]])
         M = cv2.getPerspectiveTransform(src, dst)
@@ -83,10 +85,10 @@ def main():
     if a.box:
         L, T, R, B = [float(x) for x in a.box.split(',')]
         l, t, r, b = int(round(L * W)), int(round(T * H)), int(round(R * W)), int(round(B * H))
+        if not (0 <= l < r <= W and 0 <= t < b <= H):   # checked first: an empty box would divide by zero below
+            sys.exit('box must lie inside the frame: reframing never extends the photo')
         if abs((r - l) / (b - t) - W / H) > 0.01 and not a.allow_aspect_change:
             sys.exit('box changes aspect; add --allow-aspect-change (allowed whenever the new aspect presents the photo better)')
-        if not (0 <= l < r <= W and 0 <= t < b <= H):
-            sys.exit('box must lie inside the frame: reframing never extends the photo')
         cur = cur[t:b, l:r]
     elif a.zoom > 1.0 + 1e-9:
         cx, cy = [float(x) for x in a.center.split(',')]

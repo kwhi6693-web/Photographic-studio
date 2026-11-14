@@ -73,7 +73,7 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 |---|---|
 | `references/principles.md` | 总则：目标、三条原则、作废与保底、标记 |
 | `references/capability_tiers.md` | 按宿主能力分四级 |
-| `references/story_style.md` | 读片：故事、情绪、主角、风格方向 |
+| `references/story_style.md` | 读片：看点（叙事只是一种）、情绪、主角、风格方向 |
 | `references/craft_reading.md`、`references/craft_prescriptions.md`、`references/genres/` | 读片要点、诊断到处方（含处理不了的问题）、七类题材（v1.0.9 新增园林） |
 | `references/director_brief.md` | 逐条诊断、导演单、翻译成指挥、逐条验收 |
 | `references/g_prompt_template.md`、`references/g_post_check.md` | G 的提示词与生成后检查 |

@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.9-c8963e?style=flat-square" alt="version 1.0.9">
-  <img src="https://img.shields.io/badge/engine-2.1.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.1.0">
+  <img src="https://img.shields.io/badge/engine-2.2.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.2.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -277,7 +277,7 @@ It looks at what the host can do first, then decides how to work:
 
 **Will it retouch portraits?** No. People as the main subject are out of scope.
 
-**Will it change what is in my photo?** No objects are added or removed, the framing stays (at most a light straighten or crop that keeps at least 80 % of the frame), and every pixel comes from your original.
+**Will it change what is in my photo?** No objects are added or removed, nothing outside your original frame is ever added (it may straighten, correct perspective or crop where that presents the photo better), and every pixel comes from your original.
 
 **What if I don't like the result?** Say what's wrong in a few words (`too warm`, `a bit clearer`): it rewrites the brief and redoes the photo.
 

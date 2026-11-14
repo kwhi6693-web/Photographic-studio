@@ -1,5 +1,6 @@
 """settle.py: step 6 in one call. By default (v1.0.9) it only removes what is over a limit (never under a floor) and
-leaves everything else as the photo's own parameters made it; --bands adds the old floor lift and band anchoring, and never introduce a physics problem."""
+leaves everything else as the photo's own parameters made it; --bands adds the old floor lift and band anchoring.
+Neither mode may introduce a physics problem."""
 import json
 import numpy as np
 from conftest import run_tool, load, ROOT
