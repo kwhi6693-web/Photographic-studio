@@ -190,7 +190,7 @@ The skill package has no place for an API key and does not contain the engine. T
    fix
    ```
 
-Tested so far on image2.6 (iPhone and web apps); agents that support `SKILL.md` can use it.
+Tested so far on image2.6 (phone and web apps); agents that support `SKILL.md` can use it.
 
 ### Option 2 · Engine (your own API key)
 
