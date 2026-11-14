@@ -25,6 +25,16 @@
 
 ---
 
+## ⚡ Start in 30 seconds
+
+1. Download the [`photographic-studio/`](photographic-studio) folder.
+2. In ChatGPT (or another AI agent that accepts skills), install it — or zip it and attach it to a new chat.
+3. Send a photo and say **fix**. You get one finished photo back. No settings, no API key.
+
+Everything below explains what it does, how, and the second, developer-only way to run it.
+
+---
+
 ## 🎯 What problem it solves
 
 For people who **love taking photos but don't want to spend time on post-processing**.
@@ -54,6 +64,24 @@ Photographic Studio sits in between: **one word, one finished photo**. It reads 
     <td><img src="photographic-studio/assets/taste/04_willow_lake_before_after.jpg" alt="Willows over a lake"><br><sub><b>Willows over a lake</b> · restrained clarity, the quiet of a clear day</sub></td>
   </tr>
 </table>
+
+---
+
+## 📖 Words used on this page
+
+| Word | Meaning |
+|---|---|
+| **Skill** | the `photographic-studio/` folder: instructions plus tools that an AI agent follows |
+| **Agent / host** | the AI app you chat with, e.g. ChatGPT |
+| **G** | the image model of your agent (or of an API). It makes a draft; **only its light and colour are used** |
+| **N** | this project's own tools: fixed rules, no AI; they make the actual finished photo from your original's pixels |
+| **Director's brief** | six lines the agent writes after reading the photo: story, subject, tone, colour, what must not change, crop |
+| **Label** | how a photo was made: `original pixels + G light & colour → N refine` (normal) · `N direct` (no usable G draft, N only) · `G + detail restore` (rare upgrade route) |
+| **Receipt** | the record of one photo: brief, prompt, parameters, check results. Hidden unless you say `show receipt` |
+| **Capability tiers** | what the skill does when your agent can't edit images or run Python (T1–T4, below) |
+| **Engine** | the same pipeline as a Python program, using model APIs with your own key (developers) |
+| **Replay** | an engine test mode that answers from recorded real runs instead of calling a paid model |
+| **Route** | which step of the automatic retry ladder produced the photo, e.g. `default`, `museum_strength` (stronger subject for museum pieces), `n_direct` |
 
 ---
 
@@ -106,9 +134,9 @@ Do not touch  : shape, patterns, finial, label, the real reflections in the glas
 Composition   : keep — the line drawing, the vase and the reflection tell the exhibition together
 ```
 
-**3 · Borrow only AI's light &amp; colour**　The host's image model makes a version, but **only its light and colour are taken**. Every pixel of the result still comes from your original — the text, the people, the textures are the ones you actually captured.
+**3 · Borrow only AI's light &amp; colour**　Your agent's image model (G) makes a version, but **only its light and colour are taken**. Every pixel of the result still comes from your original — the text, the people, the textures are the ones you actually captured.
 
-**4 · Refine and check**　Deterministic grading tools finish the brief, then the image has to pass two gates:
+**4 · Refine and check**　The project's deterministic tools (N) finish the brief, then the image has to pass two gates:
 
 - **Physics** — brightening only lands where light already falls; no invented halos around an exhibit, no real highlights or glaze sheen wiped away; tonal order, sky gradients and reflections all have to make sense.
 - **Strength** — visibly better, never overdone; museum pieces are judged on the subject itself.
@@ -232,6 +260,28 @@ It looks at what the host can do first, then decides how to work:
 | **T2** | run Python only | deterministic grading |
 | **T3** | edit images with a model only | the model's edit, honestly labelled |
 | **T4** | neither | a reading of the photo and editing advice |
+
+---
+
+## ❓ Questions first-time users ask
+
+**Does it cost anything?** The skill is free (MIT). It runs on your agent, so you need whatever plan your agent requires for image editing. The engine uses your own API key; you pay your provider per use.
+
+**Do I need an API key?** Not for the skill. Only for the engine.
+
+**Can I use it on my phone?** Yes — the skill was developed and tested in the ChatGPT iPhone app.
+
+**How long does one photo take?** In the ChatGPT app, measured: about 3–4 minutes per photo, one after another for a batch. The engine's target is 2 minutes or less per photo.
+
+**Can I send several photos at once?** Yes. It edits them one by one and delivers one finished photo each.
+
+**Will it retouch portraits?** No. People as the main subject are out of scope.
+
+**Will it change what is in my photo?** No objects are added or removed, the framing stays (at most a light straighten or crop that keeps at least 80 % of the frame), and every pixel comes from your original.
+
+**What if I don't like the result?** Say what's wrong in a few words (`too warm`, `a bit clearer`): it rewrites the brief and redoes the photo.
+
+**Where do my photos go?** With the skill: to your agent, as in any chat. With the engine: to the model provider you configured, under its terms.
 
 ---
 
