@@ -10,6 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.8-c8963e?style=flat-square" alt="version 1.0.8">
+  <img src="https://img.shields.io/badge/engine-2.1.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.1.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -125,9 +126,23 @@ It looks at what the host can do first, then decides how to work:
 
 ---
 
-## ⚙️ Engine (v2.0.0, prototype)
+## 🏗️ Architecture
 
-The same pipeline as code, without ChatGPT: model APIs for the brief and G, the deterministic tools for everything else, an evaluation harness and an HTTP service skeleton for the future app. API keys are left empty on purpose — see [`engine/README.md`](engine/README.md).
+<p align="center">
+  <img src="docs/images/architecture.svg" alt="Two entry points — the ChatGPT skill and the engine — share one set of deterministic tools" width="100%">
+</p>
+
+Two ways in, **one set of rules**. Both call the same deterministic tools in `photographic-studio/optional/`, so every improvement reaches both, and the tests cover both.
+
+| | ChatGPT skill (`photographic-studio/`) | Engine (`engine/`) |
+|---|---|---|
+| Status | in daily use | prototype, waiting for an API key |
+| Who runs the steps | the agent, reading `SKILL.md` | code |
+| G (light & colour model) | the host's built-in image tool | an image-editing API (OpenAI / Gemini, set in `config.toml`) |
+| Good for | editing photos today | batch evaluation, full-resolution output, the future app's back end |
+| Target time | — | ≤ 2 minutes per photo |
+
+API keys are left empty on purpose: set `OPENAI_API_KEY` / `GEMINI_API_KEY` or fill `engine/config.toml` (git-ignored). Details in [`engine/README.md`](engine/README.md).
 
 ## 🗂️ Repository layout
 
@@ -141,11 +156,17 @@ photographic-studio/          ← the skill itself (install this folder)
 │   ├── look_transfer.py      ← original pixels + AI light & colour
 │   ├── grade.py              ← grading by the director's brief
 │   ├── settle.py             ← strength calibration in one call
+│   ├── full_res.py           ← carries an edit back to full resolution
 │   ├── physics_check.py      ← natural-light physics check
 │   └── intensity_check.py    ← strength check
 ├── assets/taste/             ← taste references: before/after pairs approved by the author
 ├── CHANGELOG.md
 └── SHA256SUMS.txt
+engine/                       ← the pipeline as code (prototype)
+├── studio_engine/            ← pipeline · model providers · evaluation · CLI
+├── service/app.py            ← HTTP API for the future app
+└── config.example.toml       ← models and keys (copy to config.toml)
+tests/                        ← tests + real photo fixtures (GitHub Actions on every commit)
 docs/images/                  ← illustrations for this page
 README.md · README.zh-CN.md · README.zh-TW.md
 LICENSE                       ← MIT

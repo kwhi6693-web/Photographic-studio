@@ -10,6 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.8-c8963e?style=flat-square" alt="version 1.0.8">
+  <img src="https://img.shields.io/badge/engine-2.1.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.1.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建筑·街景·风光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -125,9 +126,23 @@
 
 ---
 
-## ⚙️ 引擎（v2.0.0，原型）
+## 🏗️ 架构
 
-同一套流程写成代码，不依赖 ChatGPT：读片和 G 调用模型 API，其余全部用确定性工具；附评测程序和给未来 App 用的 HTTP 服务骨架。API 密钥特意留空，见 [`engine/README.md`](engine/README.md)。
+<p align="center">
+  <img src="docs/images/architecture.zh-CN.svg" alt="两个入口——ChatGPT skill 和引擎——共用一套确定性工具" width="100%">
+</p>
+
+两个入口，**同一套规则**。两边都调用 `photographic-studio/optional/` 里的同一套确定性工具，所以每次改进两边同时生效，测试也同时覆盖两边。
+
+| | ChatGPT 版（`photographic-studio/`） | 引擎（`engine/`） |
+|---|---|---|
+| 状态 | 日常在用 | 原型，等 API 密钥 |
+| 谁来执行步骤 | GPT 读 `SKILL.md` 自己执行 | 代码 |
+| G（光色模型） | 宿主自带的图像工具 | 图像编辑 API（OpenAI / Gemini，在 `config.toml` 里设置） |
+| 适合 | 现在修图 | 批量评测、全尺寸输出、未来 App 的后端 |
+| 目标耗时 | — | 每张 ≤ 2 分钟 |
+
+API 密钥特意留空：设置环境变量 `OPENAI_API_KEY` / `GEMINI_API_KEY`，或填进 `engine/config.toml`（不会上传到 GitHub）。详见 [`engine/README.md`](engine/README.md)。
 
 ## 🗂️ 仓库结构
 
@@ -141,11 +156,17 @@ photographic-studio/          ← Skill 本体（安装这个目录）
 │   ├── look_transfer.py      ← 原片像素 + AI 光色
 │   ├── grade.py              ← 按导演单调色
 │   ├── settle.py             ← 一次完成力度校准
+│   ├── full_res.py           ← 把修图带回原图尺寸
 │   ├── physics_check.py      ← 自然光物理检查
 │   └── intensity_check.py    ← 力度检查
 ├── assets/taste/             ← 口味参照：作者认可的前后对比
 ├── CHANGELOG.md
 └── SHA256SUMS.txt
+engine/                       ← 流程写成代码（原型）
+├── studio_engine/            ← 流程 · 模型接口 · 评测 · 命令行
+├── service/app.py            ← 给未来 App 用的 HTTP 接口
+└── config.example.toml       ← 模型和密钥（复制为 config.toml）
+tests/                        ← 测试与真实照片样例（每次提交自动跑）
 docs/images/                  ← 本页的插图
 README.md · README.zh-CN.md · README.zh-TW.md
 LICENSE                       ← MIT
