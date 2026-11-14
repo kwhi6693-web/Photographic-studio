@@ -1,5 +1,5 @@
-"""Real G outputs from the owner's ChatGPT runs (fixtures/real_g/): original, G intermediate, the director's grade
-parameters and ChatGPT's finish.py receipt. b1_*: 2026-11-13 batch under v1.0.1; b2_*: 2026-11-13 batch under v1.0.3.
+"""Real G outputs from the owner's agent runs (fixtures/real_g/): original, G intermediate, the director's grade
+parameters and the agent's finish.py receipt. b1_*: 2026-11-13 batch under v1.0.1; b2_*: 2026-11-13 batch under v1.0.3.
 They guard the main promise: a photo whose G route passes the physics checks keeps G's look, and a G route with a real
 defect does not."""
 import json

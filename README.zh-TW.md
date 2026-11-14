@@ -25,6 +25,16 @@
 
 ---
 
+## ⚡ 30 秒上手
+
+1. 下載 [`photographic-studio/`](photographic-studio) 目錄。
+2. 在一個具備生圖能力的大模型 agent（能看圖，也能用內建的影像模型改圖）裡安裝它——或者打包成 zip，在新對話裡作為附件發過去。
+3. 發一張照片，說「**修**」。你會拿到一張成片。不用任何設定，也不需要 API 金鑰。
+
+下面依次說明它做什麼、怎麼做，以及另一種只面向開發者的用法。
+
+---
+
 ## 🎯 解決什麼問題
 
 給**喜歡拍照、但不想花時間修圖**的人用。
@@ -54,6 +64,24 @@ Photographic Studio 介於兩者之間：**一句話，一張成片**。它先�
     <td><img src="photographic-studio/assets/taste/04_willow_lake_before_after.jpg" alt="垂柳與湖"><br><sub><b>垂柳與湖</b> · 剋制的清透，晴日裡的安靜</sub></td>
   </tr>
 </table>
+
+---
+
+## 📖 本頁用到的詞
+
+| 詞 | 意思 |
+|---|---|
+| **Skill** | `photographic-studio/` 這個目錄：一份讓 AI agent 照著做的說明，加上一組工具 |
+| **Agent / 宿主** | 你在用的 AI 應用。必須是**具備生圖能力的大模型 agent**：能看圖，也能用內建的影像模型改圖 |
+| **G** | 你的 agent（或 API）內建的影像模型。它先出一版草圖，**只取它的光線和色彩** |
+| **N** | 本專案自己的工具：固定規則、不是 AI；成片由它用原片的畫素做出來 |
+| **導演單** | agent 讀片後寫的六行方案：故事、主角、影調、色彩、不能動的、構圖 |
+| **成片標籤** | 這張照片是怎麼做出來的：`原片像素 + G 光色 → N 精修`（正常情況）·`N 直出`（G 的草圖不能用，只用 N）·`G + 細節貼回`（少見的升級做法） |
+| **回執** | 一張照片的處理記錄：導演單、提示詞、參數、檢查結論。預設不顯示，說「看回執」才給 |
+| **能力分級** | 你的 agent 不能改圖或不能執行 Python 時，skill 怎麼做（T1–T4，見下文） |
+| **引擎** | 同一套流程寫成的 Python 程式，用你自己的金鑰呼叫模型 API（面向開發者） |
+| **重放** | 引擎的一種測試模式：用記錄下來的真實執行結果代替付費模型呼叫 |
+| **路線** | 自動重做階梯裡最終出片的是哪一級，例如 `default`（預設）、`museum_strength`（博物館展品加強主角）、`n_direct`（N 直出） |
 
 ---
 
@@ -106,9 +134,9 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 構圖：保持——線圖、瓶子與右側映像共同交代展陳
 ```
 
-**3 · 只借 AI 的光與色**　讓宿主的影像模型出一版，但**只拿走它的光線和色彩**，成片的每一個畫素仍然來自原片——文字、人物、紋理都是你拍到的那些。
+**3 · 只借 AI 的光與色**　讓你所用 AI 內建的影像模型（G）出一版，但**只拿走它的光線和色彩**，成片的每一個畫素仍然來自原片——文字、人物、紋理都是你拍到的那些。
 
-**4 · 精修與檢查**　確定性調色工具按導演單補齊，再過兩道關：
+**4 · 精修與檢查**　本專案的確定性工具（N）按導演單補齊，再過兩道關：
 
 - **物理關**：加亮只落在原本有光的地方；不給展品憑空加光圈，也不把真實的光斑、釉光抹掉；明暗次序、天空漸變、倒影都要講得通。
 - **力度關**：看得出提升，又不過頭；博物館展品按主角來判斷。
@@ -132,40 +160,73 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 
 ## 🚀 安裝
 
-**兩種獨立的用法，二選一：**
+Photographic Studio 有**兩種獨立的用法**，下載的東西不同，要求也不同。大多數人用方式一就夠了。
 
-| | Skill（`photographic-studio/` 目錄） | 引擎（`engine/` 目錄，需要整個倉庫） |
+| | 方式一 · Skill | 方式二 · 引擎 |
 |---|---|---|
-| 適合誰 | 有 AI agent 的任何人（實測：ChatGPT app） | 開發者；未來 App 的後端 |
-| API 金鑰 | **不需要**——用 agent 內建的圖像工具和 Python | **需要**——你自己的 OpenAI 或 Gemini 金鑰，費用由你支付 |
-| 怎麼用 | 發一張照片，說「修」 | 在自己的電腦或伺服器上用命令列或 HTTP 介面 |
+| 下載什麼 | `photographic-studio/` 目錄 | 整個倉庫（`engine/` 目錄加上 skill 的工具） |
+| 適合誰 | 有具備生圖能力的大模型 agent 的任何人 | 開發者；未來 App 的後端 |
+| API 金鑰 | **不需要** | **需要**——你自己的 OpenAI 或 Gemini 金鑰 |
+| AI 的費用誰付 | 照常包含在你的 agent 訂閱裡 | 你自己，按用量從你的 API 帳戶扣 |
+| 照片送到哪裡 | 送給你的 agent，和平時聊天一樣 | 送給你設定的模型服務商 |
 | 狀態 | 日常在用 | 原型；還沒有接真實 API 跑過 |
 
-Skill 包裡沒有填 API 金鑰的地方，也不包含引擎。
+Skill 包裡沒有填 API 金鑰的地方，也不包含引擎；引擎也不需要 agent。
 
+### 方式一 · Skill（不需要 API 金鑰）
 
-**作為 Agent Skill 安裝**：把 [`photographic-studio/`](photographic-studio) 整個目錄安裝到支援 `SKILL.md` 的宿主（實測過的是 ChatGPT app；其他宿主應可使用，但尚未實測），然後：
+**需要什麼**：一個**具備生圖能力的大模型 agent**——能看圖，也能用內建的影像模型改圖。要得到完整效果，它還要能執行 Python；做不到時會怎樣，見下面的「能力分級」。
 
-```text
-（發一張照片）修
-```
+**步驟**
 
-**不能安裝的宿主**：把目錄打包成 zip，作為附件發過去，說一句：
+1. 下載 [`photographic-studio/`](photographic-studio) 目錄（或它的 zip 安裝包）。
+2. 如果你的 agent 支援安裝 skill（`SKILL.md`），就安裝這個目錄。
+   如果不支援，或者不想安裝：把目錄打包成 zip，在新對話裡作為附件發過去，說一句：
+   ```text
+   按附件裡的 Photographic Studio 處理這張照片
+   ```
+3. 發一張照片，說：
+   ```text
+   修
+   ```
 
-```text
-按附件裡的 Photographic Studio 處理這張照片
-```
+目前在 image2.6 上實測過（手機與網頁版）；支援 `SKILL.md` 的 agent 可使用。
 
-**引擎（原型，Python 3.11+）**：
+### 方式二 · 引擎（使用你自己的 API 金鑰）
 
-```bash
-pip install -r engine/requirements.txt
-cp engine/config.example.toml engine/config.toml     # 填模型名；這個檔案不會上傳到 GitHub
-export OPENAI_API_KEY=...                            # 或 GEMINI_API_KEY=...（也可以填進 config.toml）
-cd engine && python -m studio_engine.cli selftest    # 顯示設定情況；加 --live 發一次很小的真實呼叫
-```
+**需要什麼**：Python 3.11 或更新版本；OpenAI 或 Google Gemini 的 API 金鑰；要用的模型名稱（以服務商目前的模型列表為準）。一個模型負責讀片、寫導演單，一個模型負責改圖（G），兩者可以來自同一家服務商。
 
-引擎目前還沒有接真實的模型 API 跑過：至今還沒有設定金鑰。
+**步驟**
+
+1. 下載倉庫並安裝相依套件：
+   ```bash
+   git clone https://github.com/kwhi6693-web/Photographic-studio.git
+   cd Photographic-studio
+   pip install -r engine/requirements.txt
+   ```
+2. 建立設定檔，填上兩個模型名（`[vision]` 和 `[editor]`）：
+   ```bash
+   cp engine/config.example.toml engine/config.toml
+   ```
+   `engine/config.toml` 已被 git 忽略，不會上傳到 GitHub。
+3. 提供金鑰——建議用環境變數（也可以填進 `config.toml` 的 `api_key`）：
+   ```bash
+   export OPENAI_API_KEY=...        # 或 GEMINI_API_KEY=...
+   ```
+4. 先檢查設定，再給每個模型發一次很小的真實呼叫：
+   ```bash
+   cd engine
+   python -m studio_engine.cli selftest           # 顯示設定情況，不產生費用
+   python -m studio_engine.cli selftest --live    # 每個模型發一次很小的真實呼叫
+   ```
+
+**需要知道的**
+
+- 沒有金鑰時不會發出任何呼叫：`selftest` 顯示「NOT CONFIGURED」，修圖會直接停下並說明「not configured」，不會跑到一半才失敗。
+- 換服務商或換模型，只改 `config.toml`（`provider = "openai" | "gemini"`、`model = ...`），不用改程式。
+- 費用：每次執行都會在 `receipt.json` 裡寫一個估算費用，按 `config.toml` 裡的 `price_per_call_usd` 計算；實際以服務商的帳單為準。建議為這個專案單獨建一個金鑰，設好每月花費上限，測完就作廢。
+- 隱私：這種用法會把你的照片送給你設定的模型服務商，適用該服務商的條款。
+- 狀態：引擎已經用「重放真實執行記錄」的方式離線測試過；還沒有接真實的模型 API 跑過。
 
 ---
 
@@ -202,15 +263,37 @@ cd engine && python -m studio_engine.cli selftest    # 顯示設定情況；加 
 
 ---
 
+## ❓ 第一次用的人常問
+
+**要花錢嗎？** Skill 本身免費（MIT 授權）。它執行在你的 agent 上，所以需要你的 agent 本身支援改圖的那檔方案。引擎用你自己的 API 金鑰，按用量向服務商付費。
+
+**需要 API 金鑰嗎？** 用 skill 不需要，只有引擎需要。
+
+**手機上能用嗎？** 能。skill 就是在 iPhone app 裡用 image2.6 開發和測試的。
+
+**修一張要多久？** 在 agent app 裡實測，每張大約 3–4 分鐘，多張會一張一張來。引擎的目標是每張 2 分鐘以內。
+
+**能一次發好幾張嗎？** 能。它會逐張處理，每張交一張成片。
+
+**能修人像嗎？** 不能。以人為主角的照片不在處理範圍內。
+
+**會改動照片裡的內容嗎？** 不會增刪任何東西，取景保持不變（最多輕微拉直或裁切，至少保留 80% 的畫面），每個畫素都來自原片。
+
+**不滿意怎麼辦？** 用幾個字說哪裡不對（「太暖了」「再通透一點」），它會改導演單重修。
+
+**照片會送到哪裡？** 用 skill：送給你的 agent，和平時聊天一樣。用引擎：送給你設定的模型服務商，適用它的條款。
+
+---
+
 ## 🏗️ 架構
 
 <p align="center">
-  <img src="docs/images/architecture.zh-TW.svg" alt="兩個入口——ChatGPT skill 和引擎——共用一套確定性工具" width="100%">
+  <img src="docs/images/architecture.zh-TW.svg" alt="兩個入口——skill（執行在具備生圖能力的大模型 agent 裡）和引擎——共用一套確定性工具" width="100%">
 </p>
 
 兩個入口，**同一套規則**。兩邊都呼叫 `photographic-studio/optional/` 裡的同一套確定性工具，所以每次改進兩邊同時生效，測試也同時涵蓋兩邊。
 
-| | ChatGPT 版（`photographic-studio/`） | 引擎（`engine/`） |
+| | Skill 版（在生圖大模型 agent 裡，`photographic-studio/`） | 引擎（`engine/`） |
 |---|---|---|
 | 狀態 | 日常在用 | 原型，等 API 金鑰 |
 | 誰來執行步驟 | GPT 讀 `SKILL.md` 自己執行 | 程式 |

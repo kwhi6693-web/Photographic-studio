@@ -25,6 +25,16 @@
 
 ---
 
+## ⚡ Start in 30 seconds
+
+1. Download the [`photographic-studio/`](photographic-studio) folder.
+2. In an LLM agent with image generation (one that can see photos and edit them with its own image model), install it — or zip it and attach it to a new chat.
+3. Send a photo and say **fix**. You get one finished photo back. No settings, no API key.
+
+Everything below explains what it does, how, and the second, developer-only way to run it.
+
+---
+
 ## 🎯 What problem it solves
 
 For people who **love taking photos but don't want to spend time on post-processing**.
@@ -54,6 +64,24 @@ Photographic Studio sits in between: **one word, one finished photo**. It reads 
     <td><img src="photographic-studio/assets/taste/04_willow_lake_before_after.jpg" alt="Willows over a lake"><br><sub><b>Willows over a lake</b> · restrained clarity, the quiet of a clear day</sub></td>
   </tr>
 </table>
+
+---
+
+## 📖 Words used on this page
+
+| Word | Meaning |
+|---|---|
+| **Skill** | the `photographic-studio/` folder: instructions plus tools that an AI agent follows |
+| **Agent / host** | the AI app you chat with. It must be an **LLM agent with image generation**: it can look at a photo and edit it with its own image model |
+| **G** | the image model of your agent (or of an API). It makes a draft; **only its light and colour are used** |
+| **N** | this project's own tools: fixed rules, no AI; they make the actual finished photo from your original's pixels |
+| **Director's brief** | six lines the agent writes after reading the photo: story, subject, tone, colour, what must not change, crop |
+| **Label** | how a photo was made: `original pixels + G light & colour → N refine` (normal) · `N direct` (no usable G draft, N only) · `G + detail restore` (rare upgrade route) |
+| **Receipt** | the record of one photo: brief, prompt, parameters, check results. Hidden unless you say `show receipt` |
+| **Capability tiers** | what the skill does when your agent can't edit images or run Python (T1–T4, below) |
+| **Engine** | the same pipeline as a Python program, using model APIs with your own key (developers) |
+| **Replay** | an engine test mode that answers from recorded real runs instead of calling a paid model |
+| **Route** | which step of the automatic retry ladder produced the photo, e.g. `default`, `museum_strength` (stronger subject for museum pieces), `n_direct` |
 
 ---
 
@@ -106,9 +134,9 @@ Do not touch  : shape, patterns, finial, label, the real reflections in the glas
 Composition   : keep — the line drawing, the vase and the reflection tell the exhibition together
 ```
 
-**3 · Borrow only AI's light &amp; colour**　The host's image model makes a version, but **only its light and colour are taken**. Every pixel of the result still comes from your original — the text, the people, the textures are the ones you actually captured.
+**3 · Borrow only AI's light &amp; colour**　Your agent's image model (G) makes a version, but **only its light and colour are taken**. Every pixel of the result still comes from your original — the text, the people, the textures are the ones you actually captured.
 
-**4 · Refine and check**　Deterministic grading tools finish the brief, then the image has to pass two gates:
+**4 · Refine and check**　The project's deterministic tools (N) finish the brief, then the image has to pass two gates:
 
 - **Physics** — brightening only lands where light already falls; no invented halos around an exhibit, no real highlights or glaze sheen wiped away; tonal order, sky gradients and reflections all have to make sense.
 - **Strength** — visibly better, never overdone; museum pieces are judged on the subject itself.
@@ -132,40 +160,73 @@ Not good enough? It quietly retries a safer step on its own until a result passe
 
 ## 🚀 Installation
 
-**Two separate ways to use it — pick one:**
+There are **two separate ways** to use Photographic Studio. They are different downloads, with different requirements. Most people want option 1.
 
-| | Skill (`photographic-studio/` folder) | Engine (`engine/` folder, whole repository) |
+| | Option 1 · Skill | Option 2 · Engine |
 |---|---|---|
-| Who it is for | anyone with an AI agent (tested: ChatGPT app) | developers; the future app's back end |
-| API key | **not needed** — it uses the agent's own image tool and Python | **needed** — your own OpenAI or Gemini key; you pay for the usage |
-| How you use it | send a photo and say `fix` | command line or HTTP API on your own computer/server |
+| What you download | the `photographic-studio/` folder | the whole repository (the `engine/` folder plus the skill's tools) |
+| Who it is for | anyone with an LLM agent with image generation | developers; the future app's back end |
+| API key | **not needed** | **needed** — your own OpenAI or Gemini key |
+| Who pays for the AI | your agent subscription, as usual | you, per use, on your own API account |
+| Where your photos go | to your agent, as in any chat | to the model provider you configure |
 | Status | in daily use | prototype; not yet run against a live API |
 
-The skill package has no place for an API key, and it does not contain the engine.
+The skill package has no place for an API key and does not contain the engine. The engine does not need an agent.
 
+### Option 1 · Skill (no API key)
 
-**Install as an Agent Skill**: install the whole [`photographic-studio/`](photographic-studio) folder into a host that supports `SKILL.md` (tested in the ChatGPT app; other hosts should work but are untested), then:
+**What you need**: an **LLM agent with image generation** — it can look at a photo and edit it with its own image model. For the full result it should also be able to run Python; see *Capability tiers* below for what happens when it can't.
 
-```text
-(send a photo) fix
-```
+**Steps**
 
-**Hosts without skill install**: zip the folder, attach it, and say:
+1. Download the [`photographic-studio/`](photographic-studio) folder (or a release zip of it).
+2. If your agent supports installing skills (`SKILL.md`), install the folder.
+   If it doesn't — or you'd rather not install — zip the folder, attach it in a new conversation and say:
+   ```text
+   Process this photo with the attached Photographic Studio
+   ```
+3. Send a photo and say:
+   ```text
+   fix
+   ```
 
-```text
-Process this photo with the attached Photographic Studio
-```
+Tested so far on image2.6 (phone and web apps); agents that support `SKILL.md` can use it.
 
-**The engine (prototype, Python 3.11+)**:
+### Option 2 · Engine (your own API key)
 
-```bash
-pip install -r engine/requirements.txt
-cp engine/config.example.toml engine/config.toml     # set the model names; this file is git-ignored
-export OPENAI_API_KEY=...                            # or GEMINI_API_KEY=... (or put the key in config.toml)
-cd engine && python -m studio_engine.cli selftest    # shows what is configured; --live makes one small real call
-```
+**What you need**: Python 3.11 or newer; an API key from OpenAI or Google Gemini; the names of the models you want (check the provider's current model list). One model reads the photo and writes the brief; one edits images (G). They can come from the same provider.
 
-The engine has not yet been run against a live model API: no key has been configured so far.
+**Steps**
+
+1. Get the repository and install the dependencies:
+   ```bash
+   git clone https://github.com/kwhi6693-web/Photographic-studio.git
+   cd Photographic-studio
+   pip install -r engine/requirements.txt
+   ```
+2. Create your configuration and fill in the two model names (`[vision]` and `[editor]`):
+   ```bash
+   cp engine/config.example.toml engine/config.toml
+   ```
+   `engine/config.toml` is git-ignored, so it is never uploaded.
+3. Provide the key — preferably as an environment variable (or as `api_key` in `config.toml`):
+   ```bash
+   export OPENAI_API_KEY=...        # or GEMINI_API_KEY=...
+   ```
+4. Check, then make one small real call to each model:
+   ```bash
+   cd engine
+   python -m studio_engine.cli selftest           # what is configured; no paid call
+   python -m studio_engine.cli selftest --live    # one tiny real call per model
+   ```
+
+**Good to know**
+
+- Without a key nothing is called: `selftest` reports *NOT CONFIGURED*, and a run stops with *not configured* instead of failing halfway.
+- Switching provider or model means editing `config.toml` only (`provider = "openai" | "gemini"`, `model = ...`); no code change.
+- Cost: every run writes an estimated cost in `receipt.json`, from the `price_per_call_usd` values in `config.toml`. Your provider's bill is what counts. Use a key made only for this project, with a monthly spending limit, and revoke it when you stop testing.
+- Privacy: in this mode your photos are sent to the model provider you configured, under that provider's terms.
+- Status: the engine has been tested offline by replaying recorded real runs; it has not yet been run against a live model API.
 
 ---
 
@@ -202,15 +263,37 @@ It looks at what the host can do first, then decides how to work:
 
 ---
 
+## ❓ Questions first-time users ask
+
+**Does it cost anything?** The skill is free (MIT). It runs on your agent, so you need whatever plan your agent requires for image editing. The engine uses your own API key; you pay your provider per use.
+
+**Do I need an API key?** Not for the skill. Only for the engine.
+
+**Can I use it on my phone?** Yes — the skill was developed and tested on image2.6 in an iPhone app.
+
+**How long does one photo take?** In the agent app, measured: about 3–4 minutes per photo, one after another for a batch. The engine's target is 2 minutes or less per photo.
+
+**Can I send several photos at once?** Yes. It edits them one by one and delivers one finished photo each.
+
+**Will it retouch portraits?** No. People as the main subject are out of scope.
+
+**Will it change what is in my photo?** No objects are added or removed, the framing stays (at most a light straighten or crop that keeps at least 80 % of the frame), and every pixel comes from your original.
+
+**What if I don't like the result?** Say what's wrong in a few words (`too warm`, `a bit clearer`): it rewrites the brief and redoes the photo.
+
+**Where do my photos go?** With the skill: to your agent, as in any chat. With the engine: to the model provider you configured, under its terms.
+
+---
+
 ## 🏗️ Architecture
 
 <p align="center">
-  <img src="docs/images/architecture.svg" alt="Two entry points — the ChatGPT skill and the engine — share one set of deterministic tools" width="100%">
+  <img src="docs/images/architecture.svg" alt="Two entry points — the skill (in an LLM agent with image generation) and the engine — share one set of deterministic tools" width="100%">
 </p>
 
 Two ways in, **one set of rules**. Both call the same deterministic tools in `photographic-studio/optional/`, so every improvement reaches both, and the tests cover both.
 
-| | ChatGPT skill (`photographic-studio/`) | Engine (`engine/`) |
+| | Skill in an LLM agent with image generation (`photographic-studio/`) | Engine (`engine/`) |
 |---|---|---|
 | Status | in daily use | prototype, waiting for an API key |
 | Who runs the steps | the agent, reading `SKILL.md` | code |

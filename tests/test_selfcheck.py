@@ -1,4 +1,4 @@
-"""selfcheck.py must ask only for libraries a tool imports, or hosts install packages nobody uses (2026-11-13: ChatGPT
+"""selfcheck.py must ask only for libraries a tool imports, or hosts install packages nobody uses (2026-11-13: the agent
 installed scikit-image because the self check listed it)."""
 import ast, json
 from conftest import TOOLS, run_tool

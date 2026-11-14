@@ -1,4 +1,4 @@
-"""The engine runs the whole pipeline without ChatGPT. Offline here: the replay provider answers from recorded real runs
+"""The engine runs the whole pipeline without an agent. Offline here: the replay provider answers from recorded real runs
 (tests/fixtures/real_g), so the engine must reproduce the routes those runs took. Network providers are only checked
 for 'not configured' behaviour: no key, no call."""
 import json

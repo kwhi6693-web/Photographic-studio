@@ -1,6 +1,6 @@
 # Photographic Studio engine (v2.1.0)
 
-The retouching pipeline as code. Same rules and the same deterministic tools as the ChatGPT skill
+The retouching pipeline as code. Same rules and the same deterministic tools as the skill (run in an LLM agent with image generation)
 (`photographic-studio/optional/*.py` stay the single source of truth), but the steps are run by code and the two
 judgement calls go to model APIs:
 
@@ -46,7 +46,7 @@ cost and run-to-run difference.
 ## Offline / tests
 
 `provider = "replay"` answers from a recorded run folder (`params.json`, `g.png`, `receipt.json`), so the whole
-pipeline runs without network. `tests/test_engine.py` replays real ChatGPT runs and checks the engine takes the
+pipeline runs without network. `tests/test_engine.py` replays real agent runs and checks the engine takes the
 same routes.
 
 ## Not done yet (by design, waiting for the API key or the app phase)
