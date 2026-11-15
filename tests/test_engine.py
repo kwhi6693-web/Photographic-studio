@@ -103,12 +103,11 @@ def test_large_photo_comes_back_at_full_resolution(tmp_path):
     assert step['verdict'] == 'PASS'
 
 
-def test_light_already_good_skips_g(tmp_path):
-    """v1.0.9 / v1.2.0: when every improvement move can be done by N and the brief says so, the image model is not
-    called (N direct); without moves the flag is not enough."""
+def test_light_already_good_does_not_skip_g(tmp_path):
+    """v1.2.1: the image model is always called when one is configured. v1.0.9 skipped it for "light already good"
+    and v1.2.0 for "every move is N-doable"; in the 2026-11-15 runs that skipped G on all six photos."""
     import shutil
     d = tmp_path / 'case'; shutil.copytree(REAL_G / 'b1_01', d)
-    params = json.loads((d / 'params.json').read_text())
     (d / 'brief.json').write_text(json.dumps({'story': 'x', 'subject': 'x', 'genre': 'day', 'portrait': False, 'diagnoses': [],
                                               'keep': 'the light', 'light_already_good': True, 'g_intent': 'x',
                                               'params': {'highlights': -3, 'clarity': 0.06, 'vibrance': 0.06},
@@ -118,4 +117,5 @@ def test_light_already_good_skips_g(tmp_path):
     r = Studio(cfg).run(next(d.glob('original.*')), tmp_path / 'out')
     assert r.status == 'done', r.reason
     rec = json.loads((tmp_path / 'out' / 'receipt.json').read_text())
-    assert rec['g_calls'] == 0 and any(s.get('skipped') == 'light_already_good' for s in rec['steps'])
+    assert rec['g_calls'] >= 1 and not any(s.get('skipped') for s in rec['steps'])
+

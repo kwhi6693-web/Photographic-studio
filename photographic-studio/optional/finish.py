@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.0 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+"""Photographic Studio v1.2.1 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
 Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum] [--no-g]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit
   --no-g      v1.2.0: no G for this photo (the brief says every move can be done by N): only the N attempts run, with
@@ -23,6 +23,11 @@ v1.2.0 (the user: "修得好" before "别改坏"): GRADE_JSON carries the brief'
 that passes the checks is then measured by improve_check.py; a move nobody can see is strengthened (x1.5, at most two
 rounds) as long as the physics checks still pass and nothing goes over a strength limit. An attempt whose moves stay
 invisible counts as weaker than one whose moves show. A brief without moves is reported (NO_MOVES).
+v1.2.1: moves are strengthened (x1.4, up to three rounds) until they reach improve_check.py's TARGET (the level of the
+finals the user approved), not just its floor. A halo from a band that spans the whole frame (a sky or water band) is
+fixed by a wider feather, not by "on structure" (that removed the sunset band's colour altogether); a local move keeps
+the on-structure fix. Photos with a short edge under 900 px get clarity at most 0.2 everywhere (local contrast on a
+small photo turns into grain: the 2026-11-15 book at clarity 0.4).
 Deterministic. Needs numpy, Pillow, OpenCV.
 """
 import json, sys, tempfile, shutil
@@ -77,6 +82,25 @@ def unstack(params, gain):
 
 
 MOVE_LIMITS = {'lift': (-20, 20), 'warm': (-8, 8), 'clarity': (0, 0.5)}
+LOWRES_EDGE, LOWRES_CLARITY = 900, 0.2
+
+
+def lowres_cap(params, short_edge):
+    """v1.2.1: clarity at most 0.2 (global and in every move/region) on a photo with a short edge under 900 px."""
+    if short_edge >= LOWRES_EDGE: return params, None
+    q = json.loads(json.dumps(params)); capped = []
+    if float(q.get('clarity', 0) or 0) > LOWRES_CLARITY: capped.append(['clarity', q['clarity']]); q['clarity'] = LOWRES_CLARITY
+    for key in ('moves', 'regions'):
+        for j, r in enumerate(q.get(key, [])):
+            if float(r.get('clarity', 0) or 0) > LOWRES_CLARITY: capped.append([f'{key}[{j}].clarity', r['clarity']]); r['clarity'] = LOWRES_CLARITY
+    return q, ({'short_edge': short_edge, 'capped': capped} if capped else None)
+
+
+def full_span(mv):
+    """A band across the whole frame (sky, water): its edges run through smooth areas by design."""
+    if mv.get('shape') == 'gradient': return True
+    b = mv.get('box') or [0, 0, 1, 1]
+    return (b[0] <= 0.02 and b[2] >= 0.98) or (b[1] <= 0.02 and b[3] >= 0.98)
 
 
 def strengthen(params, idx, k=1.5):
@@ -87,6 +111,7 @@ def strengthen(params, idx, k=1.5):
         for key, (lo, hi) in MOVE_LIMITS.items():
             if key in mv: mv[key] = round(min(hi, max(lo, float(mv[key]) * k)), 3)
         if 'sat' in mv: mv['sat'] = round(min(1.6, max(0.5, 1 + (float(mv['sat']) - 1) * k)), 3)
+        if q.get('_lowres') and float(mv.get('clarity', 0) or 0) > LOWRES_CLARITY: mv['clarity'] = LOWRES_CLARITY
     return q
 
 
@@ -124,6 +149,10 @@ def main():
     src, g, gj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     txt = Path(gj).read_text(encoding='utf-8').strip() if Path(gj).exists() else ''
     params = json.loads(txt) if txt else {}   # v1.0: a missing or empty parameter file means no extra grading
+    from PIL import Image as _Image
+    with _Image.open(src) as _im: short_edge = min(_im.size)
+    params, lowres = lowres_cap(params, short_edge)
+    if lowres: params['_lowres'] = True
     no_g = '--no-g' in sys.argv or Path(g).resolve() == Path(src).resolve()
     if not no_g:
         if str(HERE) not in sys.path: sys.path.insert(0, str(HERE))
@@ -137,7 +166,10 @@ def main():
         tries += [('no_region_lift_no_vignette', safer(params), [], g), ('local0_safer_grade', safer(params), ['--local=0'], g),
                   ('n_direct', safer(params), [], None)]
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
-    rec = {'tool': 'finish.py v1.2.0', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    if lowres:   # the museum-strength step raises clarity again: cap every attempt
+        tries = [(nm, lowres_cap(pp, short_edge)[0], lo, gs) for nm, pp, lo, gs in tries]
+    rec = {'tool': 'finish.py v1.2.1', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    if lowres: rec['low_resolution'] = lowres
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
 
     best = None
@@ -176,9 +208,11 @@ def main():
             if p.get('moves') and not bad and set(weak) <= {'no_visible_change'}:   # an invisible edit is exactly what to strengthen
                 # v1.2.0: the improvement must show. Strengthen only the moves nobody can see, while nothing breaks.
                 ic = run('improve_check.py', src, fin, pj, f'--base={lt}'); rounds = []
-                if ic.get('halo'):   # a ring of light or colour around the subject: the move goes on structure only
+                if ic.get('halo'):   # a ring of light or colour: a local move goes on structure, a band gets a softer edge
                     p2 = json.loads(json.dumps(p))
-                    for k in ic['halo']: p2['moves'][k]['on_structure'] = True
+                    for k in ic['halo']:
+                        if full_span(p2['moves'][k]): p2['moves'][k]['feather'] = max(0.3, float(p2['moves'][k].get('feather', 0.08)))
+                        else: p2['moves'][k]['on_structure'] = True
                     pj2 = td / f'p{i}h.json'; fin2 = td / f'fin{i}h.png'; pj2.write_text(json.dumps(p2), encoding='utf-8')
                     run('grade.py', lt, fin2, pj2)
                     if p2.get('keep'): run('keep_regions.py', src, fin2, fin2, kj)
@@ -187,9 +221,10 @@ def main():
                     if not (b2 or set(w2) - {'no_visible_change'}):
                         p, pj, fin, iv, pv, weak = p2, pj2, fin2, _iv, _pv, w2
                         ic = run('improve_check.py', src, fin, pj, f'--base={lt}')
-                for rnd in range(2):
-                    if not ic.get('weak'): break
-                    p2 = strengthen(p, ic['weak']); pj2 = td / f'p{i}s{rnd}.json'; fin2 = td / f'fin{i}s{rnd}.png'
+                for rnd in range(3):   # v1.2.1: up to the target, not just over the floor
+                    todo = ic.get('below_target', ic.get('weak')) or []
+                    if not todo: break
+                    p2 = strengthen(p, todo, 1.4); pj2 = td / f'p{i}s{rnd}.json'; fin2 = td / f'fin{i}s{rnd}.png'
                     pj2.write_text(json.dumps(p2), encoding='utf-8'); run('grade.py', lt, fin2, pj2)
                     if not fin2.exists(): break
                     if p2.get('keep'): run('keep_regions.py', src, fin2, fin2, kj)

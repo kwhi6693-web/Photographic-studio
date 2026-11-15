@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.0 - improve check: is each of the brief's improvement moves visible in the finished photo?
+"""Photographic Studio v1.2.1 - improve check: is each of the brief's improvement moves visible in the finished photo?
 Usage: python3 improve_check.py ORIGINAL FINISHED PARAMS_JSON [RECEIPT_JSON] [--base=GRADE_INPUT]
   PARAMS_JSON  the grade parameters with "moves" (grade.py). FINISHED must have the original's framing (run it before
                any crop), it is resized to the original if needed.
@@ -12,6 +12,14 @@ sat, warm and clarity, or the move's "look" - is measured there between the orig
   contrast local contrast ratio   >= 1.08
 The thresholds sit just under the most restrained final the user approved (willow lake: whole frame chroma x1.10,
 local contrast x1.06, L +1.6; a move acts on its own region, where the change is larger than the whole-frame mean).
+v1.2.1 - a floor is not a target. Agents wrote moves just over the floor (2026-11-15 run: every move "visible", the
+sunset gate unchanged as a whole). So each move also has a TARGET at the level of the finals the user approved (median
+of the six taste samples: colour x1.39, local contrast x1.19, L +2.6 over the whole frame; a move's own area changes
+more): light 4.0 L*, colour x1.25 (colour- x0.85), warm 2.5, local contrast x1.18. finish.py strengthens a move until it
+reaches its target, as long as the physics checks hold and nothing goes over a strength limit; only a move under the
+floor counts as a failure.
+FINISHED with a different framing than ORIGINAL (cropped) is not measured (SKIPPED): run this before the crop; the
+finish.py receipt is the record.
 A brief without moves is reported NO_MOVES: v1.2.0 requires at least one visible improvement per photo.
 Halo: a rect or ellipse move whose soft edge crosses a smooth area (sky, haze, a plain wall) leaves a ring of light or
 colour around the subject. Where the original is smooth inside the move's feather zone, the change of the edit across
@@ -29,7 +37,8 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ps_common import load_rgb, srgb_to_lab, blur, sha256
 
-VISIBLE = {'light': 2.5, 'colour': 1.10, 'colour-': 0.91, 'warm': 1.5, 'contrast': 1.08}
+VISIBLE = {'light': 2.5, 'colour': 1.10, 'colour-': 0.91, 'warm': 1.5, 'contrast': 1.08}   # floor: under it = failure
+TARGET = {'light': 4.0, 'colour': 1.25, 'colour-': 0.85, 'warm': 2.5, 'contrast': 1.18}    # v1.2.1: what to reach
 NORM = {'lift': 6.0, 'sat': 0.15, 'warm': 3.0, 'clarity': 0.2}
 EFFECT = {'lift': 'light', 'sat': 'colour', 'warm': 'warm', 'clarity': 'contrast'}
 HALO_L, HALO_C = 4.0, 4.5
@@ -78,12 +87,12 @@ def measure(lo, lf, m, effect, sign):
     return None
 
 
-def visible(effect, sign, v):
+def visible(effect, sign, v, T=VISIBLE):
     if v is None: return False
-    if effect == 'light': return v * sign >= VISIBLE['light']
-    if effect == 'colour': return v >= VISIBLE['colour'] if sign > 0 else v <= VISIBLE['colour-']
-    if effect == 'warm': return v * sign >= VISIBLE['warm']
-    if effect == 'contrast': return v >= VISIBLE['contrast']
+    if effect == 'light': return v * sign >= T['light']
+    if effect == 'colour': return v >= T['colour'] if sign > 0 else v <= T['colour-']
+    if effect == 'warm': return v * sign >= T['warm']
+    if effect == 'contrast': return v >= T['contrast']
     return False
 
 
@@ -111,6 +120,8 @@ def check(src, fin, params, base=None):
     src_global[0] = src
     import grade as G
     o = load_rgb(src); f = load_rgb(fin)
+    if abs(f.shape[1] / f.shape[0] - o.shape[1] / o.shape[0]) > 0.01:
+        return None   # v1.2.1: a cropped final cannot be measured against the brief's boxes
     if f.shape != o.shape:
         f = np.asarray(Image.fromarray(np.uint8(np.rint(f * 255))).resize((o.shape[1], o.shape[0]), Image.LANCZOS)).astype(np.float32) / 255
     lo, lf = srgb_to_lab(o), srgb_to_lab(f)
@@ -134,6 +145,7 @@ def check(src, fin, params, base=None):
                 hl, hc = halo(lo, lf, mg)
         out.append({'move': i, 'what': mv.get('what', ''), 'effect': effect, 'sign': sign,
                     'value': None if v is None else round(v, 3), 'visible': visible(effect, sign, v),
+                    'at_target': visible(effect, sign, v, TARGET),
                     'halo': [hl, hc], 'halo_found': bool(hl > HALO_L or hc > HALO_C), 'area': round(float(m.mean()), 3)})
     return out
 
@@ -145,12 +157,17 @@ def main():
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}')
     opt = {x.split('=')[0]: x.split('=', 1)[1] for x in sys.argv[1:] if x.startswith('--') and '=' in x}
     moves = check(src, fin, params, opt.get('--base'))
+    if moves is None:
+        rec = {'tool': 'improve_check.py v1.2.1', 'verdict': 'SKIPPED: the finished photo has another framing (cropped); measure before the crop - the finish.py receipt is the record'}
+        print(json.dumps(rec, ensure_ascii=False, indent=1)); return 0
     weak = [m['move'] for m in moves if not m.get('visible')]
+    below = [m['move'] for m in moves if not m.get('at_target')]
     halos = [m['move'] for m in moves if m.get('halo_found')]
     verdict = 'NO_MOVES: the brief promised no visible improvement' if not moves else \
               ('VISIBLE' if not weak else 'WEAK: ' + '; '.join(f"{m['what'] or m['move']} ({m.get('effect')} {m.get('value')})" for m in moves if not m.get('visible')))
     if halos: verdict += ' | HALO: ' + '; '.join(m['what'] or str(m['move']) for m in moves if m.get('halo_found'))
-    rec = {'tool': 'improve_check.py v1.2.0', 'source_sha256': sha256(src), 'moves': moves, 'weak': weak, 'halo': halos, 'verdict': verdict}
+    if not weak and below: verdict += ' | BELOW_TARGET: ' + '; '.join(m['what'] or str(m['move']) for m in moves if not m.get('at_target'))
+    rec = {'tool': 'improve_check.py v1.2.1', 'source_sha256': sha256(src), 'moves': moves, 'weak': weak, 'below_target': below, 'halo': halos, 'verdict': verdict}
     t = json.dumps(rec, ensure_ascii=False, indent=1)
     if rec_p: Path(rec_p).write_text(t, encoding='utf-8')
     print(t); return 0

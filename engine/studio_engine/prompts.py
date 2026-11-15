@@ -15,7 +15,7 @@ Rules:
 - The subject is lifted by quieting its surroundings, not by inventing light on it.
 - moves (v1.2.0, required, 2-3): the improvement moves that make THIS photo better, each on one area (sky, subject, water, foreground...) and visible at normal viewing - what a professional retoucher would do to bring out the point of interest. A photo with no defect still gets moves; "the light is already good" is not a reason to leave it as it is. Each move: what, look (light+ light- colour+ colour- warm+ warm- contrast+), shape (gradient from top/bottom/left/right with end 0..1, or rect/ellipse with box fractions), on_structure true when the area around the subject is smooth sky, haze or a plain wall, and lift (-8..8 L), sat (0.8..1.4), warm (-4..4), clarity (0..0.35); neutral values (0, 1, 0, 0) for what the move does not use.
 - keep (the text) lists only key facts that must not change: text, people, structure, signature colours - never whole areas the moves are meant to improve.
-- light_already_good: true only when every move is a region adjustment the grading tool can do on its own (then the image model is not called); it does not mean "edit lightly".
+- light_already_good: informational only (v1.2.1: the image model is always called); it never means "edit lightly".
 - keep_regions (v1.1.0): the areas whose colour must not change (a sign, a label, coloured glass, a painted surface, a wall whose colour is the point) or whose content the image model must not repaint, each as a box in fractions of the frame. mode "colour" keeps the original colour and lets the brightness follow the edit; mode "content" keeps the original's own detail and colour and takes only the large-scale light. Empty if nothing needs it; at most 6.
 - If people's faces/bodies are the main subject, set portrait=true (the service does not retouch portraits).
 Return ONLY JSON matching the schema. Use the measurements as evidence; trust your eyes when they disagree."""
@@ -48,7 +48,7 @@ BRIEF_SCHEMA = {
                                            'from': {'type': 'string', 'enum': ['top', 'bottom', 'left', 'right']},
                                            'end': {'type': 'number'}, 'on_structure': {'type': 'boolean'},
                                            'lift': {'type': 'number'}, 'sat': {'type': 'number'}, 'warm': {'type': 'number'}, 'clarity': {'type': 'number'}}}},
-        'light_already_good': {'type': 'boolean', 'description': 'v1.2.0: true only when every move can be done by the grading tool alone; then the image model is not called (it never means "edit lightly")'},
+        'light_already_good': {'type': 'boolean', 'description': 'v1.2.1: informational only - the image model is always called; never means "edit lightly"'},
         'g_intent': {'type': 'string', 'description': 'English, 2-3 concrete light-and-colour intents for the image model, no numbers'},
         'params': {'type': 'object', 'additionalProperties': False,
                    'required': ['exposure_ev', 'contrast', 'highlights', 'shadows', 'clarity', 'vibrance', 'saturation', 'levels_black'],

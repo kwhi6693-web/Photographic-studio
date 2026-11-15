@@ -2,7 +2,7 @@
 
     studio.run(photo, out_dir) -> Result     one photo in, one finished photo out (or a clear reason why not)
 
-Order (SKILL.md v1.2.0; no crop step yet): measure -> brief (vision model) -> portrait? stop -> G (image model) -> scene check (retry once)
+Order (SKILL.md v1.2.1; no crop step yet): measure -> brief (vision model) -> portrait? stop -> G (image model) -> scene check (retry once)
 -> finish.py (route ladder) -> G rejected? re-call G once with the problems named -> settle.py -> n_trim.py -> final.
 Every step is timed and written to receipt.json; model usage and estimated cost too.
 """
@@ -21,11 +21,7 @@ from .config import EngineConfig
 from .providers import ImageEditor, NotConfigured, ProviderError, VisionModel, make_editor, make_vision
 from .tools import ToolError, Tools
 
-VERSION = '2.3.0'
-
-
-class _SkipG(Exception):
-    """v1.0.9: the brief says the light is already good, so the image model is not called."""
+VERSION = '2.3.1'
 
 
 @dataclass
@@ -101,14 +97,10 @@ class Studio:
             # G: up to two calls; the second only when the first does not match the scene
             g = None
             try:
-                if brief.get('light_already_good') and brief.get('moves'):   # v1.2.0: every move is N-doable -> no image model (never 'edit lightly')
-                    rec['steps'].append({'step': 'g', 'skipped': 'light_already_good'})
-                    raise _SkipG()
+                # v1.2.1: the image model is always called when one is configured; the brief does not decide
                 g = self._g(src, prompts.g_prompt(brief), out, rec)
                 if g is None and rec['g_calls'] < self.cfg.g_max_calls:
                     g = self._g(src, prompts.g_prompt(brief, ['scene']), out, rec)
-            except _SkipG:
-                pass
             except (ProviderError, ToolError) as e:
                 rec['steps'].append({'step': 'g', 'error': str(e)[:400]})   # fall back to N direct
             t = time.time()

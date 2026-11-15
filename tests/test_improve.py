@@ -32,7 +32,7 @@ def test_every_move_shows_and_nothing_breaks(tmp_path, name):
     assert r['route'] == 'no_g'   # the original passed as G: its own N route, no look transfer of the photo onto itself
     a = next(x for x in r['attempts'] if x['name'] == r['delivered'])
     assert not a['problems'] and not a['strength_problems'], a
-    assert a['improve']['verdict'] == 'VISIBLE', a['improve']
+    assert a['improve']['verdict'].startswith('VISIBLE'), a['improve']   # every move over the floor (BELOW_TARGET may follow)
     assert all(not m['halo_found'] for m in a['improve']['moves'])
     diff = float(np.abs(load(out) - load(src)).mean() * 255)
     assert diff > MIN_DIFF[name], diff
@@ -43,7 +43,7 @@ def test_an_invisible_move_is_strengthened(tmp_path):
     p['moves'] = [dict(p['moves'][2], clarity=0.08)]   # the water move, written too lightly to see
     _, _, r = finish(tmp_path, '07_lake_frame', p)
     imp = r['attempts'][0]['improve']
-    assert imp['strengthened'] and imp['verdict'] == 'VISIBLE', imp
+    assert imp['strengthened'] and imp['verdict'].startswith('VISIBLE'), imp
     assert r['attempts'][0]['params']['moves'][0]['clarity'] > 0.08
 
 
@@ -66,3 +66,32 @@ def test_a_brief_without_moves_is_reported(tmp_path):
     assert r['verdict'].startswith('NO_MOVES')
     run_tool('finish.py', src, src, pj, tmp_path / 'f.png', tmp_path / 'f.json')
     assert json.loads((tmp_path / 'f.json').read_text())['brief'].startswith('NO_MOVES')
+
+
+def test_a_sky_band_halo_gets_a_softer_edge_not_on_structure(tmp_path):
+    """v1.2.1: the agent's own 2026-11-15 gate brief put the sunset colour on a band across the whole frame. Its edges
+    in the smooth sky made a halo; putting it on structure (v1.2.0) left the smooth sky unchanged. Now the band keeps
+    its colour with a softer edge."""
+    p = {'moves': [{'what': 'sunset band', 'look': 'colour+', 'shape': 'rect', 'box': [0, 0.23, 1, 0.64], 'sat': 1.26, 'lift': -3}]}
+    _, _, r = finish(tmp_path, '09_gate_sunset', p)
+    a = r['attempts'][0]
+    mv = a['params']['moves'][0]
+    assert not mv.get('on_structure') and mv.get('feather', 0) >= 0.3, mv
+    assert not a['problems'], a
+
+
+def test_a_small_photo_gets_no_more_than_02_clarity(tmp_path):
+    """v1.2.1: the 797 px book at clarity 0.4 turned grainy; under 900 px every clarity is capped at 0.2."""
+    p = {'moves': [{'what': 'paper and ink', 'look': 'contrast+', 'shape': 'rect', 'box': [0.1, 0.32, 0.87, 0.7], 'clarity': 0.4}]}
+    _, _, r = finish(tmp_path, '08_book_showcase', p, genre='museum')
+    assert r['low_resolution']['capped'] == [['moves[0].clarity', 0.4]]
+    for a in r['attempts']:
+        if 'params' in a:
+            assert all(float(m.get('clarity', 0)) <= 0.2 for m in a['params']['moves'])
+
+
+def test_a_cropped_final_is_not_measured(tmp_path):
+    src = REAL / '09_gate_sunset.jpg'
+    crop = tmp_path / 'c.png'; run_tool('reframe.py', src, crop, '--box', '0,0.12,1,0.97', '--allow-aspect-change')
+    r = json.loads(run_tool('improve_check.py', src, crop, BRIEFS / '09_gate_sunset.json').stdout)
+    assert r['verdict'].startswith('SKIPPED')

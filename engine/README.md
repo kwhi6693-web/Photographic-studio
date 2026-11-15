@@ -1,4 +1,4 @@
-# Photographic Studio engine (v2.3.0)
+# Photographic Studio engine (v2.3.1)
 
 The retouching pipeline as code. Same rules and the same deterministic tools as the skill (run in an LLM agent with image generation)
 (`photographic-studio/optional/*.py` stay the single source of truth), but the steps are run by code and the two
