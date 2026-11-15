@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-c8963e?style=flat-square" alt="version 1.1.0">
-  <img src="https://img.shields.io/badge/engine-2.2.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.2.0">
+  <img src="https://img.shields.io/badge/version-1.2.0-c8963e?style=flat-square" alt="version 1.2.0">
+  <img src="https://img.shields.io/badge/engine-2.3.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建築·街景·風光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -123,10 +123,11 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 
 **1 · 讀片**　先回答“這張照片為什麼值得看”：看點（敘事只是一種，還有幾何、光影、色彩、質感、氛圍、空間、極簡）、主角、情緒、風格方向；再看光從哪來、顏色怎麼搭、空間怎麼分層。
 
-**2 · 導演單**　把判斷寫成六行後期方案，例如：
+**2 · 導演單**　先定目標：2–3 個讓這張照片**看得出更好**的提升動作，各自落在一個區域（天空、主體、水面……）；再寫缺陷和不能動的地方，例如：
 
 ```text
 看點｜風格：暗展櫃中，藍釉與金飾承接展燈｜低調博物館靜物，深藍與暖金分明
+提升動作：A 瓶身受光面的體積更立體　B 只在瓶身加濃鈷藍與金色　C 浮雕紋樣的局部反差
 主角：中央藍釉瓶；怎麼突出：放大已有受光面的體積與金飾反差，背景保持深暗
 影調：黑場保留，高光輕壓，主體中間調展開，局部反差增加
 色彩：鈷藍與暖金為主，加強釉色與金飾，收斂臺座偏色
@@ -136,9 +137,10 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 
 **3 · 只借 AI 的光與色**　讓你所用 AI 內建的影像模型（G）出一版，但**只拿走它的光線和色彩**，成片的每一個畫素仍然來自原片——文字、人物、紋理都是你拍到的那些。
 
-**4 · 精修與檢查**　本專案的確定性工具（N）按導演單補齊，再過兩道關：
+**4 · 精修與檢查**　本專案的確定性工具（N）按導演單補齊，再過三道關：
 
 - **物理關**：加亮只落在原本有光的地方；不給展品憑空加光圈，也不把真實的光斑、釉光抹掉；明暗次序、天空漸變、倒影都要講得通。
+- **提升關**：每個提升動作都要在它的區域裡看得出來；看不出就一點點加強，前提是物理關仍然通過。會在天空裡留下光圈的動作，自動改成只作用在建築和物體上。
 - **力度關**：看得出提升，又不過頭；博物館展品按主角來判斷。
 
 不合格？它會自己換一級更穩的做法重來，直到交出一張合格的成片——**不停下來問你**。
@@ -341,5 +343,5 @@ Skill 本身（執行說明、參考檔案和工具）採用 [MIT 授權條款](
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.1.0 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.2.0 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
 </p>

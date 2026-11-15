@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.0.9 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
-Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum]
-  SOURCE      original photo;  G_OUTPUT  the host's generative edit (or the SOURCE itself for N-only)
+"""Photographic Studio v1.2.0 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum] [--no-g]
+  SOURCE      original photo;  G_OUTPUT  the host's generative edit
+  --no-g      v1.2.0: no G for this photo (the brief says every move can be done by N): only the N attempts run, with
+              the brief's own parameters first. Passing the SOURCE as G_OUTPUT means the same.
   GRADE_JSON  director-brief parameters for grade.py ({} for none)
 Chain: look_transfer -> grade -> physics_check + intensity_check. An attempt passes only when the physics check finds
 no problem AND nothing is over a strength limit (v1.0.9: a strength floor is not a failure - the photo's own
@@ -17,6 +19,10 @@ bright rims (the approved blue vase: gold rims with edge gain 0.86).
 v1.1.0: GRADE_JSON may carry "keep": the brief's must-not-change regions (keep_regions.py). They are applied to every
 attempt right after the grade and BEFORE the checks, so a G whose only fault was repainting a kept region is judged
 without it.
+v1.2.0 (the user: "修得好" before "别改坏"): GRADE_JSON carries the brief's improvement "moves" (grade.py). An attempt
+that passes the checks is then measured by improve_check.py; a move nobody can see is strengthened (x1.5, at most two
+rounds) as long as the physics checks still pass and nothing goes over a strength limit. An attempt whose moves stay
+invisible counts as weaker than one whose moves show. A brief without moves is reported (NO_MOVES).
 Deterministic. Needs numpy, Pillow, OpenCV.
 """
 import json, sys, tempfile, shutil
@@ -70,8 +76,24 @@ def unstack(params, gain):
     return q, {'g_local_contrast_gain': round(gain, 3), 'clarity': [c, q['clarity']]}
 
 
+MOVE_LIMITS = {'lift': (-20, 20), 'warm': (-8, 8), 'clarity': (0, 0.5)}
+
+
+def strengthen(params, idx, k=1.5):
+    """v1.2.0: the moves in idx, k times stronger (sat about 1), within grade.py's ranges."""
+    q = json.loads(json.dumps(params))
+    for i in idx:
+        mv = q['moves'][i]
+        for key, (lo, hi) in MOVE_LIMITS.items():
+            if key in mv: mv[key] = round(min(hi, max(lo, float(mv[key]) * k)), 3)
+        if 'sat' in mv: mv['sat'] = round(min(1.6, max(0.5, 1 + (float(mv['sat']) - 1) * k)), 3)
+    return q
+
+
 def safer(params):
     q = json.loads(json.dumps(params))
+    for mv in q.get('moves', []):   # v1.2.0: a move is the point of the edit - kept, its added light halved
+        if float(mv.get('lift', 0)) > 0: mv['lift'] = round(float(mv['lift']) / 2, 3)
     q.pop('vignette', None)
     regs = [r for r in q.get('regions', []) if float(r.get('lift', 0)) <= 0]
     if regs: q['regions'] = regs
@@ -102,12 +124,22 @@ def main():
     src, g, gj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     txt = Path(gj).read_text(encoding='utf-8').strip() if Path(gj).exists() else ''
     params = json.loads(txt) if txt else {}   # v1.0: a missing or empty parameter file means no extra grading
-    tries = [('default', params, [], g)]
-    if genre == 'museum': tries.append(('museum_strength', boost(params), [], g))
-    tries += [('no_region_lift_no_vignette', safer(params), [], g), ('local0_safer_grade', safer(params), ['--local=0'], g),
-              ('n_direct', safer(params), [], None)]
+    no_g = '--no-g' in sys.argv or Path(g).resolve() == Path(src).resolve()
+    if not no_g:
+        if str(HERE) not in sys.path: sys.path.insert(0, str(HERE))
+        from ps_common import sha256 as _sha
+        no_g = _sha(g) == _sha(src)
+    if no_g:   # v1.2.0: its own N route - no look_transfer of the original against itself
+        tries = [('n_direct', params, [], None), ('n_direct_safer', safer(params), [], None)]
+    else:
+        tries = [('default', params, [], g)]
+        if genre == 'museum': tries.append(('museum_strength', boost(params), [], g))
+        tries += [('no_region_lift_no_vignette', safer(params), [], g), ('local0_safer_grade', safer(params), ['--local=0'], g),
+                  ('n_direct', safer(params), [], None)]
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
-    rec = {'tool': 'finish.py v1.0.9', 'genre': genre, 'attempts': []}
+    rec = {'tool': 'finish.py v1.2.0', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
+
     best = None
     with tempfile.TemporaryDirectory() as td:
         td = Path(td); seen = set(); result = {}
@@ -140,9 +172,39 @@ def main():
                 kept = run('keep_regions.py', src, fin, fin, kj)
             bad, weak, iv, pv = problems(src, fin, genre)
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
+            ic = None
+            if p.get('moves') and not bad and set(weak) <= {'no_visible_change'}:   # an invisible edit is exactly what to strengthen
+                # v1.2.0: the improvement must show. Strengthen only the moves nobody can see, while nothing breaks.
+                ic = run('improve_check.py', src, fin, pj, f'--base={lt}'); rounds = []
+                if ic.get('halo'):   # a ring of light or colour around the subject: the move goes on structure only
+                    p2 = json.loads(json.dumps(p))
+                    for k in ic['halo']: p2['moves'][k]['on_structure'] = True
+                    pj2 = td / f'p{i}h.json'; fin2 = td / f'fin{i}h.png'; pj2.write_text(json.dumps(p2), encoding='utf-8')
+                    run('grade.py', lt, fin2, pj2)
+                    if p2.get('keep'): run('keep_regions.py', src, fin2, fin2, kj)
+                    b2, w2, _iv, _pv = problems(src, fin2, genre)
+                    rounds.append({'halo_fix': ic['halo'], **({'stopped_by': b2 + w2} if (b2 or w2) else {})})
+                    if not (b2 or set(w2) - {'no_visible_change'}):
+                        p, pj, fin, iv, pv, weak = p2, pj2, fin2, _iv, _pv, w2
+                        ic = run('improve_check.py', src, fin, pj, f'--base={lt}')
+                for rnd in range(2):
+                    if not ic.get('weak'): break
+                    p2 = strengthen(p, ic['weak']); pj2 = td / f'p{i}s{rnd}.json'; fin2 = td / f'fin{i}s{rnd}.png'
+                    pj2.write_text(json.dumps(p2), encoding='utf-8'); run('grade.py', lt, fin2, pj2)
+                    if not fin2.exists(): break
+                    if p2.get('keep'): run('keep_regions.py', src, fin2, fin2, kj)
+                    b2, w2, _iv, _pv = problems(src, fin2, genre)
+                    if b2 or set(w2) - {'no_visible_change'}:
+                        rounds.append({'round': rnd + 1, 'stopped_by': b2 + w2}); break
+                    p, pj, fin, iv, pv, weak = p2, pj2, fin2, _iv, _pv, w2
+                    ic = run('improve_check.py', src, fin, pj, f'--base={lt}'); rounds.append({'round': rnd + 1, 'verdict': ic.get('verdict')})
+                if ic.get('weak'): weak = weak + ['move_not_visible']
+                if ic.get('halo'): bad = bad + ['move_halo']
+                ic = {'verdict': ic.get('verdict'), 'moves': ic.get('moves'), 'strengthened': rounds}
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak,
                                     **({'clarity_unstacked': unstacked} if unstacked else {}),
-                                    **({'keep': kept.get('verdict')} if kept else {})})
+                                    **({'keep': kept.get('verdict')} if kept else {}),
+                                    **({'improve': ic, 'params': p} if ic else {})})
             result[name] = (bad, weak)
             # v1.0.2: a G route that passes the physics checks and visibly changes the photo beats N direct whatever the
             #   strength ranges say: ranges trim the excess afterwards (step 6), they are not a reason to drop G's look.
@@ -150,7 +212,7 @@ def main():
             #   preferred the G route on all four.)
             score = (len(bad), 0 if (gsrc is not None and 'no_visible_change' not in weak) else 1, len(weak), i)
             if best is None or score < best[0]: best = (score, fin, name, bad + weak)
-            if not bad and not weak: break
+            if not bad and (not weak or weak == ['move_not_visible']): break   # a safer attempt cannot show more
         shutil.copy(best[1], out)
     rec['delivered'] = best[2]
     rec['verdict'] = 'DELIVER' if not best[3] else 'DELIVER_WITH_FLAGS: ' + ', '.join(best[3])

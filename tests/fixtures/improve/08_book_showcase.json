@@ -1,0 +1,6 @@
+{"contrast": 0.1,
+ "moves": [
+  {"what": "书页提亮聚焦", "look": "light+", "shape": "rect", "box": [0.06, 0.22, 0.89, 0.78], "feather": 0.16, "edge_aware": true, "lift": 6},
+  {"what": "纸墨对比", "look": "contrast+", "shape": "rect", "box": [0.06, 0.22, 0.89, 0.78], "feather": 0.16, "edge_aware": true, "clarity": 0.2},
+  {"what": "压暗上方空展柜", "look": "light-", "shape": "gradient", "from": "top", "end": 0.25, "lift": -4}
+ ]}

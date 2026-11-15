@@ -13,13 +13,16 @@ Rules:
 - Follow real light physics: keep the light direction and time of day; shadows stay darker and cooler than lit areas; never add a light source or a glow around the subject; dark backgrounds stay dark and clean.
 - Parameters come only from THIS photo's problems (v1.0.9). First list the problems the photo really has, each with what you see and a measurement as evidence (e.g. haze over water and walls even when black window frames make the dynamic range wide; blown highlights; washed sky; flat colour), and what is already good and must not change. Every parameter must serve one listed problem, sized to how bad it is; a parameter no problem asks for stays 0. If the light is already good, only refine lightly: do not brighten, do not add colour. There is no default parameter set.
 - The subject is lifted by quieting its surroundings, not by inventing light on it.
+- moves (v1.2.0, required, 2-3): the improvement moves that make THIS photo better, each on one area (sky, subject, water, foreground...) and visible at normal viewing - what a professional retoucher would do to bring out the point of interest. A photo with no defect still gets moves; "the light is already good" is not a reason to leave it as it is. Each move: what, look (light+ light- colour+ colour- warm+ warm- contrast+), shape (gradient from top/bottom/left/right with end 0..1, or rect/ellipse with box fractions), on_structure true when the area around the subject is smooth sky, haze or a plain wall, and lift (-8..8 L), sat (0.8..1.4), warm (-4..4), clarity (0..0.35); neutral values (0, 1, 0, 0) for what the move does not use.
+- keep (the text) lists only key facts that must not change: text, people, structure, signature colours - never whole areas the moves are meant to improve.
+- light_already_good: true only when every move is a region adjustment the grading tool can do on its own (then the image model is not called); it does not mean "edit lightly".
 - keep_regions (v1.1.0): the areas whose colour must not change (a sign, a label, coloured glass, a painted surface, a wall whose colour is the point) or whose content the image model must not repaint, each as a box in fractions of the frame. mode "colour" keeps the original colour and lets the brightness follow the edit; mode "content" keeps the original's own detail and colour and takes only the large-scale light. Empty if nothing needs it; at most 6.
 - If people's faces/bodies are the main subject, set portrait=true (the service does not retouch portraits).
 Return ONLY JSON matching the schema. Use the measurements as evidence; trust your eyes when they disagree."""
 
 BRIEF_SCHEMA = {
     'type': 'object', 'additionalProperties': False,
-    'required': ['story', 'subject', 'genre', 'portrait', 'diagnoses', 'keep', 'keep_regions', 'light_already_good', 'g_intent', 'params'],
+    'required': ['story', 'subject', 'genre', 'portrait', 'diagnoses', 'moves', 'keep', 'keep_regions', 'light_already_good', 'g_intent', 'params'],
     'properties': {
         'story': {'type': 'string', 'description': 'one line: the point of interest (a story is only one kind; also geometry/order, light, colour, texture, mood, space, minimalism) and the style direction'},
         'subject': {'type': 'string', 'description': 'what the subject is and where it is in the frame'},
@@ -35,7 +38,17 @@ BRIEF_SCHEMA = {
                                    'properties': {'what': {'type': 'string'},
                                                   'box': {'type': 'array', 'items': {'type': 'number'}, 'description': '[x0, y0, x1, y1], fractions 0..1'},
                                                   'mode': {'type': 'string', 'enum': ['colour', 'content']}}}},
-        'light_already_good': {'type': 'boolean', 'description': 'v1.0.9: true when the light, colour and depth are already right and only a light refinement is needed; then the image model is not called'},
+        'moves': {'type': 'array', 'description': 'v1.2.0: 2-3 visible improvement moves (see the rules)',
+                  'items': {'type': 'object', 'additionalProperties': False,
+                            'required': ['what', 'look', 'shape', 'box', 'from', 'end', 'on_structure', 'lift', 'sat', 'warm', 'clarity'],
+                            'properties': {'what': {'type': 'string'},
+                                           'look': {'type': 'string', 'enum': ['light+', 'light-', 'colour+', 'colour-', 'warm+', 'warm-', 'contrast+']},
+                                           'shape': {'type': 'string', 'enum': ['gradient', 'rect', 'ellipse']},
+                                           'box': {'type': 'array', 'items': {'type': 'number'}, 'description': '[x0, y0, x1, y1] fractions (rect/ellipse)'},
+                                           'from': {'type': 'string', 'enum': ['top', 'bottom', 'left', 'right']},
+                                           'end': {'type': 'number'}, 'on_structure': {'type': 'boolean'},
+                                           'lift': {'type': 'number'}, 'sat': {'type': 'number'}, 'warm': {'type': 'number'}, 'clarity': {'type': 'number'}}}},
+        'light_already_good': {'type': 'boolean', 'description': 'v1.2.0: true only when every move can be done by the grading tool alone; then the image model is not called (it never means "edit lightly")'},
         'g_intent': {'type': 'string', 'description': 'English, 2-3 concrete light-and-colour intents for the image model, no numbers'},
         'params': {'type': 'object', 'additionalProperties': False,
                    'required': ['exposure_ev', 'contrast', 'highlights', 'shadows', 'clarity', 'vibrance', 'saturation', 'levels_black'],
@@ -102,6 +115,29 @@ def clamp_brief(b: dict) -> dict:
             keep.append({'what': str(r.get('what', ''))[:80], 'box': [x0, y0, x1, y1],
                          'mode': 'content' if r.get('mode') == 'content' else 'colour'})
     b['keep_regions'] = keep
+    mv_out = []   # v1.2.0: validated improvement moves; finish.py grades them and improve_check.py checks they show
+    LIM = {'lift': (-8.0, 8.0), 'sat': (0.8, 1.4), 'warm': (-4.0, 4.0), 'clarity': (0.0, 0.35)}
+    for mv in list(b.get('moves') or [])[:4]:
+        try:
+            shape = mv.get('shape') if mv.get('shape') in ('gradient', 'rect', 'ellipse') else 'rect'
+            q = {'what': str(mv.get('what', ''))[:80], 'look': str(mv.get('look', '')), 'shape': shape}
+            if shape == 'gradient':
+                q['from'] = mv.get('from') if mv.get('from') in ('top', 'bottom', 'left', 'right') else 'top'
+                q['end'] = min(1.0, max(0.05, float(mv.get('end', 0.5))))
+            else:
+                x0, y0, x1, y1 = [min(1.0, max(0.0, float(v))) for v in mv['box']]
+                if x1 - x0 < 0.02 or y1 - y0 < 0.02: continue
+                q['box'] = [x0, y0, x1, y1]; q['feather'] = 0.12
+            if mv.get('on_structure'): q['on_structure'] = True
+            for k, (lo, hi) in LIM.items():
+                v = float(mv.get(k, 1.0 if k == 'sat' else 0.0))
+                if v != (1.0 if k == 'sat' else 0.0): q[k] = min(hi, max(lo, v))
+        except (KeyError, TypeError, ValueError):
+            continue
+        mv_out.append(q)
+    b['moves'] = mv_out
+    if mv_out:
+        p['moves'] = mv_out
     if keep:
         p['keep'] = keep
     b['light_already_good'] = bool(b.get('light_already_good'))

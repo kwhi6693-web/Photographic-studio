@@ -1,0 +1,6 @@
+{"vibrance": 0.1,
+ "moves": [
+  {"what": "天空上深下浅", "look": "light-", "shape": "gradient", "from": "top", "end": 0.6, "lift": -4, "sat": 1.12},
+  {"what": "叶片透光的紫红", "look": "colour+", "shape": "rect", "box": [0, 0, 1, 0.85], "feather": 0.1, "only_hue": "red", "sat": 1.35, "lift": 2},
+  {"what": "水面波光与层次", "look": "contrast+", "shape": "rect", "box": [0, 0.68, 1, 1], "feather": 0.08, "clarity": 0.25}
+ ]}

@@ -104,13 +104,16 @@ def test_large_photo_comes_back_at_full_resolution(tmp_path):
 
 
 def test_light_already_good_skips_g(tmp_path):
-    """v1.0.9: when the brief says the light is already right, the image model is not called (N direct, light params)."""
+    """v1.0.9 / v1.2.0: when every improvement move can be done by N and the brief says so, the image model is not
+    called (N direct); without moves the flag is not enough."""
     import shutil
     d = tmp_path / 'case'; shutil.copytree(REAL_G / 'b1_01', d)
     params = json.loads((d / 'params.json').read_text())
     (d / 'brief.json').write_text(json.dumps({'story': 'x', 'subject': 'x', 'genre': 'day', 'portrait': False, 'diagnoses': [],
                                               'keep': 'the light', 'light_already_good': True, 'g_intent': 'x',
-                                              'params': {'highlights': -3, 'clarity': 0.06, 'vibrance': 0.06}}))
+                                              'params': {'highlights': -3, 'clarity': 0.06, 'vibrance': 0.06},
+                                              'moves': [{'what': 'deeper sky at the top', 'look': 'light-', 'shape': 'gradient', 'box': [0, 0, 1, 1],
+                                                         'from': 'top', 'end': 0.5, 'on_structure': False, 'lift': -4, 'sat': 1.1, 'warm': 0, 'clarity': 0}]}))
     cfg = replay_cfg('b1_01'); cfg.replay_dir = str(d)
     r = Studio(cfg).run(next(d.glob('original.*')), tmp_path / 'out')
     assert r.status == 'done', r.reason
