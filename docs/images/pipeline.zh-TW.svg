@@ -15,7 +15,7 @@
       <rect x="30" y="54" width="220" height="192" rx="14" fill="url(#card)" stroke="#2c3446"/>
       <g transform="translate(140,88)" fill="none" stroke="#e9c46a" stroke-width="2.5"><path d="M-26,0 Q0,-22 26,0 Q0,22 -26,0 Z"/><circle r="8" fill="#e9c46a"/></g>
       <text x="140" y="150" text-anchor="middle" font-size="22" fill="#f3eee4" font-weight="600">讀片</text>
-      <text x="140" y="182" text-anchor="middle" font-size="15" fill="#a9b1c3">故事 · 情緒 · 主角</text>
+      <text x="140" y="182" text-anchor="middle" font-size="15" fill="#a9b1c3">看點 · 情緒 · 主角</text>
       <text x="140" y="206" text-anchor="middle" font-size="15" fill="#a9b1c3">光 · 色 · 空間</text>
     </g>
     <g>
@@ -43,7 +43,7 @@
       <rect x="1030" y="54" width="220" height="192" rx="14" fill="#1d2f63" stroke="#3a5ba8"/>
       <g transform="translate(1140,88)" fill="none" stroke="#c9d3ea" stroke-width="2.5"><rect x="-26" y="-20" width="52" height="40" rx="3"/><path d="M-20,14 L-6,-2 L4,8 L12,0 L20,14" /><circle cx="12" cy="-9" r="4" fill="#e9c46a" stroke="none"/></g>
       <text x="1140" y="150" text-anchor="middle" font-size="22" fill="#f3eee4" font-weight="600">一張成片</text>
-      <text x="1140" y="182" text-anchor="middle" font-size="15" fill="#c9d3ea">故事 ｜ 風格</text>
+      <text x="1140" y="182" text-anchor="middle" font-size="15" fill="#c9d3ea">看點 ｜ 風格</text>
       <text x="1140" y="206" text-anchor="middle" font-size="15" fill="#c9d3ea">直接存進相簿</text>
     </g>
     <g stroke="#c8963e" stroke-width="2.5" marker-end="url(#arr)">

@@ -4,7 +4,6 @@ for 'not configured' behaviour: no key, no call."""
 import json
 import sys
 
-import numpy as np
 import pytest
 from PIL import Image
 
@@ -30,7 +29,9 @@ def original(name):
     return next((REAL_G / name).glob('original.*'))
 
 
-@pytest.mark.parametrize('name,route', [('b1_01', 'default'), ('b2_06', 'museum_strength')])
+# v1.0.9: a museum photo below the strength floor is no longer raised to a fixed museum strength by the ladder -
+# how strong it is comes from the brief's diagnoses, so b2_06 now stays on its default route
+@pytest.mark.parametrize('name,route', [('b1_01', 'default'), ('b2_06', 'default')])
 def test_replay_reproduces_the_recorded_route(tmp_path, name, route):
     r = Studio(replay_cfg(name)).run(original(name), tmp_path / 'out')
     assert r.status == 'done', r.reason
@@ -100,3 +101,18 @@ def test_large_photo_comes_back_at_full_resolution(tmp_path):
     assert Image.open(r.final).size == Image.open(src).size
     step = [s for s in r.receipt['steps'] if s['step'] == 'full_res'][0]
     assert step['verdict'] == 'PASS'
+
+
+def test_light_already_good_skips_g(tmp_path):
+    """v1.0.9: when the brief says the light is already right, the image model is not called (N direct, light params)."""
+    import shutil
+    d = tmp_path / 'case'; shutil.copytree(REAL_G / 'b1_01', d)
+    params = json.loads((d / 'params.json').read_text())
+    (d / 'brief.json').write_text(json.dumps({'story': 'x', 'subject': 'x', 'genre': 'day', 'portrait': False, 'diagnoses': [],
+                                              'keep': 'the light', 'light_already_good': True, 'g_intent': 'x',
+                                              'params': {'highlights': -3, 'clarity': 0.06, 'vibrance': 0.06}}))
+    cfg = replay_cfg('b1_01'); cfg.replay_dir = str(d)
+    r = Studio(cfg).run(next(d.glob('original.*')), tmp_path / 'out')
+    assert r.status == 'done', r.reason
+    rec = json.loads((tmp_path / 'out' / 'receipt.json').read_text())
+    assert rec['g_calls'] == 0 and any(s.get('skipped') == 'light_already_good' for s in rec['steps'])

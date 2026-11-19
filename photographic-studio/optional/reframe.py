@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio - geometric reframing (non-generative; crop / straighten / perspective).
+"""Photographic Studio v1.0.9 - geometric reframing (non-generative; crop / straighten / perspective).
 
 Usage:
   python3 reframe.py INPUT OUTPUT.png [--rotate DEG] [--persp x1,y1,x2,y2,x3,y3,x4,y4]
@@ -12,11 +12,15 @@ Order of operations: perspective -> rotate (straighten) -> crop.
            Blank corners are removed by auto-cropping the largest inscribed rectangle of the SAME aspect.
  --zoom    crop to 1/Z of the frame, same aspect (default 1.0 = no crop); --center is the crop centre
            as fractions of the (rotated) frame, default 0.5,0.5; the crop is clamped inside the frame.
- --box     free crop L,T,R,B in fractions; changes aspect unless it matches; needs --allow-aspect-change.
+ --box     free crop L,T,R,B in fractions (of the straightened frame); a new aspect needs --allow-aspect-change.
 
 No pixels are invented: the output is resampled (Lanczos) from the input only. It writes OUTPUT.png (lossless)
 and OUTPUT.png.json with source SHA-256, parameters, sizes, area retained, and warnings.
-Limits: retained area >= 0.80 (v1.0.5: the user's approved crops kept 0.84 and 0.87), |rotate| <= 5 deg, keep original aspect."""
+v1.0.9 (owner, 2026-11-14): reframing is there to present the photo at its best, from the original only - any crop
+and any common aspect are allowed, extending the frame is not. The old 0.80 retained-area limit is gone (the owner's
+own example crop kept about 0.64 and went from 3:4 to 1:1). What still limits a crop is the photo itself:
+the output's short edge should stay >= 900 px so detail survives, and |rotate| <= 5 deg (larger tilts are usually
+part of the scene). Both only warn; the agent decides."""
 import sys, io, json, math, hashlib, argparse
 import numpy as np, cv2
 from PIL import Image, ImageCms, ImageOps
@@ -61,6 +65,8 @@ def main():
     if a.persp:
         v = [float(x) for x in a.persp.split(',')]
         if len(v) != 8: sys.exit('--persp needs 8 numbers')
+        if not all(0.0 <= x <= 1.0 for x in v):   # a point outside the frame would stretch edge pixels into new area
+            sys.exit('--persp points must lie inside the frame (0..1): reframing never extends the photo')
         src = np.float32([[v[0] * W0, v[1] * H0], [v[2] * W0, v[3] * H0], [v[4] * W0, v[5] * H0], [v[6] * W0, v[7] * H0]])
         dst = np.float32([[0, 0], [W0, 0], [W0, H0], [0, H0]])
         M = cv2.getPerspectiveTransform(src, dst)
@@ -79,8 +85,10 @@ def main():
     if a.box:
         L, T, R, B = [float(x) for x in a.box.split(',')]
         l, t, r, b = int(round(L * W)), int(round(T * H)), int(round(R * W)), int(round(B * H))
+        if not (0 <= l < r <= W and 0 <= t < b <= H):   # checked first: an empty box would divide by zero below
+            sys.exit('box must lie inside the frame: reframing never extends the photo')
         if abs((r - l) / (b - t) - W / H) > 0.01 and not a.allow_aspect_change:
-            sys.exit('box changes aspect; add --allow-aspect-change if the user asked for a new aspect')
+            sys.exit('box changes aspect; add --allow-aspect-change (allowed whenever the new aspect presents the photo better)')
         cur = cur[t:b, l:r]
     elif a.zoom > 1.0 + 1e-9:
         cx, cy = [float(x) for x in a.center.split(',')]
@@ -89,10 +97,10 @@ def main():
         cur = cur[int(round(y0)):int(round(y0 + ch)), int(round(x0)):int(round(x0 + cw))]
     Ho, Wo = cur.shape[:2]
     area = (Wo * Ho) / (W0 * H0)
-    if area < 0.80: warn.append('retained area < 0.80 (v1.0.5 limit): do not deliver this crop; crop less or not at all')
+    if min(Wo, Ho) < 900: warn.append(f'short edge {min(Wo, Ho)} px < 900: detail may look soft at full view; crop less if the subject allows')
     if abs(Wo / Ho - W0 / H0) > 0.01: warn.append('aspect changed from source')
     Image.fromarray(np.ascontiguousarray(cur)).save(a.out, format='PNG', icc_profile=ImageCms.ImageCmsProfile(SRGB).tobytes())
-    log = {'tool': 'reframe.py (Photographic Studio v0.1.3)', 'source_sha256': sha256(a.inp), 'output_sha256': sha256(a.out),
+    log = {'tool': 'reframe.py (Photographic Studio v1.0.9)', 'source_sha256': sha256(a.inp), 'output_sha256': sha256(a.out),
            'source_size': [W0, H0], 'output_size': [Wo, Ho], 'params': params,
            'area_retained': round(area, 4), 'aspect_source': round(W0 / H0, 4), 'aspect_output': round(Wo / Ho, 4),
            'resampling': 'Lanczos (persp/rotate), integer crop', 'generative': False, 'warnings': warn}

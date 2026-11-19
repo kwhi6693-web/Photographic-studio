@@ -1,4 +1,4 @@
-# Photographic Studio engine (v2.1.0)
+# Photographic Studio engine (v2.2.0)
 
 The retouching pipeline as code. Same rules and the same deterministic tools as the skill (run in an LLM agent with image generation)
 (`photographic-studio/optional/*.py` stay the single source of truth), but the steps are run by code and the two
@@ -7,12 +7,12 @@ judgement calls go to model APIs:
 | Step | Who | Notes |
 |---|---|---|
 | measure | `measure.py` | numbers only |
-| read + director brief | vision model API | JSON, clamped to safe ranges (`prompts.py`) |
+| read + director brief | vision model API | JSON: diagnoses with evidence, what to keep, parameters tied to the diagnoses; clamped to safe ranges (`prompts.py`) |
 | portrait? | code | stops with status `unsupported` |
 | G | image-editing API | prompt from the brief + physics sentences; scene check; one retry |
 | finish | `finish.py` | route ladder, physics + strength checks |
 | G rejected → second G | code | names the problems in the prompt (v1.0.7) |
-| settle | `settle.py` | strength calibration + anchoring (`--n-direct` when G was not used) |
+| settle | `settle.py` | removes only what is over a strength limit (v2.2.0 / skill v1.0.9; the old floor lift and anchoring are `--bands`, for comparison only) |
 | n_trim | `n_trim.py` | clipping guard |
 | full resolution | `full_res.py` | when the photo is larger than `work_size`: the edit is carried back to the original size, detail from the original |
 

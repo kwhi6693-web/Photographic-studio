@@ -4,7 +4,7 @@
 
 POST   /jobs              multipart field "photo"  -> {"id", "status"}
 GET    /jobs/{id}         -> {"status": queued|running|done|unsupported|failed, "route", "reason", "seconds"}
-GET    /jobs/{id}/result  -> the finished PNG
+GET    /jobs/{id}/result  -> the finished photo (PNG, or JPEG when it was carried back to full resolution)
 DELETE /jobs/{id}         -> removes every file of the job
 Jobs and files are deleted automatically after STUDIO_TTL_HOURS (default 168 = 7 days).
 Single process, in-memory queue: enough for the prototype and tests; production swaps in a real queue and object storage.
@@ -23,14 +23,14 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from studio_engine import Studio, load_config
+from studio_engine import VERSION, Studio, load_config
 
 DATA = Path(os.environ.get('STUDIO_DATA', '/tmp/studio_jobs'))
 TTL_S = float(os.environ.get('STUDIO_TTL_HOURS', '168')) * 3600
 MAX_BYTES = int(os.environ.get('STUDIO_MAX_MB', '40')) * 1024 * 1024
 ALLOWED = ('.jpg', '.jpeg', '.png', '.heic', '.heif')
 
-app = FastAPI(title='Photographic Studio', version='2.0.0')
+app = FastAPI(title='Photographic Studio', version=VERSION)
 _jobs: dict[str, dict] = {}
 _q: queue.Queue = queue.Queue()
 _lock = threading.Lock()
@@ -93,7 +93,9 @@ def job_result(jid: str):
     j = _jobs.get(jid)
     if not j or j.get('status') != 'done' or not j.get('final'):
         raise HTTPException(404, 'no result')
-    return FileResponse(j['final'], media_type='image/png', filename='photographic-studio.png')
+    ext = Path(j['final']).suffix.lower()   # final_full.jpg for photos larger than work_size
+    mt = 'image/jpeg' if ext in ('.jpg', '.jpeg') else 'image/png'
+    return FileResponse(j['final'], media_type=mt, filename=f'photographic-studio{ext or ".png"}')
 
 
 @app.delete('/jobs/{jid}')

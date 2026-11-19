@@ -48,8 +48,8 @@
   <!-- title -->
   <text x="430" y="170" font-family="Georgia, 'Times New Roman', serif" font-size="66" fill="#f3eee4" letter-spacing="2">Photographic Studio</text>
   <text x="432" y="232" font-family="Georgia,'Noto Serif CJK SC','Songti SC','Source Han Serif SC',serif" font-size="32" fill="#e9c46a">Send a photo. Say “fix”. Get one finished photo.</text>
-  <text x="432" y="282" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="18" fill="#a9b1c3">Reads the story · writes a brief · borrows only AI's light &amp; colour · obeys natural light</text>
+  <text x="432" y="282" font-family="'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif" font-size="18" fill="#a9b1c3">Reads the photo · writes a brief · borrows only AI's light &amp; colour · obeys natural light</text>
   <g font-family="'SF Mono','Menlo','Consolas',monospace" font-size="15" fill="#7d879c">
-    <text x="432" y="336">ISO 100   ƒ/8   1/125s   ·   non-portrait   ·   v1.0.1</text>
+    <text x="432" y="336">ISO 100   ƒ/8   1/125s   ·   non-portrait   ·   v1.0.9</text>
   </g>
 </svg>
