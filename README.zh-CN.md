@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-c8963e?style=flat-square" alt="version 1.2.4">
+  <img src="https://img.shields.io/badge/version-1.2.5-c8963e?style=flat-square" alt="version 1.2.5">
   <img src="https://img.shields.io/badge/engine-2.3.1%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.1">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建筑·街景·风光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
@@ -142,6 +142,8 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 - **物理关**：加亮只落在原本有光的地方；不给展品凭空加光圈，也不把真实的光斑、釉光抹掉；明暗次序、天空渐变、倒影都要讲得通。
 - **提升关**：每个提升动作都要在它的区域里看得出来；看不出就一点点加强，前提是物理关仍然通过。会在天空里留下光圈的动作，自动改成只作用在建筑和物体上。
 - **力度关**：看得出提升，又不过头；博物馆展品按主角来判断。
+
+**最后，对你收到的那个文件**，按“先光、再层次、最后颜色”的固定顺序收口一次：物理检查发现的错光只在出错的地方修回（不扔掉 G）；黑场、明暗分离和细微反差不会比原片更平；白墙灰石保持本来的颜色，阳光比阴影暖，不会有哪一块颜色比周围浓出一截。
 
 不合格？它会自己换一级更稳的做法重来，直到交出一张合格的成片——**不停下来问你**。
 
@@ -319,7 +321,8 @@ photographic-studio/          ← Skill 本体（安装这个目录）
 │   ├── settle.py             ← 只去掉超出上限的部分，这张照片的参数说了算
 │   ├── full_res.py           ← 把修图带回原图尺寸
 │   ├── physics_check.py      ← 自然光物理检查
-│   └── intensity_check.py    ← 力度检查
+│   ├── intensity_check.py    ← 力度检查
+│   └── harmonize.py          ← 最后收口：光、层次、颜色
 └── SHA256SUMS.txt
 engine/                       ← 流程写成代码（原型）
 ├── studio_engine/            ← 流程 · 模型接口 · 评测 · 命令行
@@ -342,5 +345,5 @@ Skill 本身（执行说明、参考文件和工具）采用 [MIT 许可证](LIC
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.2.4 · 为非人像摄影而做 · 与 Claude 共同打造 · 代码与文档 MIT · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.2.5 · 为非人像摄影而做 · 与 Claude 共同打造 · 代码与文档 MIT · 照片 © 作者本人</sub>
 </p>

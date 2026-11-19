@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-c8963e?style=flat-square" alt="version 1.2.4">
+  <img src="https://img.shields.io/badge/version-1.2.5-c8963e?style=flat-square" alt="version 1.2.5">
   <img src="https://img.shields.io/badge/engine-2.3.1%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.1">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
@@ -142,6 +142,8 @@ Composition   : keep — the line drawing, the vase and the reflection tell the 
 - **Physics** — brightening only lands where light already falls; no invented halos around an exhibit, no real highlights or glaze sheen wiped away; tonal order, sky gradients and reflections all have to make sense.
 - **Improvement** — every move has to be visible in its own area; one that is not is strengthened (a little at a time, only while the physics still holds). A move that would leave a ring of light in the sky is kept to the buildings and objects.
 - **Strength** — visibly better, never overdone; museum pieces are judged on the subject itself.
+
+**Last, on the very file you receive**, one harmonizing pass in a fixed order — light, then depth, then colour: light the physics check finds wrong is repaired only where it is wrong (G is not thrown away); blacks, light-and-shade separation and fine contrast never end up flatter than the original; white walls and grey stone keep their own colour, sunlight stays warmer than shade, and no patch jumps out more saturated than its surroundings.
 
 Not good enough? It quietly retries a safer step on its own until a result passes — **it never stops to ask you**.
 
@@ -319,7 +321,8 @@ photographic-studio/          ← the skill itself (install this folder)
 │   ├── settle.py             ← trims only what is over a limit; the photo's own parameters stand
 │   ├── full_res.py           ← carries an edit back to full resolution
 │   ├── physics_check.py      ← natural-light physics check
-│   └── intensity_check.py    ← strength check
+│   ├── intensity_check.py    ← strength check
+│   └── harmonize.py          ← last step: light, depth, colour
 └── SHA256SUMS.txt
 engine/                       ← the pipeline as code (prototype)
 ├── studio_engine/            ← pipeline · model providers · evaluation · CLI
@@ -344,5 +347,5 @@ The example and test photographs (`docs/history/taste/`, `tests/fixtures/`, `doc
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.2.4 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
+  <sub>Photographic Studio v1.2.5 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
 </p>

@@ -3,7 +3,7 @@
     studio.run(photo, out_dir) -> Result     one photo in, one finished photo out (or a clear reason why not)
 
 Order (SKILL.md v1.2.1; no crop step yet): measure -> brief (vision model) -> portrait? stop -> G (image model) -> scene check (retry once)
--> finish.py (route ladder) -> G rejected? re-call G once with the problems named -> settle.py -> n_trim.py -> final.
+-> finish.py (route ladder) -> G rejected? re-call G once with the problems named -> settle.py -> n_trim.py -> harmonize.py -> final.
 Every step is timed and written to receipt.json; model usage and estimated cost too.
 """
 from __future__ import annotations
@@ -134,6 +134,12 @@ class Studio:
             final = out / 'trimmed.png' if str(nt.get('verdict', '')).startswith('PASS') and (out / 'trimmed.png').exists() \
                 else out / 'settled.png'
             rec['steps'].append({'step': 'n_trim', 'seconds': round(time.time() - t, 1), 'verdict': str(nt.get('verdict'))[:60]})
+            t = time.time()   # v1.2.5: last step, light -> depth -> colour on the file that is delivered
+            hz = self.tools.run('harmonize.py', src, final, out / 'harmonized.png', out / 'harmonize.json',
+                                *(['--genre=museum'] if museum else []))
+            if (out / 'harmonized.png').exists():
+                final = out / 'harmonized.png'
+            rec['steps'].append({'step': 'harmonize', 'seconds': round(time.time() - t, 1), 'verdict': str(hz.get('verdict'))[:80]})
             shutil.copy(final, out / 'final.png')
             rec['final_intensity'] = self.tools.intensity(src, out / 'final.png', museum).get('verdict')
             rec['final_physics'] = self.tools.physics(src, out / 'final.png').get('verdict')
