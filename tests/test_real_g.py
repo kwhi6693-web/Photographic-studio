@@ -21,7 +21,10 @@ EXPECTED = {'b1_01': 'default', 'b1_02': 'default', 'b1_03': 'default', 'b1_04':
             # v1.2.5: c1_05 (boat on a garden canal, 2026-11-19 batch): G dimmed the bright sky gaps and their reflections
             #   (lamps_kept); it was delivered as N direct. harmonize.py --light-only now restores those lights inside
             #   finish.py, so the G route is kept.
-            'c1_05': 'default'}
+            'c1_05': 'default',
+            # v1.2.6: c1_04 (arched branches over a pond, 2026-11-19 rework): G route; its subdue moves are measured as
+            #   the share of excess brightness over the surroundings taken away (see test_subdue_*).
+            'c1_04': 'default'}
 
 
 def test_fixtures_present():
@@ -63,3 +66,16 @@ def test_put_out_lights_are_repaired_not_a_reason_to_drop_g(tmp_path):
     a = next(x for x in r['attempts'] if x['name'] == r['delivered'])
     assert r['delivered'] == 'default'
     assert a['light_repair']['was'] == ['lamps_kept'] and a['light_repair']['left'] == []
+
+
+def test_subdue_moves_quiet_distractions_by_contrast_not_by_amount(tmp_path):
+    """v1.2.6: c1_04 - white visitors, a white stone and its reflection. Even with a strength range flag on the photo
+    (lit warmth), the subdue moves are strengthened in small steps until the physics check would see a dark patch."""
+    d = RG / 'c1_04'
+    out, rec = tmp_path / 'f.png', tmp_path / 'f.json'
+    run_tool('finish.py', next(d.glob('original.*')), d / 'g.png', d / 'params.json', out, rec)
+    r = json.loads(rec.read_text())
+    a = next(x for x in r['attempts'] if x['name'] == r['delivered'])
+    sub = [m for m in a['improve']['moves'] if m['effect'] == 'subdue']
+    assert len(sub) == 2 and all(m['value'] >= 0.25 for m in sub), sub
+    assert not any(m.get('over_cap') for m in sub)

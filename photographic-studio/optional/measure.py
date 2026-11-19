@@ -14,6 +14,56 @@ def pct(x, q):
     return round(float(np.percentile(x, q)), 1)
 
 
+def distractions(L, C, h, w):
+    """v1.2.6: candidate bright distractions for the brief - small bright things well above their surroundings (a
+    white-clad visitor, a white stone, a railing glint, a dead-white sky gap). Light sources (lamps, lit windows) show up
+    here too: the agent decides which to quiet and leaves real lights alone. A bright spot straight below another one is
+    reported as its reflection ("reflection_of"): quiet both, or the water shows a light the bank no longer has.
+    Whitish only (L* > 74, chroma < 18, 20 above the surroundings): sunlit leaves and flowers are bright but colourful."""
+    import cv2
+    k = max(6, min(h, w) // 60)
+    exc = L - blur(L, 3 * k)
+    core = (L > 74) & (exc > 20) & (C < 18)            # whitish: sunlit leaves are bright too, but colourful
+    g = max(3, k // 3)
+    m = cv2.dilate(core.astype(np.uint8), np.ones((g, g), np.uint8))   # a figure broken by leaves stays one item
+    n, lab_, st, cen = cv2.connectedComponentsWithStats(m, 8)
+    A = h * w; found = []
+    for i in range(1, n):
+        x, y, bw, bh, area = st[i]
+        sel = (lab_ == i) & core
+        area = int(sel.sum())
+        if not (0.00015 * A <= area <= 0.02 * A): continue
+        if bw > 0.2 * w or bh > 0.2 * h: continue      # a scatter of glints across the frame, not one thing
+        ring = (cv2.dilate(sel.astype(np.uint8), np.ones((2 * k + 1, 2 * k + 1), np.uint8)) > 0) & ~sel
+        surround = float(np.median(L[ring])) if ring.any() else float(L.mean())
+        Lm = float(L[sel].mean())
+        pad_x, pad_y = max(2, int(bw * 0.2)), max(2, int(bh * 0.2))
+        box = [max(0, x - pad_x) / w, max(0, y - pad_y) / h, min(w, x + bw + pad_x) / w, min(h, y + bh + pad_y) / h]
+        found.append({'box': [round(v, 3) for v in box], 'L': round(Lm, 1), 'surround_L': round(surround, 1),
+                      'above_surround': round(Lm - surround, 1), 'area': round(area / A, 4),
+                      'centre': [round(float(cen[i][0] / w), 3), round(float(cen[i][1] / h), 3)],
+                      'chroma': round(float(C[sel].mean()), 1)})
+    found = found  # (sorted below)
+    for d in found:   # sky seen through leaves near the top, or glints on water: listed after the single objects
+        near = sum(1 for e in found if e is not d and abs(e['centre'][0] - d['centre'][0]) < 0.15 and abs(e['centre'][1] - d['centre'][1]) < 0.15)
+        d['kind'] = 'sky_gap' if d['centre'][1] < 0.3 and d['L'] > 88 else ('glints' if near >= 3 and d['centre'][1] > 0.65 else 'object')
+    order = {'object': 0, 'sky_gap': 1, 'glints': 2}
+    found.sort(key=lambda d: (order[d['kind']], -d['above_surround'] * d['area'] ** 0.5))
+    glints = sum(1 for d in found if d['kind'] == 'glints')
+    found = [d for d in found if d['kind'] == 'object'][:12] + [d for d in found if d['kind'] == 'sky_gap'][:4]
+    for i, d in enumerate(found):          # a reflection: the same column a little further down, a little darker
+        if not 0.25 < d['centre'][1] < 0.75 or d['kind'] != 'object': continue
+        for j, e in enumerate(found):
+            dy = e['centre'][1] - d['centre'][1]
+            if j != i and 0.02 < dy < 0.3 and abs(e['centre'][0] - d['centre'][0]) < 0.03 and e['L'] <= d['L'] + 2 \
+                    and 'reflection_of' not in e:
+                e['reflection_of'] = i; break
+    for i, d in enumerate(found): d['id'] = i
+    return {'candidates': found, 'water_glints': glints,
+            'note': 'small bright things that pull the eye; leave real lights, quiet the rest with a subdue move '
+                    '(director_brief.md); a candidate with reflection_of is the water image of another: quiet it with it (also)'}
+
+
 def main(path, out=None):
     rgb = load_rgb(path)
     h, w = rgb.shape[:2]
@@ -87,6 +137,8 @@ def main(path, out=None):
     edge = np.concatenate([sal[:hq // 12].ravel(), sal[-hq // 12:].ravel(), sal[:, :wq // 12].ravel(), sal[:, -wq // 12:].ravel()])
     r['attention']['edge_pull'] = round(float(edge.mean() / (sal.mean() + 1e-9)), 2)
     r['attention']['edge_hint'] = 'strong pull at the frame edges: consider vignette or crop' if r['attention']['edge_pull'] > 1.15 else 'edges are quiet'
+
+    r['distractions'] = distractions(L, C, h, w)
 
     text = json.dumps(r, ensure_ascii=False, indent=1)
     if out:
