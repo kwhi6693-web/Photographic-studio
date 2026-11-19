@@ -49,6 +49,11 @@ def smoothstep(x):
 
 
 def region_mask(reg, h, w, L01, hue, L):
+    if reg.get('also'):   # v1.2.6: the same edit on more boxes (a white stone and its reflection in the water)
+        m = region_mask({**reg, 'also': None}, h, w, L01, hue, L)
+        for bx in reg['also']:
+            m = np.maximum(m, region_mask({**reg, 'also': None, 'box': bx}, h, w, L01, hue, L))
+        return m
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     yy /= max(h - 1, 1); xx /= max(w - 1, 1)
     f = max(cl('region.feather', reg.get('feather', 0.08), 0, 0.5), 1e-3)
@@ -181,7 +186,7 @@ def main(inp, out, params_path, receipt=None):
             else:
                 m_l = m
             L = L + lift * m_l; a *= 1 + (rs - 1) * m; b = b * (1 + (rs - 1) * m) + warm * m
-            used['regions'].append({**{k: reg[k] for k in reg if k in ('what', 'look', 'shape', 'box', 'from', 'end', 'feather', 'edge_aware', 'only_hue', 'only_L', 'lift_dark', 'on_structure')},
+            used['regions'].append({**{k: reg[k] for k in reg if k in ('what', 'look', 'shape', 'box', 'also', 'subdue', 'from', 'end', 'feather', 'edge_aware', 'only_hue', 'only_L', 'lift_dark', 'on_structure')},
                                     'lift': lift, 'sat': rs, 'warm': warm, 'clarity': rcl, 'mask_area_fraction': round(float(m.mean()), 3)})
     vg = P.get('vignette') or {}
     va = cl('vignette.amount', vg.get('amount', 0), 0, 10)

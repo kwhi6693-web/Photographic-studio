@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.1 - improve check: is each of the brief's improvement moves visible in the finished photo?
+"""Photographic Studio v1.2.6 - improve check: is each of the brief's improvement moves visible in the finished photo?
 Usage: python3 improve_check.py ORIGINAL FINISHED PARAMS_JSON [RECEIPT_JSON] [--base=GRADE_INPUT]
   PARAMS_JSON  the grade parameters with "moves" (grade.py). FINISHED must have the original's framing (run it before
                any crop), it is resized to the original if needed.
@@ -28,6 +28,9 @@ With --base (the image grade.py was applied to) only the move's own share of the
 graded once more without that move and the difference is used, so a sky gradient move next to it does not count.
 (Calibrated on the sunset gate: ellipse around the pavilion 3.8 / 6.0 = a visible ring; the same move on structure only
 2.0 / 3.1 = none; the book page lift 3.7 / - = none.) finish.py then puts the move on structure only.
+v1.2.6 - a move with "subdue": true (a bright distraction to quiet) is measured as the share of its excess brightness
+over its surroundings that the edit took away: floor 0.20, target 0.50 for small spots and 0.40 for patches the size of
+clothing (cap 0.45 - more turns them into dull grey patches).
 Deterministic, numpy + Pillow (+ grade.py's mask code).
 """
 import json, sys
@@ -87,6 +90,28 @@ def measure(lo, lf, m, effect, sign):
     return None
 
 
+SUBDUE_FLOOR, SUBDUE_SMALL, SUBDUE_PATCH, SUBDUE_CAP = 0.20, 0.50, 0.40, 0.45
+
+
+def subdue_measure(lo, lf, m):
+    """v1.2.6: share of a distraction's excess brightness over its surroundings that the edit took away.
+    The eye reads a white shirt at L* 90 among leaves at 30 by the difference (60), not by the 11 L* taken off it
+    (2026-11-19, garden 04). Small spots should lose half of it; a patch the size of clothing about 40% (at most 45%),
+    or it turns into a dull grey patch. Returns (reduction or None, small)."""
+    import cv2
+    h, w = m.shape
+    core = m > 0.5
+    if core.sum() < 20: return None, True
+    k = max(6, min(h, w) // 60)
+    ring = (cv2.dilate(core.astype(np.uint8), np.ones((2 * k + 1, 2 * k + 1), np.uint8)) > 0) & ~core & (m < 0.1)
+    if ring.sum() < 20: return None, True
+    eo = float(lo[..., 0][core].mean() - np.median(lo[..., 0][ring]))
+    ef = float(lf[..., 0][core].mean() - np.median(lf[..., 0][ring]))
+    small = core.mean() < 0.003
+    if eo < 5: return None, small
+    return 1 - ef / eo, small
+
+
 def visible(effect, sign, v, T=VISIBLE):
     if v is None: return False
     if effect == 'light': return v * sign >= T['light']
@@ -141,6 +166,21 @@ def check(src, fin, params, base=None):
             mg = m if not mv.get('on_structure') else G.region_mask({**mv, 'on_structure': False}, h, w, np.clip(lo[..., 0] / 100, 0, 1), hue, lo[..., 0])
         except (KeyError, ValueError, TypeError):
             out.append({'move': i, 'what': mv.get('what', ''), 'result': 'BAD_REGION'}); continue
+        if mv.get('subdue'):   # v1.2.6: a distraction is judged by how much brighter than its surroundings it stays
+            vals = []   # v1.2.6b: each box on its own (a union of many boxes has no meaningful 'surroundings')
+            for bx in [mv.get('box')] + list(mv.get('also') or []):
+                if not bx: continue
+                mb = G.region_mask({**mv, 'also': None, 'box': bx}, h, w, np.clip(lo[..., 0] / 100, 0, 1), hue, lo[..., 0])
+                vb, sb = subdue_measure(lo, lf, mb)
+                if vb is not None: vals.append((vb, sb))
+            v = float(np.median([x[0] for x in vals])) if vals else None
+            small = all(x[1] for x in vals) if vals else True
+            tgt = SUBDUE_SMALL if small else SUBDUE_PATCH
+            out.append({'move': i, 'what': mv.get('what', ''), 'effect': 'subdue', 'sign': -1,
+                        'value': None if v is None else round(v, 3), 'visible': v is None or v >= SUBDUE_FLOOR,
+                        'at_target': v is None or v >= tgt, 'over_cap': bool(v is not None and not small and v > SUBDUE_CAP),
+                        'target': tgt, 'halo': [0.0, 0.0], 'halo_found': False, 'area': round(float(m.mean()), 4)})
+            continue
         v = measure(lo, lf, m, effect, sign) if effect else None
         hl, hc = 0.0, 0.0
         if mv.get('shape', 'rect') in ('rect', 'ellipse'):
@@ -164,7 +204,7 @@ def main():
     opt = {x.split('=')[0]: x.split('=', 1)[1] for x in sys.argv[1:] if x.startswith('--') and '=' in x}
     moves = check(src, fin, params, opt.get('--base'))
     if moves is None:
-        rec = {'tool': 'improve_check.py v1.2.1', 'verdict': 'SKIPPED: the finished photo has another framing (cropped); measure before the crop - the finish.py receipt is the record'}
+        rec = {'tool': 'improve_check.py v1.2.6', 'verdict': 'SKIPPED: the finished photo has another framing (cropped); measure before the crop - the finish.py receipt is the record'}
         print(json.dumps(rec, ensure_ascii=False, indent=1)); return 0
     weak = [m['move'] for m in moves if not m.get('visible')]
     below = [m['move'] for m in moves if not m.get('at_target')]
@@ -173,7 +213,7 @@ def main():
               ('VISIBLE' if not weak else 'WEAK: ' + '; '.join(f"{m['what'] or m['move']} ({m.get('effect')} {m.get('value')})" for m in moves if not m.get('visible')))
     if halos: verdict += ' | HALO: ' + '; '.join(m['what'] or str(m['move']) for m in moves if m.get('halo_found'))
     if not weak and below: verdict += ' | BELOW_TARGET: ' + '; '.join(m['what'] or str(m['move']) for m in moves if not m.get('at_target'))
-    rec = {'tool': 'improve_check.py v1.2.1', 'source_sha256': sha256(src), 'moves': moves, 'weak': weak, 'below_target': below, 'halo': halos, 'verdict': verdict}
+    rec = {'tool': 'improve_check.py v1.2.6', 'source_sha256': sha256(src), 'moves': moves, 'weak': weak, 'below_target': below, 'halo': halos, 'verdict': verdict}
     t = json.dumps(rec, ensure_ascii=False, indent=1)
     if rec_p: Path(rec_p).write_text(t, encoding='utf-8')
     print(t); return 0

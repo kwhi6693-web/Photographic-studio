@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.5 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+"""Photographic Studio v1.2.6 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
 Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum] [--no-g]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit
   --no-g      v1.2.0: no G for this photo (the brief says every move can be done by N): only the N attempts run, with
@@ -113,9 +113,10 @@ def strengthen(params, idx, k=1.5):
     q = json.loads(json.dumps(params))
     for i in idx:
         mv = q['moves'][i]
+        kk = min(k, 1.25) if mv.get('subdue') else k   # v1.2.6: a distraction is quieted in small steps (no grey patch)
         for key, (lo, hi) in MOVE_LIMITS.items():
-            if key in mv: mv[key] = round(min(hi, max(lo, float(mv[key]) * k)), 3)
-        if 'sat' in mv: mv['sat'] = round(min(1.6, max(0.5, 1 + (float(mv['sat']) - 1) * k)), 3)
+            if key in mv: mv[key] = round(min(hi, max(lo, float(mv[key]) * kk)), 3)
+        if 'sat' in mv: mv['sat'] = round(min(1.6, max(0.5, 1 + (float(mv['sat']) - 1) * kk)), 3)
         if q.get('_lowres') and float(mv.get('clarity', 0) or 0) > LOWRES_CLARITY: mv['clarity'] = LOWRES_CLARITY
     return q
 
@@ -194,7 +195,7 @@ def main():
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
     if lowres:   # the museum-strength step raises clarity again: cap every attempt
         tries = [(nm, lowres_cap(pp, short_edge)[0], lo, gs) for nm, pp, lo, gs in tries]
-    rec = {'tool': 'finish.py v1.2.5', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    rec = {'tool': 'finish.py v1.2.6', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
     if lowres: rec['low_resolution'] = lowres
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
 
@@ -247,7 +248,8 @@ def main():
                         fin, bad, weak, iv, pv = fin_r, b2, w2, _iv, _pv
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
             ic = None
-            if p.get('moves') and not bad and set(weak) <= {'no_visible_change'}:   # an invisible edit is exactly what to strengthen
+            only_subdue = bool(set(weak) - {'no_visible_change'})   # v1.2.6: over a range - only distractions may still be quieted
+            if p.get('moves') and not bad and (not only_subdue or any(mv.get('subdue') for mv in p['moves'])):   # an invisible edit is exactly what to strengthen
                 # v1.2.0: the improvement must show. Strengthen only the moves nobody can see, while nothing breaks.
                 ic = run('improve_check.py', src, fin, pj, f'--base={lt}'); rounds = []
                 if ic.get('halo'):   # a ring of light or colour: a local move goes on structure, a band gets a softer edge
@@ -264,17 +266,18 @@ def main():
                         ic = run('improve_check.py', src, fin, pj, f'--base={lt}')
                 for rnd in range(3):   # v1.2.1: up to the target, not just over the floor
                     todo = ic.get('below_target', ic.get('weak')) or []
+                    if only_subdue: todo = [j for j in todo if p['moves'][j].get('subdue')]
                     if not todo: break
                     p2 = strengthen(p, todo, 1.4); pj2 = td / f'p{i}s{rnd}.json'; fin2 = td / f'fin{i}s{rnd}.png'
                     pj2.write_text(json.dumps(p2), encoding='utf-8'); render(lt, p2, pj2, fin2, src, kj)
                     if not fin2.exists(): break
                     b2, w2, _iv, _pv = problems(src, fin2, genre, gc)
-                    if b2 or set(w2) - {'no_visible_change'}:
+                    if b2 or (set(w2) - {'no_visible_change'}) - (set(weak) if only_subdue else set()):
                         rounds.append({'round': rnd + 1, 'stopped_by': b2 + w2}); break
                     p, pj, fin, iv, pv, weak = p2, pj2, fin2, _iv, _pv, w2
                     ic = run('improve_check.py', src, fin, pj, f'--base={lt}'); rounds.append({'round': rnd + 1, 'verdict': ic.get('verdict')})
                 if ic.get('weak'): weak = weak + ['move_not_visible']
-                if ic.get('halo'): bad = bad + ['move_halo']
+                if ic.get('halo') and not only_subdue: bad = bad + ['move_halo']
                 ic = {'verdict': ic.get('verdict'), 'moves': ic.get('moves'), 'strengthened': rounds}
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak,
                                     **({'light_repair': light_fix} if light_fix else {}),
