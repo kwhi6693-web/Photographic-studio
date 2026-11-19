@@ -42,15 +42,17 @@ def distractions(L, C, h, w):
         found.append({'box': [round(v, 3) for v in box], 'L': round(Lm, 1), 'surround_L': round(surround, 1),
                       'above_surround': round(Lm - surround, 1), 'area': round(area / A, 4),
                       'centre': [round(float(cen[i][0] / w), 3), round(float(cen[i][1] / h), 3)],
+                      'solid': round(float(area / max(bw * bh, 1)), 2),
                       'chroma': round(float(C[sel].mean()), 1)})
     found = found  # (sorted below)
     for d in found:   # sky seen through leaves near the top, or glints on water: listed after the single objects
         near = sum(1 for e in found if e is not d and abs(e['centre'][0] - d['centre'][0]) < 0.15 and abs(e['centre'][1] - d['centre'][1]) < 0.15)
-        d['kind'] = 'sky_gap' if d['centre'][1] < 0.3 and d['L'] > 88 else ('glints' if near >= 3 and d['centre'][1] > 0.65 else 'object')
+        d['kind'] = 'sky_gap' if d['centre'][1] < 0.3 and d['L'] > 85 else ('glints' if near >= 3 and d['centre'][1] > 0.65 else 'object')
     order = {'object': 0, 'sky_gap': 1, 'glints': 2}
-    found.sort(key=lambda d: (order[d['kind']], -d['above_surround'] * d['area'] ** 0.5))
+    # a person or a stone is one solid shape; sparkle on water and sky through leaves are broken and scattered
+    found.sort(key=lambda d: (order[d['kind']], -d['above_surround'] * d['area'] ** 0.5 * min(1.0, d['solid'] / 0.35)))
     glints = sum(1 for d in found if d['kind'] == 'glints')
-    found = [d for d in found if d['kind'] == 'object'][:12] + [d for d in found if d['kind'] == 'sky_gap'][:4]
+    found = [d for d in found if d['kind'] == 'object'][:8] + [d for d in found if d['kind'] == 'sky_gap'][:2]   # v1.2.6b: the few that pull hardest
     for i, d in enumerate(found):          # a reflection: the same column a little further down, a little darker
         if not 0.25 < d['centre'][1] < 0.75 or d['kind'] != 'object': continue
         for j, e in enumerate(found):
@@ -60,8 +62,10 @@ def distractions(L, C, h, w):
                 e['reflection_of'] = i; break
     for i, d in enumerate(found): d['id'] = i
     return {'candidates': found, 'water_glints': glints,
-            'note': 'small bright things that pull the eye; leave real lights, quiet the rest with a subdue move '
-                    '(director_brief.md); a candidate with reflection_of is the water image of another: quiet it with it (also)'}
+            'note': 'candidates only - most are NOT distractions. Quiet only what pulls the eye away from the subject '
+                    '(a white-clad visitor, a stray white stone, a railing glint, a dead-white sky gap). Parts of the subject '
+                    '(its white wall or gable, plaques, window paper, lamps) stay. Usually 0-3 things; with reflection_of, '
+                    'quiet the water image with its object (also). director_brief.md'}
 
 
 def main(path, out=None):
@@ -139,6 +143,10 @@ def main(path, out=None):
     r['attention']['edge_hint'] = 'strong pull at the frame edges: consider vignette or crop' if r['attention']['edge_pull'] > 1.15 else 'edges are quiet'
 
     r['distractions'] = distractions(L, C, h, w)
+    ab = r['attention']['box_xyxy']
+    for c in r['distractions']['candidates']:   # inside the area that already holds the eye: often part of the subject itself
+        cx, cy = c['centre']
+        c['in_attention_area'] = bool(ab[0] <= cx <= ab[2] and ab[1] <= cy <= ab[3])
 
     text = json.dumps(r, ensure_ascii=False, indent=1)
     if out:

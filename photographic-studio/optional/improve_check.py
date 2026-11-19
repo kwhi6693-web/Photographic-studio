@@ -167,7 +167,14 @@ def check(src, fin, params, base=None):
         except (KeyError, ValueError, TypeError):
             out.append({'move': i, 'what': mv.get('what', ''), 'result': 'BAD_REGION'}); continue
         if mv.get('subdue'):   # v1.2.6: a distraction is judged by how much brighter than its surroundings it stays
-            v, small = subdue_measure(lo, lf, m)
+            vals = []   # v1.2.6b: each box on its own (a union of many boxes has no meaningful 'surroundings')
+            for bx in [mv.get('box')] + list(mv.get('also') or []):
+                if not bx: continue
+                mb = G.region_mask({**mv, 'also': None, 'box': bx}, h, w, np.clip(lo[..., 0] / 100, 0, 1), hue, lo[..., 0])
+                vb, sb = subdue_measure(lo, lf, mb)
+                if vb is not None: vals.append((vb, sb))
+            v = float(np.median([x[0] for x in vals])) if vals else None
+            small = all(x[1] for x in vals) if vals else True
             tgt = SUBDUE_SMALL if small else SUBDUE_PATCH
             out.append({'move': i, 'what': mv.get('what', ''), 'effect': 'subdue', 'sign': -1,
                         'value': None if v is None else round(v, 3), 'visible': v is None or v >= SUBDUE_FLOOR,
