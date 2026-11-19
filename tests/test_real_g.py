@@ -17,7 +17,11 @@ CASES = sorted(p.name for p in RG.iterdir() if p.is_dir())
 EXPECTED = {'b1_01': 'default', 'b1_02': 'default', 'b1_03': 'default', 'b1_04': 'default', 'b1_05': 'default',
             'b2_01': 'n_direct', 'b2_02': 'default', 'b2_03': 'default', 'b2_04': 'default', 'b2_05': 'n_direct',
             'b2_06': 'default', 'b2_07': 'default', 'b2_08': 'default', 'b2_09': 'default',
-            'b2_10': 'default'}
+            'b2_10': 'default',
+            # v1.2.5: c1_05 (boat on a garden canal, 2026-11-19 batch): G dimmed the bright sky gaps and their reflections
+            #   (lamps_kept); it was delivered as N direct. harmonize.py --light-only now restores those lights inside
+            #   finish.py, so the G route is kept.
+            'c1_05': 'default'}
 
 
 def test_fixtures_present():
@@ -48,3 +52,14 @@ def test_clarity_does_not_stack_on_g_local_contrast(tmp_path):
     a = next(x for x in r['attempts'] if x['name'] == 'default')
     assert r['delivered'] == 'default'
     assert a['clarity_unstacked']['g_local_contrast_gain'] > 1.25 and a['clarity_unstacked']['clarity'][1] == 0.0
+
+
+def test_put_out_lights_are_repaired_not_a_reason_to_drop_g(tmp_path):
+    """v1.2.5: c1_05 - the G attempt's only physics problem was lamps_kept; the in-place light repair fixes it."""
+    d = RG / 'c1_05'
+    out, rec = tmp_path / 'f.png', tmp_path / 'f.json'
+    run_tool('finish.py', next(d.glob('original.*')), d / 'g.png', d / 'params.json', out, rec)
+    r = json.loads(rec.read_text())
+    a = next(x for x in r['attempts'] if x['name'] == r['delivered'])
+    assert r['delivered'] == 'default'
+    assert a['light_repair']['was'] == ['lamps_kept'] and a['light_repair']['left'] == []

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Photographic Studio v1.2.5 - harmonize: the last step, run on the file that is actually delivered.
 
-Usage: python3 -I harmonize.py ORIGINAL CANDIDATE OUT.png [RECEIPT.json] [--genre=museum|night] [--check-only]
+Usage: python3 -I harmonize.py ORIGINAL CANDIDATE OUT.png [RECEIPT.json] [--genre=museum|night] [--check-only] [--light-only]
 
 ORIGINAL must be framed like CANDIDATE: when reframe.py cropped or straightened the photo, run reframe.py with the
 same arguments on the original too and pass that copy here.
@@ -29,6 +29,7 @@ reads first is light, then colour, then depth; this step repairs those locally i
 4 Check   physics_check.py and intensity_check.py on the result; their verdicts go into the receipt.
 
 --check-only writes nothing but the receipt: steps 1-3 report what they would change.
+--light-only runs step 1 only (finish.py uses it to repair a G attempt instead of dropping G).
 Deterministic. Needs numpy, Pillow, OpenCV (via ps_common).
 """
 import json, sys
@@ -60,7 +61,7 @@ def lit_shade(Lo, bo):
     return lit, shade, wl.astype(np.float32), ws.astype(np.float32)
 
 
-def step_light(Lo, L, a, b, r, want_inv=True, want_dark=True):
+def step_light(Lo, L, a, b, r, want_inv=True, want_dark=True, ao=None, bo=None):
     eps = 25.0
     base_o, base_c = guided(Lo, Lo, r, eps), guided(L, L, r, eps)
     D = base_c - base_o
@@ -68,13 +69,19 @@ def step_light(Lo, L, a, b, r, want_inv=True, want_dark=True):
     src = (base_o - blur(base_o, 3 * r))                       # where the original itself had a local light
     invented = smooth(bump, 3.0, 8.0) * smooth(D, 2.0, 6.0) * (1 - smooth(src, 3.0, 8.0))   # brighter than the original AND than around it
     corr_inv = -np.maximum(bump - 1.5, 0) * invented
-    src_px = Lo - blur(Lo, 3 * r)                              # the original's own local lights, at full detail
-    light_src = smooth(src_px, 6.0, 12.0) * smooth(Lo, 45.0, 60.0)
+    h, w = Lo.shape                                            # the original's own small lights, as physics_check finds them
+    src_px = Lo - blur(Lo, max(6, min(h, w) // 60))            #   (lamps_kept: L* > 80 and > 25 above their surroundings)
+    light_src = smooth(src_px, 18.0, 25.0) * smooth(Lo, 72.0, 80.0)
+    light_src = np.maximum(light_src, blur(light_src, 2))
     darkened = smooth(Lo - L, 4.0, 10.0) * light_src
     corr_inv = corr_inv if want_inv else 0 * corr_inv
     corr_inv = guided(L, corr_inv.astype(np.float32), max(4, r // 2), eps)   # edge-aware, no grey patches
     # a real light the candidate put out comes back at the original's own brightness (it is the original's light),
     # feathered so the edge of the mask does not show
+    # the whole bright opening around a put-out light comes back, not just its rim (a half-restored sky gap shows a ring)
+    zone = blur((darkened > 0.3).astype(np.float32), r) > 0.02
+    opening = smooth(Lo, 68.0, 82.0) * smooth(Lo - L, 2.0, 6.0) * zone
+    darkened = np.maximum(darkened, opening)
     m = np.maximum(darkened, blur(darkened, max(2, r // 8)))
     corr_dark = (np.maximum(Lo - L, 0) * m) if want_dark else 0 * Lo
     corr = (corr_inv + corr_dark).astype(np.float32)
@@ -89,6 +96,9 @@ def step_light(Lo, L, a, b, r, want_inv=True, want_dark=True):
         return L, a, b, info, False
     L2 = np.clip(L + corr, 0, 100)
     k = np.clip((L2 + 8) / (L + 8), 0.75, 1.3)                 # chroma follows the light change
+    if want_dark and ao is not None:                           # a restored light is the original's light: its colour too
+        md = np.clip(m, 0, 1)
+        a = a * (1 - md) + ao * md / np.maximum(k, 1e-3); b = b * (1 - md) + bo * md / np.maximum(k, 1e-3)
     info['action'] = f'patched {area:.1%} of the frame (max |dL| {float(np.abs(corr).max()):.1f})'
     return L2, a * k, b * k, info, False
 
@@ -183,7 +193,7 @@ def main():
     opt = {x.split('=')[0]: (x.split('=', 1)[1] if '=' in x else True) for x in sys.argv[1:] if x.startswith('--')}
     if len(args) < 3: sys.exit(__doc__)
     o_p, c_p, out_p = args[:3]; rec_p = args[3] if len(args) > 3 else None
-    genre = opt.get('--genre'); check_only = bool(opt.get('--check-only'))
+    genre = opt.get('--genre'); check_only = bool(opt.get('--check-only')); light_only = bool(opt.get('--light-only'))
     c = load_rgb(c_p); o = load_rgb(o_p)
     framing_note = None
     if o.shape != c.shape:
@@ -203,11 +213,14 @@ def main():
     want_inv = bool(set(pre_fail) & {'halo', 'spotlight_glow', 'highlight_order'})
     want_dark = bool(set(pre_fail) & {'lamps_kept', 'darkening_patch', 'highlight_order'})
     if want_inv or want_dark:   # only light that physics_check found wrong is touched; G's intended look stays
-        L, a, b, rec['light'], regen = step_light(Lo, L, a, b, r, want_inv, want_dark)
+        L, a, b, rec['light'], regen = step_light(Lo, L, a, b, r, want_inv, want_dark, ao, bo)
     else:
         rec['light'], regen = {'action': 'none (physics_check found no wrong light)'}, False
-    L, rec['depth'] = step_depth(Lo, L, genre)
-    a, b, rec['colour'] = step_colour(Lo, ao, bo, L, a, b)
+    if light_only:   # finish.py v1.2.5: repair a G attempt's wrong light before deciding whether to keep G
+        rec['depth'], rec['colour'] = 'skipped (--light-only)', 'skipped (--light-only)'
+    else:
+        L, rec['depth'] = step_depth(Lo, L, genre)
+        a, b, rec['colour'] = step_colour(Lo, ao, bo, L, a, b)
     out = np.clip(to_srgb(lab_to_lin(np.stack([L, a, b], -1))), 0, 1)
     changed = float(np.abs(out - c).mean() * 255)
     rec['mean_change_8bit'] = round(changed, 2)
