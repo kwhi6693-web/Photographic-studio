@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.4 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+"""Photographic Studio v1.3.0 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
 Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum] [--no-g]
+                      [--style=STYLE_PROFILE.json [--style-genre=night]]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit
   --no-g      v1.2.0: no G for this photo (the brief says every move can be done by N): only the N attempts run, with
               the brief's own parameters first. Passing the SOURCE as G_OUTPUT means the same.
@@ -30,6 +31,11 @@ the on-structure fix. Photos with a short edge under 900 px get clarity at most 
 small photo turns into grain: the 2026-11-15 book at clarity 0.4).
 v1.2.2: on the G route the colour upper limit is G's own colour (at most x1.65; intensity_check.py --g-chroma), and the
 receipt records it as "g_chroma" for settle.py. The user chose this on 2026-11-19 (lake: G x1.61 was trimmed to x1.30).
+v1.3.0: --style (optional, the user's personal style library, style.py): the brief's parameters with the style pushed
+in are tried FIRST; the plain brief and the whole ladder stay behind it, so a style that breaks a physics check is dropped for that photo
+and the plain brief is delivered; one that only goes over a strength range is kept and settle.py trims the excess (as
+for G's own look, v1.0.2). Moves and keep regions are never touched by the style.
+The receipt records what the style changed ("style").
 Deterministic. Needs numpy, Pillow, OpenCV.
 """
 import json, sys, tempfile, shutil
@@ -189,10 +195,20 @@ def main():
         tries += [('no_region_lift_no_vignette', safer(params), [], g), ('local0_safer_grade', safer(params), ['--local=0'], g),
                   ('n_direct', safer(params), [], None)]
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
+    style_rec = None
+    if opt.get('--style') and Path(opt['--style']).exists():   # v1.3.0: the user's style first; the plain brief stays as the fallback
+        if str(HERE) not in sys.path: sys.path.insert(0, str(HERE))
+        from style import apply as _style_apply
+        _prof = json.loads(Path(opt['--style']).read_text(encoding='utf-8'))
+        styled = _style_apply(params, _prof, opt.get('--style-genre'))
+        style_rec = styled.pop('style')
+        if style_rec.get('changes'):
+            tries.insert(0, ('n_direct_style' if no_g else 'default_style', styled, [], None if no_g else g))
     if lowres:   # the museum-strength step raises clarity again: cap every attempt
         tries = [(nm, lowres_cap(pp, short_edge)[0], lo, gs) for nm, pp, lo, gs in tries]
-    rec = {'tool': 'finish.py v1.2.4', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    rec = {'tool': 'finish.py v1.3.0', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
     if lowres: rec['low_resolution'] = lowres
+    if style_rec: rec['style'] = style_rec
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
 
     best = None
@@ -269,6 +285,10 @@ def main():
             #   strength ranges say: ranges trim the excess afterwards (step 6), they are not a reason to drop G's look.
             #   (2026-11-13 batch: four of five photos lost G this way and came out nearly unchanged; the user
             #   preferred the G route on all four.)
+            if name.endswith('_style') and not bad:
+                # v1.3.0: like G's own look (v1.0.2), a style that passes the physics checks is not dropped for going over
+                #   a strength range: settle.py trims the excess afterwards. An invisible edit still counts.
+                weak = [w for w in weak if w in ('no_visible_change', 'move_not_visible')]
             score = (len(bad), 0 if (gsrc is not None and 'no_visible_change' not in weak) else 1, len(weak), i)
             if best is None or score < best[0]: best = (score, fin, name, bad + weak)
             if not bad and (not weak or weak == ['move_not_visible']): break   # a safer attempt cannot show more

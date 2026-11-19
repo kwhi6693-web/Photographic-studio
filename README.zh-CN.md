@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-c8963e?style=flat-square" alt="version 1.2.4">
+  <img src="https://img.shields.io/badge/version-1.3.0-c8963e?style=flat-square" alt="version 1.3.0">
   <img src="https://img.shields.io/badge/engine-2.3.1%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.1">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建筑·街景·风光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
@@ -283,6 +283,8 @@ Skill 包里没有填 API 密钥的地方，也不包含引擎；引擎也不需
 
 **不满意怎么办？** 用几个字说哪里不对（「太暖了」「再通透一点」），它会改导演单重修。
 
+**能学会我自己的风格吗？** 可以，需要时再开（默认关闭）。说一句「建风格」，发 3–10 张你喜欢的照片，最好是原片和你自己修好的成片成对发。之后每次修图都会往你的口味偏一点：更暖或更冷、色彩更浓或更淡、暗部更深或更通透。每张照片仍然单独读片、单独定参数，风格也越不过物理检查。风格只存成数字，不存你的照片：宿主有记忆就存在记忆里，没有就存成一个小文件 `style_profile.json`，修图时一起发。「关风格」「看风格」「忘掉风格」照字面意思执行。
+
 **照片会发到哪里？** 用 skill：发给你的 agent，和平时聊天一样。用引擎：发给你配置的模型服务商，适用它的条款。
 
 ---
@@ -319,7 +321,8 @@ photographic-studio/          ← Skill 本体（安装这个目录）
 │   ├── settle.py             ← 只去掉超出上限的部分，这张照片的参数说了算
 │   ├── full_res.py           ← 把修图带回原图尺寸
 │   ├── physics_check.py      ← 自然光物理检查
-│   └── intensity_check.py    ← 力度检查
+│   ├── intensity_check.py    ← 力度检查
+│   └── style.py              ← 个人风格库（可选）
 └── SHA256SUMS.txt
 engine/                       ← 流程写成代码（原型）
 ├── studio_engine/            ← 流程 · 模型接口 · 评测 · 命令行
@@ -342,5 +345,5 @@ Skill 本身（执行说明、参考文件和工具）采用 [MIT 许可证](LIC
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.2.4 · 为非人像摄影而做 · 与 Claude 共同打造 · 代码与文档 MIT · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.3.0 · 为非人像摄影而做 · 与 Claude 共同打造 · 代码与文档 MIT · 照片 © 作者本人</sub>
 </p>

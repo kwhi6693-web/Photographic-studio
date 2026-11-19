@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-c8963e?style=flat-square" alt="version 1.2.4">
+  <img src="https://img.shields.io/badge/version-1.3.0-c8963e?style=flat-square" alt="version 1.3.0">
   <img src="https://img.shields.io/badge/engine-2.3.1%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.1">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
@@ -283,6 +283,8 @@ It looks at what the host can do first, then decides how to work:
 
 **What if I don't like the result?** Say what's wrong in a few words (`too warm`, `a bit clearer`): it rewrites the brief and redoes the photo.
 
+**Can it learn my own style?** Yes, if you want it to (off by default). Say `build my style` and send 3–10 photos you like — best as pairs of an original and your own edit. From then on every edit leans a little towards your taste: warmer or cooler, richer or quieter colour, deeper or lighter shadows. Each photo is still read and edited on its own, and the style never overrides the physics checks. The style is kept as numbers, never as your photos: in your agent's memory if it has one, otherwise as a small `style_profile.json` you send along. `style off` / `show my style` / `forget my style` do what they say.
+
 **Where do my photos go?** With the skill: to your agent, as in any chat. With the engine: to the model provider you configured, under its terms.
 
 ---
@@ -319,7 +321,8 @@ photographic-studio/          ← the skill itself (install this folder)
 │   ├── settle.py             ← trims only what is over a limit; the photo's own parameters stand
 │   ├── full_res.py           ← carries an edit back to full resolution
 │   ├── physics_check.py      ← natural-light physics check
-│   └── intensity_check.py    ← strength check
+│   ├── intensity_check.py    ← strength check
+│   └── style.py              ← personal style library (optional)
 └── SHA256SUMS.txt
 engine/                       ← the pipeline as code (prototype)
 ├── studio_engine/            ← pipeline · model providers · evaluation · CLI
@@ -344,5 +347,5 @@ The example and test photographs (`docs/history/taste/`, `tests/fixtures/`, `doc
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.2.4 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
+  <sub>Photographic Studio v1.3.0 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
 </p>
