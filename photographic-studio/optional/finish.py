@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.3 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+"""Photographic Studio v1.2.4 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
 Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum] [--no-g]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit
   --no-g      v1.2.0: no G for this photo (the brief says every move can be done by N): only the N attempts run, with
@@ -191,7 +191,7 @@ def main():
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
     if lowres:   # the museum-strength step raises clarity again: cap every attempt
         tries = [(nm, lowres_cap(pp, short_edge)[0], lo, gs) for nm, pp, lo, gs in tries]
-    rec = {'tool': 'finish.py v1.2.3', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    rec = {'tool': 'finish.py v1.2.4', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
     if lowres: rec['low_resolution'] = lowres
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
 
@@ -204,6 +204,8 @@ def main():
                 # physics problem or an excess, so it is not tried for those (it was a floor-lift before v1.0.9).
                 base = result.get('n_direct' if name.startswith('n_direct') else 'default')
                 if base != ([], ['no_visible_change']): continue
+            if gsrc is None and best is not None and best[0][0] == 0 and best[0][1] == 0:
+                continue   # a clean, visible G attempt already exists: an N-direct attempt cannot outrank it (score order)
             key = json.dumps([p, ltopt, gsrc is None], sort_keys=True)
             if key in seen: continue
             seen.add(key)

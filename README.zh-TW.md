@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.3-c8963e?style=flat-square" alt="version 1.2.3">
+  <img src="https://img.shields.io/badge/version-1.2.4-c8963e?style=flat-square" alt="version 1.2.4">
   <img src="https://img.shields.io/badge/engine-2.3.1%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.1">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建築·街景·風光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
@@ -52,16 +52,16 @@ Photographic Studio 介於兩者之間：**一句話，一張成片**。它先�
 
 <table>
   <tr>
-    <td width="50%"><img src="photographic-studio/assets/taste/02_night_before_after.jpg" alt="夜色中的塔與倒影"><br><sub><b>夜色中的塔與倒影</b> · 保住夜空的黑，讓塔、橋和倒影的燈更清楚</sub></td>
-    <td width="50%"><img src="photographic-studio/assets/taste/03_canal_before_after.jpg" alt="運河與雲"><br><sub><b>運河與雲</b> · 天空有了顏色和體積，樹從死黑裡透出層次</sub></td>
+    <td width="50%"><img src="docs/history/taste/02_night_before_after.jpg" alt="夜色中的塔與倒影"><br><sub><b>夜色中的塔與倒影</b> · 保住夜空的黑，讓塔、橋和倒影的燈更清楚</sub></td>
+    <td width="50%"><img src="docs/history/taste/03_canal_before_after.jpg" alt="運河與雲"><br><sub><b>運河與雲</b> · 天空有了顏色和體積，樹從死黑裡透出層次</sub></td>
   </tr>
   <tr>
-    <td><img src="photographic-studio/assets/taste/05_bronze_ox_before_after.jpg" alt="錯金銀銅牛燈"><br><sub><b>錯金銀銅牛燈</b> · 銅色、綠鏽、赭紅分明，黑牆依舊乾淨</sub></td>
-    <td><img src="photographic-studio/assets/taste/06_blue_vase_museum_before_after.jpg" alt="藍釉金彩瓶"><br><sub><b>藍釉金彩瓶</b> · 鈷藍更濃、金飾更亮，展櫃的暗一點不提</sub></td>
+    <td><img src="docs/history/taste/05_bronze_ox_before_after.jpg" alt="錯金銀銅牛燈"><br><sub><b>錯金銀銅牛燈</b> · 銅色、綠鏽、赭紅分明，黑牆依舊乾淨</sub></td>
+    <td><img src="docs/history/taste/06_blue_vase_museum_before_after.jpg" alt="藍釉金彩瓶"><br><sub><b>藍釉金彩瓶</b> · 鈷藍更濃、金飾更亮，展櫃的暗一點不提</sub></td>
   </tr>
   <tr>
-    <td><img src="photographic-studio/assets/taste/01_building_before_after.jpg" alt="鐵塔框景裡的鐘樓"><br><sub><b>鐵塔框景裡的鐘樓</b> · 夕陽的暖與鋼架的冷拉開</sub></td>
-    <td><img src="photographic-studio/assets/taste/04_willow_lake_before_after.jpg" alt="垂柳與湖"><br><sub><b>垂柳與湖</b> · 剋制的清透，晴日裡的安靜</sub></td>
+    <td><img src="docs/history/taste/01_building_before_after.jpg" alt="鐵塔框景裡的鐘樓"><br><sub><b>鐵塔框景裡的鐘樓</b> · 夕陽的暖與鋼架的冷拉開</sub></td>
+    <td><img src="docs/history/taste/04_willow_lake_before_after.jpg" alt="垂柳與湖"><br><sub><b>垂柳與湖</b> · 剋制的清透，晴日裡的安靜</sub></td>
   </tr>
 </table>
 
@@ -320,8 +320,6 @@ photographic-studio/          ← Skill 本體（安裝這個目錄）
 │   ├── full_res.py           ← 把修圖帶回原圖尺寸
 │   ├── physics_check.py      ← 自然光物理檢查
 │   └── intensity_check.py    ← 力度檢查
-├── assets/taste/             ← 早期的前後對比示例（歷史記錄，預設流程不讀）
-├── CHANGELOG.md
 └── SHA256SUMS.txt
 engine/                       ← 流程寫成程式（原型）
 ├── studio_engine/            ← 流程 · 模型介面 · 評測 · 命令列
@@ -329,6 +327,7 @@ engine/                       ← 流程寫成程式（原型）
 └── config.example.toml       ← 模型和金鑰（複製為 config.toml）
 tests/                        ← 測試與真實照片樣例（每次提交自動跑）
 docs/images/                  ← 本頁的插圖
+docs/history/                 ← 早期的前後對比示例、口味記錄和 v0.x 版本歷史（不隨 Skill 安裝）
 README.md · README.zh-CN.md · README.zh-TW.md
 LICENSE                       ← MIT
 ```
@@ -338,10 +337,10 @@ LICENSE                       ← MIT
 ## 📜 授權條款
 
 Skill 本身（執行說明、參考檔案和工具）採用 [MIT 授權條款](LICENSE)（2026-11-14 起；此前的版本為 AGPL-3.0）。
-示例與測試照片（`photographic-studio/assets/`、`tests/fixtures/`、`docs/images/`）版權歸作者所有，**不在**此授權範圍內，未經許可請勿轉載。
+示例與測試照片（`docs/history/taste/`、`tests/fixtures/`、`docs/images/`）版權歸作者所有，**不在**此授權範圍內，未經許可請勿轉載。
 
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.2.3 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.2.4 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
 </p>

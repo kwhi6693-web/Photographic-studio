@@ -64,7 +64,7 @@ def test_vase_rims_no_longer_harsh(tmp_path, finish):
     contrast and the gold edges turned harsh and bright (edge gain 0.86). v1.0.9: the ladder no longer raises a photo
     to the fixed museum strength just because it is under a floor, so the G route is delivered as it is."""
     from PIL import Image
-    sheet = Image.open(next((ROOT / 'photographic-studio' / 'assets' / 'taste').glob('06_*.jpg')))
+    sheet = Image.open(next((ROOT / 'docs' / 'history' / 'taste').glob('06_*.jpg')))
     w, h = sheet.size; right = sheet.crop((w - w // 2 + 6, 0, w, h)); src = FILES['06_blue_vase']
     g = tmp_path / 'g.png'; right.resize(Image.open(src).size, Image.LANCZOS).save(g)
     out, rec = finish(src, g, genre='museum')
@@ -152,7 +152,7 @@ def test_approved_look_is_not_called_a_glow(tmp_path, sample):
     """The user's approved finals (right half of each taste sample) used as G: the leftover-glow check must stay quiet,
     or finish.py would throw away a look the user approved."""
     from PIL import Image
-    sheet = Image.open(next((ROOT / 'photographic-studio' / 'assets' / 'taste').glob(f'{sample}_*.jpg')))
+    sheet = Image.open(next((ROOT / 'docs' / 'history' / 'taste').glob(f'{sample}_*.jpg')))
     w, h = sheet.size; right = sheet.crop((w - w // 2 + 6, 0, w, h))
     src = FILES[TASTE[sample]]; sh = Image.open(src).size[1]
     g = tmp_path / 'g.png'; right.resize((round(right.size[0] * sh / right.size[1]), sh), Image.LANCZOS).save(g)
