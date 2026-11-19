@@ -97,20 +97,26 @@ def visible(effect, sign, v, T=VISIBLE):
 
 
 def own_share(base, params, k, lf):
-    """Lab of the edit with move k minus the edit without it (None if it cannot be rendered)."""
-    import tempfile, grade as G
-    q = json.loads(json.dumps(params)); q['moves'] = [m for j, m in enumerate(q['moves']) if j != k]
+    """Lab of the edit with move k minus the edit without it (None if it cannot be rendered). Same order as finish.py
+    v1.2.3: global grade, keep regions, then the moves."""
+    import tempfile, contextlib, io, grade as G
+    others = [m for j, m in enumerate(params['moves']) if j != k]
     with tempfile.TemporaryDirectory() as td:
-        pj, out = Path(td) / 'p.json', Path(td) / 'o.png'
-        pj.write_text(json.dumps(q), encoding='utf-8')
-        import contextlib, io
-        with contextlib.redirect_stdout(io.StringIO()):
-            G.clamps.clear(); G.main(str(base), str(out), str(pj))
+        td = Path(td)
+        def grade(inp, prm, out):
+            pj = td / 'p.json'; pj.write_text(json.dumps(prm), encoding='utf-8')
+            with contextlib.redirect_stdout(io.StringIO()):
+                G.clamps.clear(); G.main(str(inp), str(out), str(pj))
         if params.get('keep'):
             import keep_regions as K
-            o = load_rgb(src_global[0]); e = load_rgb(out)
-            res, _ = K.apply(o, e, K.regions_of(params)); return srgb_to_lab(res)
-        return srgb_to_lab(load_rgb(out))
+            from ps_common import save_png
+            grade(base, {kk: v for kk, v in params.items() if kk != 'moves'}, td / 'b.png')
+            res, _ = K.apply(load_rgb(src_global[0]), load_rgb(td / 'b.png'), K.regions_of(params))
+            save_png(res, td / 'k.png')
+            grade(td / 'k.png', {'moves': others}, td / 'o.png')
+        else:
+            grade(base, {**params, 'moves': others}, td / 'o.png')
+        return srgb_to_lab(load_rgb(td / 'o.png'))
 
 
 src_global = [None]

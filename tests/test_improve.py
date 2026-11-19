@@ -120,3 +120,16 @@ def test_g_route_keeps_gs_own_colour(tmp_path):
     run_tool('settle.py', src, out, st, tmp_path / 's.json', f"--g-chroma={r['g_chroma']}")
     it = json.loads(run_tool('intensity_check.py', src, st).stdout)
     assert it['checks']['chroma_ratio']['value'] > 1.4   # not trimmed back to the day limit x1.30
+
+
+def test_a_move_on_a_protected_sign_is_not_undone_by_its_protection(tmp_path):
+    """v1.2.3: 2026-11-19 cafe - the brief protected the logo (keep, content) and also asked for more contrast on it.
+    The keep step ran after the moves and undid the move (x1.00). Now: grade, keep, then moves."""
+    src = REAL / '10_cafe_counter.jpg'
+    out, rec = tmp_path / 'f.png', tmp_path / 'f.json'
+    run_tool('finish.py', src, REAL / '10_cafe_counter_g.png', REAL / '10_cafe_counter_gpt_params.json', out, rec)
+    r = json.loads(rec.read_text())
+    a = next(x for x in r['attempts'] if x['name'] == r['delivered'])
+    assert str(a.get('keep', '')).startswith('KEPT')
+    logo = a['improve']['moves'][0]
+    assert logo['visible'], logo

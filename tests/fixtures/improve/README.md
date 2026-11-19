@@ -7,3 +7,6 @@ photo is a director-brief parameter file written under the v1.2.0 rules (2–3 i
 
 `07_lake_frame_g.png` and `07_lake_frame_gpt_params.json` are the G intermediate and the agent's own brief parameters
 from the owner's 2026-11-19 run under v1.2.1 (used by the v1.2.2 tests).
+
+`10_cafe_counter*` are the original, G intermediate and the agent's brief parameters from the owner's 2026-11-19 batch
+under v1.2.2 (used by the v1.2.3 keep-then-moves test).

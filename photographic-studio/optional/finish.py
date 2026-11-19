@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.2 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+"""Photographic Studio v1.2.3 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
 Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum] [--no-g]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit
   --no-g      v1.2.0: no G for this photo (the brief says every move can be done by N): only the N attempts run, with
@@ -117,6 +117,27 @@ def strengthen(params, idx, k=1.5):
     return q
 
 
+def render(lt, params, pj, out, src, kj):
+    """v1.2.3: grade, then protect the keep regions, then the moves. The keep regions undo what the look transfer and
+    the global grade did there (colour spill, G's repaint); the improvement moves come after, so a move on a protected
+    sign (2026-11-19 cafe: logo contrast move under a 'content' keep box, measured x1.00) is not undone by its own
+    protection. Returns the keep_regions receipt or None."""
+    if not params.get('keep') or not params.get('moves'):
+        run('grade.py', lt, out, pj)
+        if not Path(out).exists(): shutil.copy(lt, out)
+        return run('keep_regions.py', src, out, out, kj) if params.get('keep') else None
+    base = {k: v for k, v in params.items() if k != 'moves'}
+    bj, bo = Path(str(pj) + '.base.json'), Path(str(out) + '.base.png')
+    mj = Path(str(pj) + '.moves.json')
+    bj.write_text(json.dumps(base), encoding='utf-8'); mj.write_text(json.dumps({'moves': params['moves']}), encoding='utf-8')
+    run('grade.py', lt, bo, bj)
+    if not bo.exists(): shutil.copy(lt, bo)
+    kept = run('keep_regions.py', src, bo, bo, kj)
+    run('grade.py', bo, out, mj)
+    if not Path(out).exists(): shutil.copy(bo, out)
+    return kept
+
+
 def safer(params):
     q = json.loads(json.dumps(params))
     for mv in q.get('moves', []):   # v1.2.0: a move is the point of the edit - kept, its added light halved
@@ -170,7 +191,7 @@ def main():
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
     if lowres:   # the museum-strength step raises clarity again: cap every attempt
         tries = [(nm, lowres_cap(pp, short_edge)[0], lo, gs) for nm, pp, lo, gs in tries]
-    rec = {'tool': 'finish.py v1.2.2', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    rec = {'tool': 'finish.py v1.2.3', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
     if lowres: rec['low_resolution'] = lowres
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
 
@@ -202,12 +223,9 @@ def main():
             if gsrc is not None:
                 p, unstacked = unstack(p, local_contrast_gain(src, lt))
                 pj.write_text(json.dumps(p), encoding='utf-8')
-            run('grade.py', lt, fin, pj)
-            if not fin.exists(): shutil.copy(lt, fin)
-            kept = None
-            if p.get('keep'):   # v1.1.0: the brief's must-not-change regions, before anything is judged
-                kj = td / f'k{i}.json'; kj.write_text(json.dumps({'keep': p['keep']}), encoding='utf-8')
-                kept = run('keep_regions.py', src, fin, fin, kj)
+            kj = td / f'k{i}.json'
+            if p.get('keep'): kj.write_text(json.dumps({'keep': p['keep']}), encoding='utf-8')   # v1.1.0, before anything is judged
+            kept = render(lt, p, pj, fin, src, kj)
             bad, weak, iv, pv = problems(src, fin, genre, gc)
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
             ic = None
@@ -220,8 +238,7 @@ def main():
                         if full_span(p2['moves'][k]): p2['moves'][k]['feather'] = max(0.3, float(p2['moves'][k].get('feather', 0.08)))
                         else: p2['moves'][k]['on_structure'] = True
                     pj2 = td / f'p{i}h.json'; fin2 = td / f'fin{i}h.png'; pj2.write_text(json.dumps(p2), encoding='utf-8')
-                    run('grade.py', lt, fin2, pj2)
-                    if p2.get('keep'): run('keep_regions.py', src, fin2, fin2, kj)
+                    render(lt, p2, pj2, fin2, src, kj)
                     b2, w2, _iv, _pv = problems(src, fin2, genre, gc)
                     rounds.append({'halo_fix': ic['halo'], **({'stopped_by': b2 + w2} if (b2 or w2) else {})})
                     if not (b2 or set(w2) - {'no_visible_change'}):
@@ -231,9 +248,8 @@ def main():
                     todo = ic.get('below_target', ic.get('weak')) or []
                     if not todo: break
                     p2 = strengthen(p, todo, 1.4); pj2 = td / f'p{i}s{rnd}.json'; fin2 = td / f'fin{i}s{rnd}.png'
-                    pj2.write_text(json.dumps(p2), encoding='utf-8'); run('grade.py', lt, fin2, pj2)
+                    pj2.write_text(json.dumps(p2), encoding='utf-8'); render(lt, p2, pj2, fin2, src, kj)
                     if not fin2.exists(): break
-                    if p2.get('keep'): run('keep_regions.py', src, fin2, fin2, kj)
                     b2, w2, _iv, _pv = problems(src, fin2, genre, gc)
                     if b2 or set(w2) - {'no_visible_change'}:
                         rounds.append({'round': rnd + 1, 'stopped_by': b2 + w2}); break
