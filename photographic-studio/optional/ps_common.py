@@ -145,7 +145,7 @@ def lab2rgb(lab):
 
 # v2.1.0: run a sibling tool in this process when it can (no interpreter start-up per call), else in a separate one.
 _TOOL_MODS = {}
-_INPROC = ('grade.py', 'intensity_check.py', 'physics_check.py', 'look_transfer.py')
+_INPROC = ('grade.py', 'intensity_check.py', 'physics_check.py', 'look_transfer.py', 'keep_regions.py')
 
 
 def run_tool(tool, *args):

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.9-c8963e?style=flat-square" alt="version 1.0.9">
+  <img src="https://img.shields.io/badge/version-1.1.0-c8963e?style=flat-square" alt="version 1.1.0">
   <img src="https://img.shields.io/badge/engine-2.2.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.2.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
@@ -343,5 +343,5 @@ The example and test photographs (`photographic-studio/assets/`, `tests/fixtures
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.0.9 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
+  <sub>Photographic Studio v1.1.0 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
 </p>

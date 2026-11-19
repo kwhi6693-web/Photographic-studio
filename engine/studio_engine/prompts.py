@@ -13,12 +13,13 @@ Rules:
 - Follow real light physics: keep the light direction and time of day; shadows stay darker and cooler than lit areas; never add a light source or a glow around the subject; dark backgrounds stay dark and clean.
 - Parameters come only from THIS photo's problems (v1.0.9). First list the problems the photo really has, each with what you see and a measurement as evidence (e.g. haze over water and walls even when black window frames make the dynamic range wide; blown highlights; washed sky; flat colour), and what is already good and must not change. Every parameter must serve one listed problem, sized to how bad it is; a parameter no problem asks for stays 0. If the light is already good, only refine lightly: do not brighten, do not add colour. There is no default parameter set.
 - The subject is lifted by quieting its surroundings, not by inventing light on it.
+- keep_regions (v1.1.0): the areas whose colour must not change (a sign, a label, coloured glass, a painted surface, a wall whose colour is the point) or whose content the image model must not repaint, each as a box in fractions of the frame. mode "colour" keeps the original colour and lets the brightness follow the edit; mode "content" keeps the original's own detail and colour and takes only the large-scale light. Empty if nothing needs it; at most 6.
 - If people's faces/bodies are the main subject, set portrait=true (the service does not retouch portraits).
 Return ONLY JSON matching the schema. Use the measurements as evidence; trust your eyes when they disagree."""
 
 BRIEF_SCHEMA = {
     'type': 'object', 'additionalProperties': False,
-    'required': ['story', 'subject', 'genre', 'portrait', 'diagnoses', 'keep', 'light_already_good', 'g_intent', 'params'],
+    'required': ['story', 'subject', 'genre', 'portrait', 'diagnoses', 'keep', 'keep_regions', 'light_already_good', 'g_intent', 'params'],
     'properties': {
         'story': {'type': 'string', 'description': 'one line: the point of interest (a story is only one kind; also geometry/order, light, colour, texture, mood, space, minimalism) and the style direction'},
         'subject': {'type': 'string', 'description': 'what the subject is and where it is in the frame'},
@@ -29,6 +30,11 @@ BRIEF_SCHEMA = {
                                 'properties': {'problem': {'type': 'string'}, 'evidence': {'type': 'string'},
                                                'params': {'type': 'array', 'items': {'type': 'string'}, 'description': 'names of the params that fix it'}}}},
         'keep': {'type': 'string', 'description': 'what is already good in this photo and must not change'},
+        'keep_regions': {'type': 'array', 'description': 'v1.1.0: regions that must not change (see the rules)',
+                         'items': {'type': 'object', 'additionalProperties': False, 'required': ['what', 'box', 'mode'],
+                                   'properties': {'what': {'type': 'string'},
+                                                  'box': {'type': 'array', 'items': {'type': 'number'}, 'description': '[x0, y0, x1, y1], fractions 0..1'},
+                                                  'mode': {'type': 'string', 'enum': ['colour', 'content']}}}},
         'light_already_good': {'type': 'boolean', 'description': 'v1.0.9: true when the light, colour and depth are already right and only a light refinement is needed; then the image model is not called'},
         'g_intent': {'type': 'string', 'description': 'English, 2-3 concrete light-and-colour intents for the image model, no numbers'},
         'params': {'type': 'object', 'additionalProperties': False,
@@ -86,6 +92,18 @@ def clamp_brief(b: dict) -> dict:
     if lb: p['levels'] = {'black': lb}
     b['params'] = p
     b['diagnoses'] = list(b.get('diagnoses') or [])
+    keep = []   # v1.1.0: validated must-not-change regions; finish.py applies them through keep_regions.py
+    for r in list(b.get('keep_regions') or [])[:6]:
+        try:
+            x0, y0, x1, y1 = [min(1.0, max(0.0, float(v))) for v in r['box']]
+        except (KeyError, TypeError, ValueError):
+            continue
+        if x1 - x0 >= 0.01 and y1 - y0 >= 0.01:
+            keep.append({'what': str(r.get('what', ''))[:80], 'box': [x0, y0, x1, y1],
+                         'mode': 'content' if r.get('mode') == 'content' else 'colour'})
+    b['keep_regions'] = keep
+    if keep:
+        p['keep'] = keep
     b['light_already_good'] = bool(b.get('light_already_good'))
     if b.get('genre') not in GENRES:
         b['genre'] = 'other'

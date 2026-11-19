@@ -14,6 +14,9 @@ then the fewest strength problems, is delivered and its problems are listed (v0.
 v1.0.9: no stacked clarity - where G's light already raised the local contrast, the grade's clarity is reduced by the
 same amount (fully off once G added 25 % or more), so G's local contrast and N's clarity do not stack into hard,
 bright rims (the approved blue vase: gold rims with edge gain 0.86).
+v1.1.0: GRADE_JSON may carry "keep": the brief's must-not-change regions (keep_regions.py). They are applied to every
+attempt right after the grade and BEFORE the checks, so a G whose only fault was repainting a kept region is judged
+without it.
 Deterministic. Needs numpy, Pillow, OpenCV.
 """
 import json, sys, tempfile, shutil
@@ -131,10 +134,15 @@ def main():
                 pj.write_text(json.dumps(p), encoding='utf-8')
             run('grade.py', lt, fin, pj)
             if not fin.exists(): shutil.copy(lt, fin)
+            kept = None
+            if p.get('keep'):   # v1.1.0: the brief's must-not-change regions, before anything is judged
+                kj = td / f'k{i}.json'; kj.write_text(json.dumps({'keep': p['keep']}), encoding='utf-8')
+                kept = run('keep_regions.py', src, fin, fin, kj)
             bad, weak, iv, pv = problems(src, fin, genre)
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak,
-                                    **({'clarity_unstacked': unstacked} if unstacked else {})})
+                                    **({'clarity_unstacked': unstacked} if unstacked else {}),
+                                    **({'keep': kept.get('verdict')} if kept else {})})
             result[name] = (bad, weak)
             # v1.0.2: a G route that passes the physics checks and visibly changes the photo beats N direct whatever the
             #   strength ranges say: ranges trim the excess afterwards (step 6), they are not a reason to drop G's look.

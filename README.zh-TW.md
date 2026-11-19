@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.9-c8963e?style=flat-square" alt="version 1.0.9">
+  <img src="https://img.shields.io/badge/version-1.1.0-c8963e?style=flat-square" alt="version 1.1.0">
   <img src="https://img.shields.io/badge/engine-2.2.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.2.0">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建築·街景·風光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
@@ -341,5 +341,5 @@ Skill 本身（執行說明、參考檔案和工具）採用 [MIT 授權條款](
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.0.9 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.1.0 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
 </p>
