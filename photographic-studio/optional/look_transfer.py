@@ -104,7 +104,7 @@ def main():
     strength = min(max(opt.get('--strength', 1.0), 0), 1); local = min(max(opt.get('--local', 1.0), 0), 1)
     src, g = load_rgb(src_p), load_rgb(g_p)
     hs, ws = src.shape[:2]; hg, wg = g.shape[:2]
-    rec = {'tool': 'look_transfer.py v0.3.8 (deterministic; output pixels are the source photo, re-toned)',
+    rec = {'tool': 'look_transfer.py v1.2.2 (deterministic; output pixels are the source photo, re-toned)',
            'source': {'file': Path(src_p).name, 'sha256': sha256(src_p), 'size': [ws, hs]}, 'g': {'file': Path(g_p).name, 'sha256': sha256(g_p), 'size': [wg, hg]},
            'params': {'strength': strength, 'local': local}, 'flags': [], 'stop_reasons': []}
     H, inl = register(src, g); rec['registration_inliers'] = inl
@@ -115,9 +115,17 @@ def main():
     Sg = cv2.warpPerspective(src, H, (wg, hg), flags=cv2.INTER_AREA, borderMode=cv2.BORDER_REPLICATE)
     valid = cv2.warpPerspective(np.ones((hs, ws), np.float32), H, (wg, hg)) > 0.99
     labS, labG = lin_to_lab(to_linear(Sg)), lin_to_lab(to_linear(g))
-    D = labG - labS
-    lut = fit_lut(labS[::2, ::2], D[::2, ::2], valid[::2, ::2])
-    R1 = (D - apply_lut(lut, labS)) * valid[..., None]
+    # v1.2.2: the colour mapping is fitted and applied on slightly smoothed images. Where G redraws fine texture
+    # (ripples, foliage), its crests and troughs no longer sit on the source's, and a per-pixel fit of "what G did to
+    # this colour" averages them out: bright crests get darkened, dark troughs lightened, and the original's own
+    # texture comes out flatter than in both the source and G (2026-11-15 lake water: local contrast x0.67, G x1.06).
+    # The mapping now sees only the tones at ~2 px and above; the source's finer texture passes through unchanged.
+    sb = 2.0
+    sm = lambda x: np.stack([blur(x[..., k], sb) for k in range(3)], -1)
+    labSb = sm(labS)
+    D = sm(labG) - labSb
+    lut = fit_lut(labSb[::2, ::2], D[::2, ::2], valid[::2, ::2])
+    R1 = (D - apply_lut(lut, labSb)) * valid[..., None]
     I = labS[..., 0] / 100.0
     conf = confidence(labS[..., 0], labG[..., 0]) * valid
     # L1: large-scale light, computed at 1/8 size
@@ -138,7 +146,8 @@ def main():
     # carry the smooth coefficient maps back to the source grid and apply to the full-resolution source
     back = lambda x: cv2.warpPerspective(x, H, (ws, hs), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP, borderMode=cv2.BORDER_REPLICATE)
     lab0 = lin_to_lab(to_linear(src)); I0 = lab0[..., 0] / 100.0
-    delta = apply_lut(lut, lab0)
+    s0 = sb * ws / max(wg, 1)   # the same smoothing on the source grid
+    delta = apply_lut(lut, np.stack([blur(lab0[..., k], s0) for k in range(3)], -1))
     Af, Bf = back(A), back(B)
     for k in range(3): delta[..., k] += Af[..., k] * I0 + Bf[..., k]
     delta *= strength

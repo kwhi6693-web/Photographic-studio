@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-c8963e?style=flat-square" alt="version 1.1.0">
-  <img src="https://img.shields.io/badge/engine-2.2.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.2.0">
+  <img src="https://img.shields.io/badge/version-1.2.4-c8963e?style=flat-square" alt="version 1.2.4">
+  <img src="https://img.shields.io/badge/engine-2.3.1%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.1">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建筑·街景·风光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -52,16 +52,16 @@ Photographic Studio 介于两者之间：**一句话，一张成片**。它先�
 
 <table>
   <tr>
-    <td width="50%"><img src="photographic-studio/assets/taste/02_night_before_after.jpg" alt="夜色中的塔与倒影"><br><sub><b>夜色中的塔与倒影</b> · 保住夜空的黑，让塔、桥和倒影的灯更清楚</sub></td>
-    <td width="50%"><img src="photographic-studio/assets/taste/03_canal_before_after.jpg" alt="运河与云"><br><sub><b>运河与云</b> · 天空有了颜色和体积，树从死黑里透出层次</sub></td>
+    <td width="50%"><img src="docs/history/taste/02_night_before_after.jpg" alt="夜色中的塔与倒影"><br><sub><b>夜色中的塔与倒影</b> · 保住夜空的黑，让塔、桥和倒影的灯更清楚</sub></td>
+    <td width="50%"><img src="docs/history/taste/03_canal_before_after.jpg" alt="运河与云"><br><sub><b>运河与云</b> · 天空有了颜色和体积，树从死黑里透出层次</sub></td>
   </tr>
   <tr>
-    <td><img src="photographic-studio/assets/taste/05_bronze_ox_before_after.jpg" alt="错金银铜牛灯"><br><sub><b>错金银铜牛灯</b> · 铜色、绿锈、赭红分明，黑墙依旧干净</sub></td>
-    <td><img src="photographic-studio/assets/taste/06_blue_vase_museum_before_after.jpg" alt="蓝釉金彩瓶"><br><sub><b>蓝釉金彩瓶</b> · 钴蓝更浓、金饰更亮，展柜的暗一点不提</sub></td>
+    <td><img src="docs/history/taste/05_bronze_ox_before_after.jpg" alt="错金银铜牛灯"><br><sub><b>错金银铜牛灯</b> · 铜色、绿锈、赭红分明，黑墙依旧干净</sub></td>
+    <td><img src="docs/history/taste/06_blue_vase_museum_before_after.jpg" alt="蓝釉金彩瓶"><br><sub><b>蓝釉金彩瓶</b> · 钴蓝更浓、金饰更亮，展柜的暗一点不提</sub></td>
   </tr>
   <tr>
-    <td><img src="photographic-studio/assets/taste/01_building_before_after.jpg" alt="铁塔框景里的钟楼"><br><sub><b>铁塔框景里的钟楼</b> · 夕阳的暖与钢架的冷拉开</sub></td>
-    <td><img src="photographic-studio/assets/taste/04_willow_lake_before_after.jpg" alt="垂柳与湖"><br><sub><b>垂柳与湖</b> · 克制的清透，晴日里的安静</sub></td>
+    <td><img src="docs/history/taste/01_building_before_after.jpg" alt="铁塔框景里的钟楼"><br><sub><b>铁塔框景里的钟楼</b> · 夕阳的暖与钢架的冷拉开</sub></td>
+    <td><img src="docs/history/taste/04_willow_lake_before_after.jpg" alt="垂柳与湖"><br><sub><b>垂柳与湖</b> · 克制的清透，晴日里的安静</sub></td>
   </tr>
 </table>
 
@@ -123,10 +123,11 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 
 **1 · 读片**　先回答“这张照片为什么值得看”：看点（叙事只是一种，还有几何、光影、色彩、质感、氛围、空间、极简）、主角、情绪、风格方向；再看光从哪来、颜色怎么搭、空间怎么分层。
 
-**2 · 导演单**　把判断写成六行后期方案，例如：
+**2 · 导演单**　先定目标：2–3 个让这张照片**看得出更好**的提升动作，各自落在一个区域（天空、主体、水面……）；再写缺陷和不能动的地方，例如：
 
 ```text
 看点｜风格：暗展柜中，蓝釉与金饰承接展灯｜低调博物馆静物，深蓝与暖金分明
+提升动作：A 瓶身受光面的体积更立体　B 只在瓶身加浓钴蓝与金色　C 浮雕纹样的局部反差
 主角：中央蓝釉瓶；怎么突出：放大已有受光面的体积与金饰反差，背景保持深暗
 影调：黑场保留，高光轻压，主体中间调展开，局部反差增加
 色彩：钴蓝与暖金为主，加强釉色与金饰，收敛台座偏色
@@ -136,9 +137,10 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 
 **3 · 只借 AI 的光与色**　让你所用 AI 自带的图像模型（G）出一版，但**只拿走它的光线和色彩**，成片的每一个像素仍然来自原片——文字、人物、纹理都是你拍到的那些。
 
-**4 · 精修与检查**　本项目的确定性工具（N）按导演单补齐，再过两道关：
+**4 · 精修与检查**　本项目的确定性工具（N）按导演单补齐，再过三道关：
 
 - **物理关**：加亮只落在原本有光的地方；不给展品凭空加光圈，也不把真实的光斑、釉光抹掉；明暗次序、天空渐变、倒影都要讲得通。
+- **提升关**：每个提升动作都要在它的区域里看得出来；看不出就一点点加强，前提是物理关仍然通过。会在天空里留下光圈的动作，自动改成只作用在建筑和物体上。
 - **力度关**：看得出提升，又不过头；博物馆展品按主角来判断。
 
 不合格？它会自己换一级更稳的做法重来，直到交出一张合格的成片——**不停下来问你**。
@@ -318,8 +320,6 @@ photographic-studio/          ← Skill 本体（安装这个目录）
 │   ├── full_res.py           ← 把修图带回原图尺寸
 │   ├── physics_check.py      ← 自然光物理检查
 │   └── intensity_check.py    ← 力度检查
-├── assets/taste/             ← 早期的前后对比示例（历史记录，默认流程不读）
-├── CHANGELOG.md
 └── SHA256SUMS.txt
 engine/                       ← 流程写成代码（原型）
 ├── studio_engine/            ← 流程 · 模型接口 · 评测 · 命令行
@@ -327,6 +327,7 @@ engine/                       ← 流程写成代码（原型）
 └── config.example.toml       ← 模型和密钥（复制为 config.toml）
 tests/                        ← 测试与真实照片样例（每次提交自动跑）
 docs/images/                  ← 本页的插图
+docs/history/                 ← 早期的前后对比示例、口味记录和 v0.x 版本历史（不随 Skill 安装）
 README.md · README.zh-CN.md · README.zh-TW.md
 LICENSE                       ← MIT
 ```
@@ -336,10 +337,10 @@ LICENSE                       ← MIT
 ## 📜 许可证
 
 Skill 本身（执行说明、参考文件和工具）采用 [MIT 许可证](LICENSE) 授权（2026-11-14 起；此前的版本为 AGPL-3.0）。
-示例与测试照片（`photographic-studio/assets/`、`tests/fixtures/`、`docs/images/`）版权归作者所有，**不在**此许可证范围内，未经许可请勿转载。
+示例与测试照片（`docs/history/taste/`、`tests/fixtures/`、`docs/images/`）版权归作者所有，**不在**此许可证范围内，未经许可请勿转载。
 
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.1.0 · 为非人像摄影而做 · 与 Claude 共同打造 · 代码与文档 MIT · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.2.4 · 为非人像摄影而做 · 与 Claude 共同打造 · 代码与文档 MIT · 照片 © 作者本人</sub>
 </p>

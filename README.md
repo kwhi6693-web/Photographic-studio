@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-c8963e?style=flat-square" alt="version 1.1.0">
-  <img src="https://img.shields.io/badge/engine-2.2.0%20prototype-3a5ba8?style=flat-square" alt="engine 2.2.0">
+  <img src="https://img.shields.io/badge/version-1.2.4-c8963e?style=flat-square" alt="version 1.2.4">
+  <img src="https://img.shields.io/badge/engine-2.3.1%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.1">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
   <img src="https://img.shields.io/badge/python-numpy·Pillow·OpenCV-2b3a55?style=flat-square" alt="numpy Pillow OpenCV">
@@ -52,16 +52,16 @@ Photographic Studio sits in between: **one word, one finished photo**. It reads 
 
 <table>
   <tr>
-    <td width="50%"><img src="photographic-studio/assets/taste/02_night_before_after.jpg" alt="Tower and reflection at night"><br><sub><b>Tower and reflection at night</b> · the night sky stays black; the tower, bridge and reflections glow clearer</sub></td>
-    <td width="50%"><img src="photographic-studio/assets/taste/03_canal_before_after.jpg" alt="Canal and clouds"><br><sub><b>Canal and clouds</b> · the sky gains colour and volume; trees emerge from the blacks</sub></td>
+    <td width="50%"><img src="docs/history/taste/02_night_before_after.jpg" alt="Tower and reflection at night"><br><sub><b>Tower and reflection at night</b> · the night sky stays black; the tower, bridge and reflections glow clearer</sub></td>
+    <td width="50%"><img src="docs/history/taste/03_canal_before_after.jpg" alt="Canal and clouds"><br><sub><b>Canal and clouds</b> · the sky gains colour and volume; trees emerge from the blacks</sub></td>
   </tr>
   <tr>
-    <td><img src="photographic-studio/assets/taste/05_bronze_ox_before_after.jpg" alt="Inlaid bronze ox lamp"><br><sub><b>Inlaid bronze ox lamp</b> · bronze, green patina and red inlay come apart; the black wall stays clean</sub></td>
-    <td><img src="photographic-studio/assets/taste/06_blue_vase_museum_before_after.jpg" alt="Cobalt-and-gold vase"><br><sub><b>Cobalt-and-gold vase</b> · deeper cobalt, brighter gold — and not a lumen added to the dark showcase</sub></td>
+    <td><img src="docs/history/taste/05_bronze_ox_before_after.jpg" alt="Inlaid bronze ox lamp"><br><sub><b>Inlaid bronze ox lamp</b> · bronze, green patina and red inlay come apart; the black wall stays clean</sub></td>
+    <td><img src="docs/history/taste/06_blue_vase_museum_before_after.jpg" alt="Cobalt-and-gold vase"><br><sub><b>Cobalt-and-gold vase</b> · deeper cobalt, brighter gold — and not a lumen added to the dark showcase</sub></td>
   </tr>
   <tr>
-    <td><img src="photographic-studio/assets/taste/01_building_before_after.jpg" alt="Clock tower framed by steel"><br><sub><b>Clock tower framed by steel</b> · warm sunset against cool steel</sub></td>
-    <td><img src="photographic-studio/assets/taste/04_willow_lake_before_after.jpg" alt="Willows over a lake"><br><sub><b>Willows over a lake</b> · restrained clarity, the quiet of a clear day</sub></td>
+    <td><img src="docs/history/taste/01_building_before_after.jpg" alt="Clock tower framed by steel"><br><sub><b>Clock tower framed by steel</b> · warm sunset against cool steel</sub></td>
+    <td><img src="docs/history/taste/04_willow_lake_before_after.jpg" alt="Willows over a lake"><br><sub><b>Willows over a lake</b> · restrained clarity, the quiet of a clear day</sub></td>
   </tr>
 </table>
 
@@ -123,10 +123,11 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 
 **1 · Read the photo**　First it answers *why is this photo worth looking at?* — its point of interest (a story is only one kind; also geometry, light, colour, texture, mood, space, minimalism), subject, mood, style. Then: where the light comes from, how the colours work, how space is layered.
 
-**2 · Write a director's brief**　Six lines of post-production intent, for example:
+**2 · Write a director's brief**　First the goal: 2–3 **improvement moves** that make this photo visibly better, each on one area (the sky, the subject, the water…). Then the defects and what must not change, for example:
 
 ```text
 Point | style : a dark showcase; cobalt glaze and gold catch the exhibit light | low-key museum still life
+Moves         : A lift the lit volume of the vase · B richer cobalt and gold on the vase only · C a touch more local contrast on the relief
 Subject       : the cobalt vase — amplify the lit volume and the gold relief; keep the background dark
 Tone          : keep the blacks, ease the highlights, open the subject's midtones, more local contrast
 Colour        : cobalt and warm gold lead; richer glaze and gilding; calm the plinth's colour cast
@@ -136,9 +137,10 @@ Composition   : keep — the line drawing, the vase and the reflection tell the 
 
 **3 · Borrow only AI's light &amp; colour**　Your agent's image model (G) makes a version, but **only its light and colour are taken**. Every pixel of the result still comes from your original — the text, the people, the textures are the ones you actually captured.
 
-**4 · Refine and check**　The project's deterministic tools (N) finish the brief, then the image has to pass two gates:
+**4 · Refine and check**　The project's deterministic tools (N) finish the brief, then the image has to pass three gates:
 
 - **Physics** — brightening only lands where light already falls; no invented halos around an exhibit, no real highlights or glaze sheen wiped away; tonal order, sky gradients and reflections all have to make sense.
+- **Improvement** — every move has to be visible in its own area; one that is not is strengthened (a little at a time, only while the physics still holds). A move that would leave a ring of light in the sky is kept to the buildings and objects.
 - **Strength** — visibly better, never overdone; museum pieces are judged on the subject itself.
 
 Not good enough? It quietly retries a safer step on its own until a result passes — **it never stops to ask you**.
@@ -318,8 +320,6 @@ photographic-studio/          ← the skill itself (install this folder)
 │   ├── full_res.py           ← carries an edit back to full resolution
 │   ├── physics_check.py      ← natural-light physics check
 │   └── intensity_check.py    ← strength check
-├── assets/taste/             ← early before/after examples (history; not read by the default flow)
-├── CHANGELOG.md
 └── SHA256SUMS.txt
 engine/                       ← the pipeline as code (prototype)
 ├── studio_engine/            ← pipeline · model providers · evaluation · CLI
@@ -327,6 +327,7 @@ engine/                       ← the pipeline as code (prototype)
 └── config.example.toml       ← models and keys (copy to config.toml)
 tests/                        ← tests + real photo fixtures (GitHub Actions on every commit)
 docs/images/                  ← illustrations for this page
+docs/history/                 ← early before/after examples, taste notes and the v0.x changelog (not shipped in the skill)
 README.md · README.zh-CN.md · README.zh-TW.md
 LICENSE                       ← MIT
 ```
@@ -338,10 +339,10 @@ LICENSE                       ← MIT
 ## 📜 License
 
 The skill — instructions, references and tools — is licensed under the [MIT License](LICENSE) (since 2026-11-14; earlier versions were AGPL-3.0).
-The example and test photographs (`photographic-studio/assets/`, `tests/fixtures/`, `docs/images/`) are © the author and are **not** covered by this license; please do not reuse them without permission.
+The example and test photographs (`docs/history/taste/`, `tests/fixtures/`, `docs/images/`) are © the author and are **not** covered by this license; please do not reuse them without permission.
 
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.1.0 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
+  <sub>Photographic Studio v1.2.4 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
 </p>

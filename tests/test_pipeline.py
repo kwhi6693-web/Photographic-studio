@@ -40,7 +40,8 @@ def test_an_edit_the_eye_cannot_see_is_never_a_clean_pass(scene, finish):
         src = scene(name)
         _, rec = finish(src, src, {}, genre='museum' if name == 'museum' else None, tag=name)
         # v1.0.9: an invisible museum edit is rescued by the museum-strength step of the ladder, which IS visible
-        assert rec['verdict'] != 'DELIVER' or rec['delivered'].startswith('museum_strength'), name
+        # (v1.2.0: the original passed as G is the N route, so the rescue is n_direct_museum_strength)
+        assert rec['verdict'] != 'DELIVER' or rec['delivered'].endswith('museum_strength'), name
 
 
 def _dark_lift(src, other):

@@ -189,6 +189,16 @@ def main():
     checks['highlight_order'] = {'top_lights_still_brightest': round(share, 3), 'ok': bool(share >= 0.7),
                                  'meaning': 'the light sources and brightest highlights stay the brightest things in the frame'}
 
+    # 7 lamps kept (v1.2.2): small bright light sources (lamps, lit windows) must not be dimmed. A light source is a
+    # bright spot well above its surroundings; G sometimes "cleans up" a night scene by putting lamps out.
+    lamp = (Lo > 80) & (Lo - blur(Lo, max(6, min(h, w) // 60)) > 25)
+    if lamp.mean() > 0.0005:
+        drop = float((Lo - Lf)[lamp].mean())
+        checks["lamps_kept"] = {"mean_drop_L": round(drop, 2), "area": round(float(lamp.mean()), 4), "ok": bool(drop <= 15.0),
+                                'meaning': 'small light sources keep their brightness (no lamps put out)'}
+    else:
+        checks['lamps_kept'] = {'ok': None, 'note': 'no small bright light sources'}
+
     bad = [k for k, v in checks.items() if v.get('ok') is False]
     rec = {'tool': 'physics_check.py v0.3.8', 'original': {'file': Path(o_p).name, 'sha256': sha256(o_p)}, 'final': {'file': Path(f_p).name, 'sha256': sha256(f_p)},
            'checks': checks, 'verdict': 'PHYSICALLY_PLAUSIBLE' if not bad else 'CHECK_BY_EYE: ' + ', '.join(bad)}

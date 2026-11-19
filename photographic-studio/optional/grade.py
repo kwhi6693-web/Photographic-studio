@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v0.3.0 - N as a directed, deterministic grading tool ("the hands that follow the brief").
+"""Photographic Studio v1.2.0 - N as a directed, deterministic grading tool ("the hands that follow the brief").
 Usage: python3 -I grade.py INPUT_IMAGE OUTPUT_PNG PARAMS_JSON [RECEIPT_JSON]
 Pure numpy + Pillow. No generative step, no resampling, no sharpening of fine detail, no added texture:
 every output pixel is a tone/colour function of the input pixel and its smooth neighbourhood.
@@ -19,8 +19,12 @@ PARAMS_JSON (all keys optional; values outside the range are clamped and reporte
                           (v0.3.7: a positive lift follows the light - it scales with each pixel's own brightness and the
                           object edges, so dark backgrounds are not lifted into a glow; set lift_dark: true to override)
                           from: top|bottom|left|right and end: 0..1 (gradient), feather: 0..0.5,
-                          edge_aware: bool, only_hue: name, only_L: [lo, hi],
-                          lift: -20..20 (L), sat: 0.5..1.6, warm: -8..8 (Lab b)}
+                          edge_aware: bool, only_hue: name, only_L: [lo, hi], on_structure: bool (v1.2.0: skip smooth areas),
+                          lift: -20..20 (L), sat: 0.5..1.6, warm: -8..8 (Lab b),
+                          clarity: 0..0.5 (v1.2.0: mid-scale local contrast inside the region only)}
+  moves:         v1.2.0 - the brief's improvement moves: the same fields as a region plus
+                 {what: "deepen the sky towards the top", look: light+|light-|colour+|colour-|warm+|warm-|contrast+}.
+                 They are graded exactly like regions; improve_check.py then measures whether each one is visible.
   vignette:      {amount: 0..10 (L at the corners), centre: [x, y] each 0.35..0.65, radius: 0.6..1.2} (v0.3.7: centred, no off-centre blotch)
 """
 import json, sys
@@ -69,6 +73,11 @@ def region_mask(reg, h, w, L01, hue, L):
         m = m * smoothstep((L - lo) / 8 + 0.5) * smoothstep((hi - L) / 8 + 0.5)
     if reg.get('edge_aware'):
         m = np.clip(guided(L01, m, max(4, min(h, w) // 60), 1e-3), 0, 1)
+    if reg.get('on_structure'):
+        # v1.2.0: only on things with structure (buildings, foliage, objects), not on smooth sky, water haze or walls -
+        # a light or colour move feathered across a smooth area shows as a halo around the subject
+        tex = blur(np.abs(L - blur(L, 3)), max(3, min(h, w) // 200))
+        m = m * np.clip(guided(L01, smoothstep((tex - 0.6) / 2.0), max(3, min(h, w) // 150), 1e-3), 0, 1)
     return m
 
 
@@ -153,13 +162,17 @@ def main(inp, out, params_path, receipt=None):
                 da, db = cl(f'tone_split.{key}.a', ts[key][0], -8, 8), cl(f'tone_split.{key}.b', ts[key][1], -8, 8)
                 a += da * wgt; b += db * wgt; used['tone_split'][key] = [da, db]
 
-    regs = P.get('regions') or []
+    regs = (P.get('regions') or []) + (P.get('moves') or [])   # v1.2.0: moves are graded like regions
     if regs:
         used['regions'] = []
         L01 = np.clip(L_in / 100, 0, 1); hue_now = np.degrees(np.arctan2(b, a)) % 360
         for reg in regs:
             m = region_mask(reg, h, w, L01, hue_now, L)
             lift, rs, warm = cl('region.lift', reg.get('lift', 0), -20, 20), cl('region.sat', reg.get('sat', 1), 0.5, 1.6), cl('region.warm', reg.get('warm', 0), -8, 8)
+            rcl = cl('region.clarity', reg.get('clarity', 0), 0, 0.5)
+            if rcl:   # v1.2.0: local contrast inside this region only (midtones, same scale as global clarity)
+                dloc = L - blur(L, max(8, min(h, w) // 50)); mid = 1 - np.abs(np.clip(L, 0, 100) - 50) / 50
+                L = L + rcl * dloc * (0.4 + 0.6 * mid) * m
             if lift > 0 and not reg.get('lift_dark', False):
                 # v0.3.7: light only brightens what it falls on. A lift acts in proportion to the surface's own brightness,
                 # so a dark background (velvet, night sky, showcase black) is not turned into a visible glowing oval.
@@ -168,8 +181,8 @@ def main(inp, out, params_path, receipt=None):
             else:
                 m_l = m
             L = L + lift * m_l; a *= 1 + (rs - 1) * m; b = b * (1 + (rs - 1) * m) + warm * m
-            used['regions'].append({**{k: reg[k] for k in reg if k in ('shape', 'box', 'from', 'end', 'feather', 'edge_aware', 'only_hue', 'only_L', 'lift_dark')},
-                                    'lift': lift, 'sat': rs, 'warm': warm, 'mask_area_fraction': round(float(m.mean()), 3)})
+            used['regions'].append({**{k: reg[k] for k in reg if k in ('what', 'look', 'shape', 'box', 'from', 'end', 'feather', 'edge_aware', 'only_hue', 'only_L', 'lift_dark', 'on_structure')},
+                                    'lift': lift, 'sat': rs, 'warm': warm, 'clarity': rcl, 'mask_area_fraction': round(float(m.mean()), 3)})
     vg = P.get('vignette') or {}
     va = cl('vignette.amount', vg.get('amount', 0), 0, 10)
     if va:
@@ -210,7 +223,7 @@ def main(inp, out, params_path, receipt=None):
     if m['clipped_white_out'] > max(m['clipped_white_in'], 0.001) * 1.5: flags.append('NEW_HIGHLIGHT_CLIPPING')
     if m['clipped_black_out'] > max(m['clipped_black_in'], 0.002) * 2: flags.append('NEW_SHADOW_CLIPPING')
     if clamps: flags.append('PARAMS_CLAMPED')
-    rec = {'tool': 'grade.py v0.3.8 (deterministic, non-generative)', 'input': {'file': Path(inp).name, 'sha256': sha256(inp), 'size': [w, h]},
+    rec = {'tool': 'grade.py v1.2.0 (deterministic, non-generative)', 'input': {'file': Path(inp).name, 'sha256': sha256(inp), 'size': [w, h]},
            'output': {'file': Path(out).name, 'sha256': sha256(out), 'size': [w, h]}, 'params_used': used, 'clamped': clamps, 'measurements': m, 'flags': flags,
            'verdict': 'DONE' + (' | FLAGS: ' + '; '.join(flags) if flags else '') + ' - judge by eye against the brief'}
     text = json.dumps(rec, ensure_ascii=False, indent=1)

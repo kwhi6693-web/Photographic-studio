@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Photographic Studio v2.2.0 - settle: step 6 safety trim in one call.
 Usage: python3 -I settle.py ORIGINAL FINISHED OUT_PNG [RECEIPT_JSON] [--genre=museum] [--n-direct] [--bands]
+  --g-chroma=X  v1.2.2: the finish.py receipt's "g_chroma" on the G route: the colour limit becomes G's own colour (max x1.65)
 v2.2.0 (v1.0.9, user 2026-11-14 "每张照片都有最适合它的参数"): by default settle ONLY removes what is over a limit
 (step 2 below). It no longer lifts a photo to a floor or pulls it into a common band, because that overrode the
 parameters chosen for this photo (a photo whose brief said "do not brighten" was brightened). The old behaviour
@@ -92,7 +93,7 @@ def main():
     opt = dict(x[2:].split('=', 1) for x in sys.argv[1:] if x.startswith('--') and '=' in x)
     if len(a) < 3: sys.exit(__doc__)
     src, fin, out = a[:3]; rec_p = a[3] if len(a) > 3 else None
-    gopt = [f"--genre={opt['genre']}"] if opt.get('genre') else []
+    gopt = ([f"--genre={opt['genre']}"] if opt.get('genre') else []) + ([f"--g-chroma={opt['g-chroma']}"] if opt.get('g-chroma') else [])
     center = opt.get('target') == 'center' or '--n-direct' in sys.argv
     rec = {'tool': 'settle.py v2.2.0', 'steps': [], 'mode': 'bands' if '--bands' in sys.argv else 'trim_only'}
     bands = '--bands' in sys.argv

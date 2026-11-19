@@ -1,0 +1,65 @@
+{
+ "highlights": -3,
+ "moves": [
+  {
+   "what": "晚霞的层次与暖色",
+   "look": "colour+",
+   "shape": "gradient",
+   "from": "top",
+   "end": 0.5,
+   "sat": 1.25,
+   "warm": 2
+  },
+  {
+   "what": "城楼的金色灯光",
+   "look": "colour+",
+   "shape": "ellipse",
+   "box": [
+    0.15,
+    0.3,
+    0.6,
+    0.62
+   ],
+   "feather": 0.15,
+   "on_structure": true,
+   "sat": 1.25,
+   "lift": 2
+  },
+  {
+   "what": "岸灯倒影",
+   "look": "colour+",
+   "shape": "rect",
+   "box": [
+    0,
+    0.82,
+    1,
+    1
+   ],
+   "feather": 0.06,
+   "sat": 1.2,
+   "clarity": 0.15
+  }
+ ],
+ "keep": [
+  {
+   "what": "楼阁金色匾额",
+   "box": [
+    0.399,
+    0.497,
+    0.466,
+    0.521
+   ],
+   "mode": "colour"
+  },
+  {
+   "what": "河岸蓝色灯光",
+   "box": [
+    0.602,
+    0.794,
+    0.645,
+    0.825
+   ],
+   "mode": "colour"
+  }
+ ]
+}

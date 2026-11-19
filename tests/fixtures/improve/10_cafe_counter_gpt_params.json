@@ -1,0 +1,66 @@
+{
+  "highlights": -4,
+  "moves": [
+    {
+      "what": "让木炭色墙上的金属标识和字母更有立体感",
+      "look": "contrast+",
+      "shape": "rect",
+      "box": [
+        0.55,
+        0.34,
+        0.992,
+        0.616
+      ],
+      "clarity": 0.24,
+      "on_structure": true
+    },
+    {
+      "what": "把吧台器具已有的反光与暗面分开",
+      "look": "light+",
+      "shape": "rect",
+      "box": [
+        0.015,
+        0.654,
+        0.86,
+        0.837
+      ],
+      "lift": 5,
+      "on_structure": true
+    },
+    {
+      "what": "减轻菜单下方白瓷砖的黄灰感",
+      "look": "warm-",
+      "shape": "rect",
+      "box": [
+        0.014,
+        0.54,
+        0.515,
+        0.665
+      ],
+      "warm": -3.5,
+      "edge_aware": true
+    }
+  ],
+  "keep": [
+    {
+      "what": "两块菜单的中英文、价格与版式",
+      "box": [
+        0,
+        0.144,
+        0.416,
+        0.545
+      ],
+      "mode": "content"
+    },
+    {
+      "what": "圆标及 MAISON KAYSER PARIS",
+      "box": [
+        0.551,
+        0.339,
+        0.982,
+        0.617
+      ],
+      "mode": "content"
+    }
+  ]
+}

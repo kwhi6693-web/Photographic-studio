@@ -17,4 +17,4 @@ jobs:
         with:
           python-version: '3.13'
       - run: pip install -r tests/requirements.txt
-      - run: python -m pytest tests -q -rx
+      - run: python -m pytest tests -q -rx -n auto
