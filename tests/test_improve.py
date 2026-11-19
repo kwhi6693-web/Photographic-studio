@@ -95,3 +95,28 @@ def test_a_cropped_final_is_not_measured(tmp_path):
     crop = tmp_path / 'c.png'; run_tool('reframe.py', src, crop, '--box', '0,0.12,1,0.97', '--allow-aspect-change')
     r = json.loads(run_tool('improve_check.py', src, crop, BRIEFS / '09_gate_sunset.json').stdout)
     assert r['verdict'].startswith('SKIPPED')
+
+
+def test_look_transfer_keeps_the_originals_texture_where_g_redrew_it(tmp_path):
+    """v1.2.2: the 2026-11-19 lake G redrew the water ripples. A per-pixel colour fit averaged crests and troughs and
+    flattened the original's own ripples to x0.67 (G itself x1.06); the mapping now works at ~2 px and above."""
+    from ps_common import srgb_to_lab, blur
+    src = REAL / '07_lake_frame.jpg'; out = tmp_path / 'lt.png'
+    run_tool('look_transfer.py', src, REAL / '07_lake_frame_g.png', out)
+    Ls, Lo = srgb_to_lab(load(src))[..., 0], srgb_to_lab(load(out))[..., 0]
+    w = slice(int(Ls.shape[0] * 0.72), Ls.shape[0])
+    lc = lambda L: np.abs(L - blur(L, 8))[w].mean()
+    assert lc(Lo) / lc(Ls) > 0.9
+
+
+def test_g_route_keeps_gs_own_colour(tmp_path):
+    """v1.2.2 (user chose plan A, 2026-11-19): on the G route the colour limit is G's own colour, at most x1.65."""
+    src = REAL / '07_lake_frame.jpg'
+    out, rec = tmp_path / 'f.png', tmp_path / 'f.json'
+    run_tool('finish.py', src, REAL / '07_lake_frame_g.png', REAL / '07_lake_frame_gpt_params.json', out, rec)
+    r = json.loads(rec.read_text())
+    assert r['delivered'] == 'default' and 1.5 < r['g_chroma'] < 1.7, r
+    st = tmp_path / 's.png'
+    run_tool('settle.py', src, out, st, tmp_path / 's.json', f"--g-chroma={r['g_chroma']}")
+    it = json.loads(run_tool('intensity_check.py', src, st).stdout)
+    assert it['checks']['chroma_ratio']['value'] > 1.4   # not trimmed back to the day limit x1.30

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Photographic Studio v0.3.8 - intensity check: is the edit within the strength the user prefers?
-Usage: python3 intensity_check.py ORIGINAL FINAL [RECEIPT_JSON] [--genre=day|night|lowcolour|museum] [--before=IMAGE]
+Usage: python3 intensity_check.py ORIGINAL FINAL [RECEIPT_JSON] [--genre=day|night|lowcolour|museum] [--before=IMAGE] [--g-chroma=X]
+  --g-chroma=X  v1.2.2: the whole-frame chroma ratio of the G intermediate (finish.py receipt "g_chroma"). On the G route
+                the colour upper limit is raised to G's own colour, at most x1.65: the limit guards against the tools
+                pushing colour past what G showed, not against G's own look (user 2026-11-19, lake: chose keeping G's
+                colour over trimming it to x1.30). Without it, or on N direct, the genre limit applies.
   --before: the image before calibration; then the check also verifies the calibration kept the expressiveness
   (local contrast, subject brightness, colour) - it may only remove the excess.
 Compares the final with the original (statistics only; a final of a different size is resampled for measuring).
@@ -41,6 +45,9 @@ FIX = {
     'subject_L_change': (None, 'the subject was brightened too much: exposure_ev down'),
     'background_L_change': (None, 'the dark background was lifted: lower exposure_ev/shadows, or darken the background region'),
 }
+
+
+G_CHROMA_MAX = 1.65
 
 
 def main():
@@ -85,6 +92,8 @@ def main():
         lo_, hi_ = ANCHORS[genre][k]
         if m_note and k == 'L_mean_change': lo_ = None
         if genre == 'museum' and k in ('L_mean_change',): lo_ = None
+        if k == 'chroma_ratio' and hi_ is not None and opt.get('g-chroma'):
+            hi_ = round(max(hi_, min(float(opt['g-chroma']), G_CHROMA_MAX)), 3)
         if v is None or (lo_ is None and hi_ is None):
             res[k] = {'value': v, 'range': [lo_, hi_], 'ok': None}; continue
         ok = (lo_ is None or v >= lo_) and (hi_ is None or v <= hi_)

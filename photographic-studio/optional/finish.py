@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.1 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+"""Photographic Studio v1.2.2 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
 Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum] [--no-g]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit
   --no-g      v1.2.0: no G for this photo (the brief says every move can be done by N): only the N attempts run, with
@@ -28,13 +28,15 @@ finals the user approved), not just its floor. A halo from a band that spans the
 fixed by a wider feather, not by "on structure" (that removed the sunset band's colour altogether); a local move keeps
 the on-structure fix. Photos with a short edge under 900 px get clarity at most 0.2 everywhere (local contrast on a
 small photo turns into grain: the 2026-11-15 book at clarity 0.4).
+v1.2.2: on the G route the colour upper limit is G's own colour (at most x1.65; intensity_check.py --g-chroma), and the
+receipt records it as "g_chroma" for settle.py. The user chose this on 2026-11-19 (lake: G x1.61 was trimmed to x1.30).
 Deterministic. Needs numpy, Pillow, OpenCV.
 """
 import json, sys, tempfile, shutil
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep')
+PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep', 'lamps_kept')
 
 
 def run(tool, *args):
@@ -126,10 +128,10 @@ def safer(params):
     return q
 
 
-def problems(src, out, genre):
+def problems(src, out, genre, g_chroma=None):
     ph = run('physics_check.py', src, out)
     bad = [k for k, v in ph.get('checks', {}).items() if k in PHYS_SERIOUS and v.get('ok') is False]
-    it = run('intensity_check.py', src, out, *([f'--genre={genre}'] if genre else []))
+    it = run('intensity_check.py', src, out, *([f'--genre={genre}'] if genre else []), *([f'--g-chroma={g_chroma}'] if g_chroma else []))
     # v1.0.9: only an excess counts against an attempt; a light edit the brief chose for this photo is not 'too weak'
     weak = [k for k, v in it.get('checks', {}).items() if isinstance(v, dict) and v.get('ok') is False and v.get('direction') == 'too strong']
     # v1.0: an edit nobody can see is a failure ("改了等于没改"), whatever the ranges say
@@ -168,7 +170,7 @@ def main():
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
     if lowres:   # the museum-strength step raises clarity again: cap every attempt
         tries = [(nm, lowres_cap(pp, short_edge)[0], lo, gs) for nm, pp, lo, gs in tries]
-    rec = {'tool': 'finish.py v1.2.1', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    rec = {'tool': 'finish.py v1.2.2', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
     if lowres: rec['low_resolution'] = lowres
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
 
@@ -186,10 +188,14 @@ def main():
             seen.add(key)
             lt = td / f'lt{i}.png'; fin = td / f'fin{i}.png'; pj = td / f'p{i}.json'
             pj.write_text(json.dumps(p), encoding='utf-8')
+            gc = None if gsrc is None else rec.get('g_chroma')   # v1.2.2: G's own colour raises the colour limit on the G route
             if gsrc is None:
                 shutil.copy(src, lt); r1 = {'flags': ['N direct: G not used']}
             else:
                 r1 = run('look_transfer.py', src, gsrc, lt, *ltopt)
+                gcm = ((r1.get('measurements') or {}).get('chroma_ratio') or {}).get('G')
+                if gcm and 'g_chroma' not in rec: rec['g_chroma'] = gcm   # v1.2.2: pass to settle.py as --g-chroma
+                gc = rec.get('g_chroma')
             if not lt.exists():
                 rec['attempts'].append({'name': name, 'result': r1.get('verdict')}); continue
             unstacked = None
@@ -202,7 +208,7 @@ def main():
             if p.get('keep'):   # v1.1.0: the brief's must-not-change regions, before anything is judged
                 kj = td / f'k{i}.json'; kj.write_text(json.dumps({'keep': p['keep']}), encoding='utf-8')
                 kept = run('keep_regions.py', src, fin, fin, kj)
-            bad, weak, iv, pv = problems(src, fin, genre)
+            bad, weak, iv, pv = problems(src, fin, genre, gc)
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
             ic = None
             if p.get('moves') and not bad and set(weak) <= {'no_visible_change'}:   # an invisible edit is exactly what to strengthen
@@ -216,7 +222,7 @@ def main():
                     pj2 = td / f'p{i}h.json'; fin2 = td / f'fin{i}h.png'; pj2.write_text(json.dumps(p2), encoding='utf-8')
                     run('grade.py', lt, fin2, pj2)
                     if p2.get('keep'): run('keep_regions.py', src, fin2, fin2, kj)
-                    b2, w2, _iv, _pv = problems(src, fin2, genre)
+                    b2, w2, _iv, _pv = problems(src, fin2, genre, gc)
                     rounds.append({'halo_fix': ic['halo'], **({'stopped_by': b2 + w2} if (b2 or w2) else {})})
                     if not (b2 or set(w2) - {'no_visible_change'}):
                         p, pj, fin, iv, pv, weak = p2, pj2, fin2, _iv, _pv, w2
@@ -228,7 +234,7 @@ def main():
                     pj2.write_text(json.dumps(p2), encoding='utf-8'); run('grade.py', lt, fin2, pj2)
                     if not fin2.exists(): break
                     if p2.get('keep'): run('keep_regions.py', src, fin2, fin2, kj)
-                    b2, w2, _iv, _pv = problems(src, fin2, genre)
+                    b2, w2, _iv, _pv = problems(src, fin2, genre, gc)
                     if b2 or set(w2) - {'no_visible_change'}:
                         rounds.append({'round': rnd + 1, 'stopped_by': b2 + w2}); break
                     p, pj, fin, iv, pv, weak = p2, pj2, fin2, _iv, _pv, w2

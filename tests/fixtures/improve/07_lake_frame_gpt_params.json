@@ -1,0 +1,39 @@
+{
+  "contrast": 0.05,
+  "moves": [
+    {
+      "what": "蓝天上深下浅",
+      "look": "light-",
+      "shape": "gradient",
+      "from": "top",
+      "end": 0.65,
+      "lift": -4,
+      "sat": 1.12,
+      "only_hue": "blue"
+    },
+    {
+      "what": "受光紫红叶片显色",
+      "look": "colour+",
+      "shape": "rect",
+      "box": [
+        0,
+        0,
+        1,
+        0.64
+      ],
+      "only_hue": "purple",
+      "sat": 1.35,
+      "on_structure": true
+    },
+    {
+      "what": "湖面水纹层次",
+      "look": "contrast+",
+      "shape": "gradient",
+      "from": "bottom",
+      "end": 0.34,
+      "clarity": 0.25,
+      "sat": 1.1
+    }
+  ],
+  "keep": []
+}
