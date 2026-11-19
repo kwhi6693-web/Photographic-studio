@@ -64,6 +64,8 @@
 |---|---|---|---|
 | 主角不突出 | 眼睛先落在别处；主角和背景一样亮 | make the existing light on <主角> read clearly; quiet the surroundings; no spotlight, no glow | 先收周边：`vignette` 3–7（中心放在主角）、次要色 `hues` 收；主角只加 `clarity`／反差。只有主角本身受光时才可 `regions` 提亮 lift ≤4（v0.3.7：工具会让提亮只落在原本亮的地方；暗背景上禁止椭圆提亮） |
 | 主体与背景分不开（v1.0.9） | 主体和背景明暗、颜色太接近，轮廓融在一起 | separate <主角> from the background by tone and colour | 背景 `regions` 压暗 lift −2…−5 或降饱和 `sat` 0.85–0.95；主体只加 `clarity`／主色 `hues.sat`，不加亮光 |
+| 亮色干扰物抢眼（v1.2.5） | 主角以外有亮白、高饱和的小东西抢视线：白衣路人、白栏杆、亮斑、反光的牌子、死白的天空缝 | quiet the bright distractions so the eye goes to <主角> | 给干扰物一个局部 `light-` 动作：`regions` 框住它，`lift` −3…−6，`sat` 0.85–0.95，`on_structure: true`；人物只压亮度、不改形状，绝不抹掉（它们写进 `keep` 的照样写） |
+| 强光下的颜色过浓（v1.2.5） | 阳光直射的叶面、墙面黄绿或橙得刺眼 | keep the sunlight, calm only the hue | 只调色相：`hues.<色>.shift` 往邻近的冷色偏 5–10°（黄绿往青绿），需要时 `sat` 0.9–0.95；**不压 `lum`、不用 `lift` 压暗受光面**，受光面与阴影的亮度差要保住（压暗会发灰发闷） |
 | 背景杂乱（v1.0.9） | 背景物件多、颜色杂，分散注意力 | quiet the busy background | 先考虑 `reframe.py` 裁掉；裁不掉时用 `regions` 把背景 `sat` 0.85–0.92、lift −2…−4；次要色 `hues.sat` 收 |
 | 边缘抢戏 | attention 的 edge_pull > 1.15；边上有亮斑 | quiet edges | `vignette`；或用 `reframe.py` 裁掉 |
 | 主体太小、周围空 | 主角占画面很小且四周无信息 | （不交给 G） | `reframe.py` 裁切，保留成就看点所需的环境（极简看点时留白本身就是看点，不裁） |

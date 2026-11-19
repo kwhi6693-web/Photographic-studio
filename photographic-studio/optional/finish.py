@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.4 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+"""Photographic Studio v1.2.5 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
 Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum] [--no-g]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit
   --no-g      v1.2.0: no G for this photo (the brief says every move can be done by N): only the N attempts run, with
@@ -30,6 +30,8 @@ the on-structure fix. Photos with a short edge under 900 px get clarity at most 
 small photo turns into grain: the 2026-11-15 book at clarity 0.4).
 v1.2.2: on the G route the colour upper limit is G's own colour (at most x1.65; intensity_check.py --g-chroma), and the
 receipt records it as "g_chroma" for settle.py. The user chose this on 2026-11-19 (lake: G x1.61 was trimmed to x1.30).
+v1.2.5: a G attempt whose only physics problems are local wrong light (a lamp put out, a darkening patch, a halo or
+spotlight glow) is first repaired in place by harmonize.py --light-only; G is dropped only when the repair does not pass.
 Deterministic. Needs numpy, Pillow, OpenCV.
 """
 import json, sys, tempfile, shutil
@@ -37,6 +39,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep', 'lamps_kept')
+LIGHT_REPAIRABLE = {'spotlight_glow', 'darkening_patch', 'halo', 'lamps_kept'}   # v1.2.5: harmonize.py --light-only can fix these locally
 
 
 def run(tool, *args):
@@ -191,7 +194,7 @@ def main():
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
     if lowres:   # the museum-strength step raises clarity again: cap every attempt
         tries = [(nm, lowres_cap(pp, short_edge)[0], lo, gs) for nm, pp, lo, gs in tries]
-    rec = {'tool': 'finish.py v1.2.4', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    rec = {'tool': 'finish.py v1.2.5', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
     if lowres: rec['low_resolution'] = lowres
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
 
@@ -229,6 +232,19 @@ def main():
             if p.get('keep'): kj.write_text(json.dumps({'keep': p['keep']}), encoding='utf-8')   # v1.1.0, before anything is judged
             kept = render(lt, p, pj, fin, src, kj)
             bad, weak, iv, pv = problems(src, fin, genre, gc)
+            light_fix = None
+            if gsrc is not None and bad and set(bad) <= LIGHT_REPAIRABLE:
+                # v1.2.5: wrong light in one place (a lamp put out, a glow invented) is repaired there, on the
+                #   low-frequency layer, instead of throwing the whole G look away; G is dropped only if that fails
+                fin_r = td / f'fin{i}r.png'
+                hz = run('harmonize.py', src, fin, fin_r, '--light-only', *([f'--genre={genre}'] if genre else []))
+                if not fin_r.exists() or str(hz.get('verdict', '')).startswith('REGEN_G'):
+                    light_fix = {'was': bad, 'action': (hz.get('light') or {}).get('action') or str(hz.get('verdict'))[:120], 'left': bad}
+                else:
+                    b2, w2, _iv, _pv = problems(src, fin_r, genre, gc)
+                    light_fix = {'was': bad, 'action': (hz.get('light') or {}).get('action'), 'left': b2}
+                    if not b2:
+                        fin, bad, weak, iv, pv = fin_r, b2, w2, _iv, _pv
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
             ic = None
             if p.get('moves') and not bad and set(weak) <= {'no_visible_change'}:   # an invisible edit is exactly what to strengthen
@@ -261,6 +277,7 @@ def main():
                 if ic.get('halo'): bad = bad + ['move_halo']
                 ic = {'verdict': ic.get('verdict'), 'moves': ic.get('moves'), 'strengthened': rounds}
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak,
+                                    **({'light_repair': light_fix} if light_fix else {}),
                                     **({'clarity_unstacked': unstacked} if unstacked else {}),
                                     **({'keep': kept.get('verdict')} if kept else {}),
                                     **({'improve': ic, 'params': p} if ic else {})})
