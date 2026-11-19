@@ -135,7 +135,7 @@ class Studio:
                 else out / 'settled.png'
             rec['steps'].append({'step': 'n_trim', 'seconds': round(time.time() - t, 1), 'verdict': str(nt.get('verdict'))[:60]})
             t = time.time()   # v1.2.5: last step, light -> depth -> colour on the file that is delivered
-            hz = self.tools.run('harmonize.py', src, final, out / 'harmonized.png', out / 'harmonize.json',
+            hz = self.tools.run('harmonize.py', src, final, out / 'harmonized.png', out / 'harmonize.json', f'--params={params}',
                                 *(['--genre=museum'] if museum else []))
             if (out / 'harmonized.png').exists():
                 final = out / 'harmonized.png'

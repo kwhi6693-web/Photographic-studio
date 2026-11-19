@@ -122,3 +122,28 @@ def test_framing_mismatch_is_reported(tmp_path):
     c = tmp_path / 'crop.png'; im.crop((0, 0, int(w * 0.7), h)).save(c)
     out, rec = run(o, c, tmp_path)
     assert 'framing' in rec
+
+
+def test_flattened_light_and_shade_come_back_to_0_9(tmp_path):
+    """v1.2.5b: 01 and 02 of the 2026-11-19 garden batch kept only 0.75 of the original's light/shade separation."""
+    o = orig('b1_03')
+    x = lab(o); base = blur(x[..., 0], 12); m = float(np.median(base))
+    y = x.copy(); y[..., 0] = x[..., 0] - (base - m) * 0.3          # sunlit and shade pulled together
+    c = tmp_path / 'c.png'; from_lab(y, c)
+    out, rec = run(o, c, tmp_path)
+    s = lambda L_: float(np.percentile(blur(L_, 12), 85) - np.percentile(blur(L_, 12), 15))
+    assert s(L(load(out))) / s(L(load(o))) >= 0.88, rec['depth']
+
+
+def test_dimmed_highlights_come_back_unless_the_brief_darkens_them(tmp_path):
+    o = orig('b2_10')                                                # bright sky at the top
+    x = lab(o); y = x.copy(); top = x[..., 0] > np.percentile(x[..., 0], 90)
+    y[..., 0] = np.where(top, x[..., 0] - 10, x[..., 0])
+    c = tmp_path / 'c.png'; from_lab(y, c)
+    out, rec = run(o, c, tmp_path)
+    p99 = lambda f: float(np.percentile(L(load(f)), 99))
+    assert p99(out) >= p99(o) - 3.5, (rec['light'], rec['depth'])      # by the light step or the highlight floor
+    pj = tmp_path / 'p.json'
+    pj.write_text(json.dumps({'moves': [{'what': 'sky darker at the top', 'look': 'light-', 'shape': 'gradient', 'from': 'top', 'end': 1.0, 'lift': -6}]}))
+    out2, rec2 = run(o, c, tmp_path, f'--params={pj}')
+    assert p99(out2) < p99(o) - 4, (rec2['light'], rec2['depth'])        # the brief's own darkening stays

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Photographic Studio v1.2.5 - harmonize: the last step, run on the file that is actually delivered.
 
-Usage: python3 -I harmonize.py ORIGINAL CANDIDATE OUT.png [RECEIPT.json] [--genre=museum|night] [--check-only] [--light-only]
+Usage: python3 -I harmonize.py ORIGINAL CANDIDATE OUT.png [RECEIPT.json] [--genre=museum|night] [--params=PARAMS.json]
+                                [--check-only] [--light-only]
 
 ORIGINAL must be framed like CANDIDATE: when reframe.py cropped or straightened the photo, run reframe.py with the
 same arguments on the original too and pass that copy here.
@@ -20,7 +21,9 @@ reads first is light, then colour, then depth; this step repairs those locally i
           stays as it is; chroma follows the light change. Fuse: when more than 20% of the frame would need it, the
           light is not patched (it would look dirty) and the receipt asks for G to be called again.
 2 Depth   black point (p5 of L*) may rise at most 3 (low-key original) or 6 L* over the original; light/shade
-          separation (as physics_check) at least 0.75; local contrast at least 1.0x the original.
+          separation (as physics_check) at least 0.90 of the original (v1.2.5b; 0.75 let photos go flat); the brightest 1%
+          at most 3 L* darker than in the original, except inside the brief's own light- moves (--params); local
+          contrast at least 1.0x the original.
 3 Colour  areas that are near-neutral in the original (white wall, grey stone; not the sky) may drift at most 3 in a*/b* (their
           real light colour is kept - drift, not absolute grey); in daylight the sunlit-minus-shade warmth keeps at least
           half of the original's; a patch (>1% of the frame) that became 1.35x more saturated than its own surroundings, compared with the
@@ -41,6 +44,8 @@ from ps_common import load_rgb, save_png, srgb_to_lab, lab_to_lin, to_srgb, blur
 
 VERSION = 'harmonize.py v1.2.5'
 FUSE_AREA = 0.20
+SEP_FLOOR = 0.90   # light/shade separation vs the original (03 and 05 of the 2026-11-19 batch kept 0.95)
+HI_DROP = 3.0      # the brightest 1% may fall at most this much in L*
 
 
 def smooth(x, a, b):
@@ -61,7 +66,7 @@ def lit_shade(Lo, bo):
     return lit, shade, wl.astype(np.float32), ws.astype(np.float32)
 
 
-def step_light(Lo, L, a, b, r, want_inv=True, want_dark=True, ao=None, bo=None):
+def step_light(Lo, L, a, b, r, want_inv=True, want_dark=True, ao=None, bo=None, protect=None):
     eps = 25.0
     base_o, base_c = guided(Lo, Lo, r, eps), guided(L, L, r, eps)
     D = base_c - base_o
@@ -82,6 +87,7 @@ def step_light(Lo, L, a, b, r, want_inv=True, want_dark=True, ao=None, bo=None):
     zone = blur((darkened > 0.3).astype(np.float32), r) > 0.02
     opening = smooth(Lo, 68.0, 82.0) * smooth(Lo - L, 2.0, 6.0) * zone
     darkened = np.maximum(darkened, opening)
+    if protect is not None: darkened = darkened * ~protect      # the brief darkens there on purpose
     m = np.maximum(darkened, blur(darkened, max(2, r // 8)))
     corr_dark = (np.maximum(Lo - L, 0) * m) if want_dark else 0 * Lo
     corr = (corr_inv + corr_dark).astype(np.float32)
@@ -103,6 +109,25 @@ def step_light(Lo, L, a, b, r, want_inv=True, want_dark=True, ao=None, bo=None):
     return L2, a * k, b * k, info, False
 
 
+def darken_mask(params_path, shape):
+    """Where the brief darkens on purpose (moves with look light-): those highlights may go down."""
+    if not params_path or not Path(params_path).exists(): return None
+    try: P = json.loads(Path(params_path).read_text(encoding='utf-8') or '{}')
+    except Exception: return None
+    h, w = shape; m = np.zeros(shape, bool)
+    for mv in P.get('moves') or []:
+        if mv.get('look') != 'light-' and float(mv.get('lift', 0) or 0) >= 0: continue
+        if mv.get('shape') == 'gradient':
+            e = float(mv.get('end', 0.5)); fr = mv.get('from', 'top')
+            if fr == 'top': m[:int(h * e)] = True
+            elif fr == 'bottom': m[int(h * (1 - e)):] = True
+            elif fr == 'left': m[:, :int(w * e)] = True
+            else: m[:, int(w * (1 - e)):] = True
+        elif mv.get('box'):
+            l, t, r, b = mv['box']; m[int(h * t):int(h * b), int(w * l):int(w * r)] = True
+    return m
+
+
 def sep(L):
     s = blur(L, 12)
     return float(np.percentile(s, 85) - np.percentile(s, 15))
@@ -112,7 +137,7 @@ def lc(L):
     return float(np.abs(L - blur(L, 8)).mean())
 
 
-def step_depth(Lo, L, genre):
+def step_depth(Lo, L, genre, protect=None):
     info = {}
     q5o, q5 = float(np.percentile(Lo, 5)), float(np.percentile(L, 5))
     lowkey = float(np.median(Lo)) < 35 or genre in ('museum', 'night')
@@ -124,10 +149,28 @@ def step_depth(Lo, L, genre):
         L = np.clip(L, 0, 100)
         info['black_point'] = f'{q5:.1f} -> {float(np.percentile(L, 5)):.1f} (limit {lim:.1f})'
     ratio = sep(L) / max(sep(Lo), 1e-6)
-    if ratio < 0.75:
-        base = blur(L, 12); m = float(np.median(base)); g = min(0.75 / ratio, 1.25)
-        L = np.clip(L + (base - m) * (g - 1), 0, 100)
-        info['light_shade_sep'] = f'{ratio:.3f} -> {sep(L) / max(sep(Lo), 1e-6):.3f}'
+    if ratio < SEP_FLOOR:   # v1.2.5b: lit and shade must stay apart (0.75 let two of five garden photos go flat)
+        r0 = ratio
+        for _ in range(3):
+            base = blur(L, 12); m = float(np.median(base)); g = min(SEP_FLOOR / ratio, 1.3)
+            d = (base - m) * (g - 1)
+            # mostly the sunlit side comes up (what reads as sunlight); the shade only a little, so darks are not crushed
+            d = np.where(d > 0, d * 1.6, d * 0.4) * (1 - smooth(L, 92.0, 99.0))
+            L = np.clip(L + d, 0, 100)
+            ratio = sep(L) / max(sep(Lo), 1e-6)
+            if ratio >= SEP_FLOOR - 0.005: break
+        info['light_shade_sep'] = f'{r0:.3f} -> {ratio:.3f}'
+    # highlights: the brightest 1% may not end up much darker than in the original, except where the brief
+    #   darkens on purpose (a light- move: a sky graded darker at the top)
+    keep_dark = protect if protect is not None else np.zeros_like(L, bool)
+    free = ~keep_dark
+    if free.mean() > 0.2:
+        t99o, t99 = float(np.percentile(Lo[free], 99)), float(np.percentile(L[free], 99))
+        if t99 < t99o - HI_DROP:
+            lift = t99o - HI_DROP - t99
+            w = smooth(L, float(np.percentile(L[free], 85)), t99) * free
+            L = np.clip(L + lift * w, 0, 100)
+            info['highlights'] = f'top 1% {t99:.1f} -> {float(np.percentile(L[free], 99)):.1f} (original {t99o:.1f})'
     r0 = r = lc(L) / max(lc(Lo), 1e-6)
     for _ in range(3):   # up to three small passes: one large unsharp step would halo
         if r >= 1.0: break
@@ -213,13 +256,13 @@ def main():
     want_inv = bool(set(pre_fail) & {'halo', 'spotlight_glow', 'highlight_order'})
     want_dark = bool(set(pre_fail) & {'lamps_kept', 'darkening_patch', 'highlight_order'})
     if want_inv or want_dark:   # only light that physics_check found wrong is touched; G's intended look stays
-        L, a, b, rec['light'], regen = step_light(Lo, L, a, b, r, want_inv, want_dark, ao, bo)
+        L, a, b, rec['light'], regen = step_light(Lo, L, a, b, r, want_inv, want_dark, ao, bo, darken_mask(opt.get('--params'), L.shape))
     else:
         rec['light'], regen = {'action': 'none (physics_check found no wrong light)'}, False
     if light_only:   # finish.py v1.2.5: repair a G attempt's wrong light before deciding whether to keep G
         rec['depth'], rec['colour'] = 'skipped (--light-only)', 'skipped (--light-only)'
     else:
-        L, rec['depth'] = step_depth(Lo, L, genre)
+        L, rec['depth'] = step_depth(Lo, L, genre, darken_mask(opt.get('--params'), L.shape))
         a, b, rec['colour'] = step_colour(Lo, ao, bo, L, a, b)
     out = np.clip(to_srgb(lab_to_lin(np.stack([L, a, b], -1))), 0, 1)
     changed = float(np.abs(out - c).mean() * 255)
