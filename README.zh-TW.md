@@ -48,20 +48,24 @@ Photographic Studio 介於兩者之間：**一句話，一張成片**。它先�
 
 ## 🎞️ 前後對比
 
-> 左為原片，右為成片。照片都是作者自己拍的，成片經作者親自挑選認可。
+> 左為原片，右為成片。照片都是作者自己拍的。這是 v1.2.6 驗收時同一批跑出的八張（2026-11-20），按交付原樣展示，沒有二次修圖，也沒有從多次結果裡挑。
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/history/taste/02_night_before_after.jpg" alt="夜色中的塔與倒影"><br><sub><b>夜色中的塔與倒影</b> · 保住夜空的黑，讓塔、橋和倒影的燈更清楚</sub></td>
-    <td width="50%"><img src="docs/history/taste/03_canal_before_after.jpg" alt="運河與雲"><br><sub><b>運河與雲</b> · 天空有了顏色和體積，樹從死黑裡透出層次</sub></td>
+    <td width="50%"><img src="docs/gallery/01_sunny_garden_before_after.jpg" alt="晴日園林水池"><br><sub><b>晴日園林水池</b> · 收緊水面框景，樹下的光和層次更分明</sub></td>
+    <td width="50%"><img src="docs/gallery/02_rainy_pavilion_bridge_before_after.jpg" alt="雨中亭橋"><br><sub><b>雨中亭橋</b> · 裁出以橋為主角，保住陰雨的柔光，綠色更鮮活</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/history/taste/05_bronze_ox_before_after.jpg" alt="錯金銀銅牛燈"><br><sub><b>錯金銀銅牛燈</b> · 銅色、綠鏽、赭紅分明，黑牆依舊乾淨</sub></td>
-    <td><img src="docs/history/taste/06_blue_vase_museum_before_after.jpg" alt="藍釉金彩瓶"><br><sub><b>藍釉金彩瓶</b> · 鈷藍更濃、金飾更亮，展櫃的暗一點不提</sub></td>
+    <td><img src="docs/gallery/03_rainy_koi_pond_before_after.jpg" alt="雨中錦鯉池"><br><sub><b>雨中錦鯉池</b> · 輕手修：魚和漣漪更清楚一點，雨天的氣氛不動</sub></td>
+    <td><img src="docs/gallery/04_waterside_pavilion_before_after.jpg" alt="水榭與荷塘"><br><sub><b>水榭與荷塘</b> · 更通透，天更藍，人物與雕花原樣保留</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/history/taste/01_building_before_after.jpg" alt="鐵塔框景裡的鐘樓"><br><sub><b>鐵塔框景裡的鐘樓</b> · 夕陽的暖與鋼架的冷拉開</sub></td>
-    <td><img src="docs/history/taste/04_willow_lake_before_after.jpg" alt="垂柳與湖"><br><sub><b>垂柳與湖</b> · 剋制的清透，晴日裡的安靜</sub></td>
+    <td><img src="docs/gallery/05_night_tower_before_after.jpg" alt="夜色中的塔"><br><sub><b>夜色中的塔</b> · 重新取景突出塔和長倒影，黑色夜空裡不添一點假光</sub></td>
+    <td><img src="docs/gallery/07_night_street_signs_before_after.jpg" alt="夜晚招牌街"><br><sub><b>夜晚招牌街</b> · 每塊招牌、每位行人都按原樣保留，只做輕微提升</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/gallery/06_backlit_canal_before_after.jpg" alt="逆光運河"><br><sub><b>逆光運河</b> · 雲有了體積，天邊的暖光透出來</sub></td>
+    <td><img src="docs/gallery/08_sea_bay_pier_before_after.jpg" alt="海灣與棧橋"><br><sub><b>海灣與棧橋</b> · 海更藍更深，浪花更清楚，畫面更開闊</sub></td>
   </tr>
 </table>
 
@@ -340,7 +344,7 @@ LICENSE                       ← MIT
 ## 📜 授權條款
 
 Skill 本身（執行說明、參考檔案和工具）採用 [MIT 授權條款](LICENSE)（2026-11-14 起；此前的版本為 AGPL-3.0）。
-示例與測試照片（`docs/history/taste/`、`tests/fixtures/`、`docs/images/`）版權歸作者所有，**不在**此授權範圍內，未經許可請勿轉載。
+示例與測試照片（`docs/gallery/`、`docs/history/taste/`、`tests/fixtures/`、`docs/images/`）版權歸作者所有，**不在**此授權範圍內，未經許可請勿轉載。
 
 ---
 
