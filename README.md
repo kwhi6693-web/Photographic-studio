@@ -48,20 +48,24 @@ Photographic Studio sits in between: **one word, one finished photo**. It reads 
 
 ## 🎞️ Before &amp; after
 
-> Left: original. Right: finished. All photos were taken by the author; every result here was picked and approved by the author.
+> Left: original. Right: finished. All photos were taken by the author. These are the eight photos of the v1.2.6 acceptance run (2026-11-20), one batch, delivered as they came out — none retouched or picked from several tries.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/history/taste/02_night_before_after.jpg" alt="Tower and reflection at night"><br><sub><b>Tower and reflection at night</b> · the night sky stays black; the tower, bridge and reflections glow clearer</sub></td>
-    <td width="50%"><img src="docs/history/taste/03_canal_before_after.jpg" alt="Canal and clouds"><br><sub><b>Canal and clouds</b> · the sky gains colour and volume; trees emerge from the blacks</sub></td>
+    <td width="50%"><img src="docs/gallery/01_sunny_garden_before_after.jpg" alt="Sunny garden pond"><br><sub><b>Sunny garden pond</b> · tighter frame around the water; depth and light under the trees</sub></td>
+    <td width="50%"><img src="docs/gallery/02_rainy_pavilion_bridge_before_after.jpg" alt="Rainy-day pavilion bridge"><br><sub><b>Rainy-day pavilion bridge</b> · cropped so the bridge leads; soft rain light kept, greens come alive</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/history/taste/05_bronze_ox_before_after.jpg" alt="Inlaid bronze ox lamp"><br><sub><b>Inlaid bronze ox lamp</b> · bronze, green patina and red inlay come apart; the black wall stays clean</sub></td>
-    <td><img src="docs/history/taste/06_blue_vase_museum_before_after.jpg" alt="Cobalt-and-gold vase"><br><sub><b>Cobalt-and-gold vase</b> · deeper cobalt, brighter gold — and not a lumen added to the dark showcase</sub></td>
+    <td><img src="docs/gallery/03_rainy_koi_pond_before_after.jpg" alt="Koi pond in the rain"><br><sub><b>Koi pond in the rain</b> · a light touch: fish and ripples a little clearer, the rainy mood untouched</sub></td>
+    <td><img src="docs/gallery/04_waterside_pavilion_before_after.jpg" alt="Waterside pavilion and lotus"><br><sub><b>Waterside pavilion and lotus</b> · clearer air, bluer sky, people and carving left exactly as they were</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/history/taste/01_building_before_after.jpg" alt="Clock tower framed by steel"><br><sub><b>Clock tower framed by steel</b> · warm sunset against cool steel</sub></td>
-    <td><img src="docs/history/taste/04_willow_lake_before_after.jpg" alt="Willows over a lake"><br><sub><b>Willows over a lake</b> · restrained clarity, the quiet of a clear day</sub></td>
+    <td><img src="docs/gallery/05_night_tower_before_after.jpg" alt="Tower at night"><br><sub><b>Tower at night</b> · re-framed for the tower and its long reflection; no light invented in the black sky</sub></td>
+    <td><img src="docs/gallery/07_night_street_signs_before_after.jpg" alt="Night street with signs"><br><sub><b>Night street with signs</b> · every sign and every passer-by kept as shot; a gentle lift only</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/gallery/06_backlit_canal_before_after.jpg" alt="Backlit canal"><br><sub><b>Backlit canal</b> · the clouds gain volume and the horizon its warm light</sub></td>
+    <td><img src="docs/gallery/08_sea_bay_pier_before_after.jpg" alt="Sea bay and pier"><br><sub><b>Sea bay and pier</b> · deeper sea, crisper surf, a more open frame</sub></td>
   </tr>
 </table>
 
@@ -342,7 +346,7 @@ LICENSE                       ← MIT
 ## 📜 License
 
 The skill — instructions, references and tools — is licensed under the [MIT License](LICENSE) (since 2026-11-14; earlier versions were AGPL-3.0).
-The example and test photographs (`docs/history/taste/`, `tests/fixtures/`, `docs/images/`) are © the author and are **not** covered by this license; please do not reuse them without permission.
+The example and test photographs (`docs/gallery/`, `docs/history/taste/`, `tests/fixtures/`, `docs/images/`) are © the author and are **not** covered by this license; please do not reuse them without permission.
 
 ---
 
