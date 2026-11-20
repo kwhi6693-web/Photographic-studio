@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 整体欠曝（v1.0.9） | 整张偏暗、中间调落在 L* 35 以下，而场景本来是明亮的（不是夜景、不是低调） | brighten the scene naturally, keep the light direction | `exposure_ev` +0.1…+0.3；高光会碰顶时改用 `shadows` 3–8 加 `highlights` −3…−6 |
 | 整体过亮（v1.0.9） | 整张发白发淡、中间调偏高，而场景本来不是高调 | bring the exposure down, recover the highlights | `exposure_ev` −0.1…−0.3；`highlights` −4…−10 |
-| 画面发灰 | 动态范围 < 60；没有黑也没有白 | restore full tonal range with real blacks and clean whites | `levels` 定黑白场；`contrast` 0.10–0.20 |
+| 画面发灰 | 动态范围 < 60；没有黑也没有白 | restore full tonal range with real blacks and clean whites | v1.2.7 起由自动基础调整完成（`auto`），不再写 `levels`、`contrast`；导演单只写提升动作 |
 | 蒙雾、漏光（v1.0.9） | **缺陷性的**发白蒙层：隔着玻璃拍、逆光进镜头、镜头脏造成的整片发灰，近处的景物也一样发白，看起来像隔了一层纱；**画面里有纯黑的窗框或边框时动态范围仍会很宽，不能据此判断“不灰”**，以眼睛为准；镜头漏光是一侧发亮的斜带。**天气形成的雾**（晨雾、山岚、雨雾：近处清楚、越远越淡）是氛围，不属于这一条，见下一行 | clear the haze; deep, clean water and stone | `levels.black` 5–10、`contrast` 0.08–0.15、`saturation` 1.05–1.1；漏光一侧 `regions` gradient lift −4…−8 |
 | 雾气是氛围（v1.0.9） | 天气形成的雾：近处清楚、越远越淡，远景层层退后 | keep the mist and the layers of distance | **不去雾**：只让近景略实（`clarity` ≤0.1 加近景 `regions`），远景保持淡；`levels.black` 不超过 2 |
 | 反差过硬（v1.0.9） | 正午顶光或直射强光：亮处刺眼、影子死黑、明暗交界很硬 | soften the harsh light, keep the shadows readable | `contrast` −0.05…−0.15；`highlights` −5…−10；`shadows` 3–6；不要再加 `clarity` |
@@ -25,7 +25,7 @@
 
 | 诊断 | 判断依据 | 给 G 的说法（写进摄影意图） | N 的参数 |
 |---|---|---|---|
-| 整体偏色 | b 均值明显偏暖/偏冷，与时段不符 | neutral, accurate white balance | `white_balance.temp` ±0.1–0.3 |
+| 整体偏色 | b 均值明显偏暖/偏冷，与时段不符 | neutral, accurate white balance | v1.2.7 起先由自动白平衡处理（只依据原片的近中性区，找不到就不纠）；自动没纠而肉眼仍明显偏色时，才写 `white_balance.temp` ±0.1–0.3 |
 | 偏绿或偏品红（v1.0.9） | 白墙、灰石、白纸带绿或带紫红；荧光灯、LED、绿荫反射常见 | neutral whites | `white_balance.tint` ±0.05–0.2（偏绿往 + 调，偏品红往 − 调） |
 | 暗部偏色（v1.0.9） | 黑和深灰带绿、带紫或带蓝，而亮部正常 | neutral, clean blacks | `tone_split.shadows` 反方向校正 a/b ±1…±3 |
 | 混合色温（v1.0.9） | 暖灯和冷的窗光、天光同时出现 | keep warm lamps against cool daylight | **保留冷暖对比，不统一成一个色温**；只在一方偏得失真时，用 `regions` 的 `warm` 对那一块校正 ±2–4 |

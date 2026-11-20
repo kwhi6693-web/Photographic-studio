@@ -19,6 +19,60 @@ def daylight_sky(L):
     return bool((L[: h // 2] > 75).mean() >= 0.08)
 
 
+def sky_mask(L, gaps=False):
+    """v1.2.7: the bright, smooth sky connected to the top edge (overcast or pale sky; from L* alone; rough). Found on a
+    small copy by flooding from the top row through bright, untextured pixels, so overhanging branches at the top and
+    trees in front do not stop it, and a white wall lower down that does not touch the sky is not taken for it."""
+    h, w = L.shape
+    k = max(1, int(round(max(h, w) / 240)))
+    hs, ws = h // k, w // k
+    Ls = L[:hs * k, :ws * k].reshape(hs, k, ws, k).mean((1, 3))
+    tex = np.abs(Ls - blur(Ls, 2))
+    ok = (Ls > 68) & (tex < 3.0)
+    ok[int(hs * 0.75):] = False                      # the sky is not in the bottom quarter
+    m = np.zeros_like(ok); m[0] = ok[0]
+    for _ in range(4 * max(hs, ws)):
+        g = m.copy()
+        g[1:] |= m[:-1]; g[:-1] |= m[1:]; g[:, 1:] |= m[:, :-1]; g[:, :-1] |= m[:, 1:]
+        g &= ok
+        if (g == m).all(): break
+        m = g
+    if m.mean() < 0.03: return np.zeros((h, w), bool)
+    big = np.repeat(np.repeat(m, k, 0), k, 1)
+    out = np.zeros((h, w), bool); out[:big.shape[0], :big.shape[1]] = big
+    if big.shape[0] < h: out[big.shape[0]:, :big.shape[1]] = big[-1:]
+    if big.shape[1] < w: out[:, big.shape[1]:] = out[:, big.shape[1] - 1:big.shape[1]]
+    out = out & (L > 60)
+    if gaps and out.any():
+        # bits of the same sky seen between leaves and branches, in the rows the sky reaches, are sky too
+        low = int(np.nonzero(out.any(1))[0].max()) + 1
+        g = np.zeros_like(out); g[:low] = L[:low] > max(78.0, float(np.percentile(L[out], 5)) - 4)
+        out = out | g
+    return out
+
+
+def tone_needs(L):
+    """v1.2.7 (shared by grade.py "auto" and intensity_check.py): what an original's own tones ask for, judged on the
+    land only - a bright sky above a grey forest or street would otherwise make the photo look "wide range" (user
+    2026-11-20: everyday flat photos are mostly a bright sky over grey ground).
+    veil: how far the land's darkest tones sit above black; flat: the land's darks-to-lights range is narrow.
+    stretch_ok (narrow land range OR lifted blacks) is the only condition under which the tones may be opened up and
+    the brightness/colour limits relax; every other photo keeps its limits. sky_p5: where the sky begins (the land's
+    tones may be opened up to just below it, the sky itself stays as it is). A night or low-key frame (mean L* < 25)
+    asks for none of this."""
+    mean = float(L.mean())
+    sky = sky_mask(L, gaps=True)
+    land = L[~sky] if (~sky).mean() > 0.3 else L.ravel()
+    lo, hi = float(np.percentile(land, 0.5)), float(np.percentile(land, 99.7))
+    rng = float(np.percentile(land, 99) - np.percentile(land, 1))
+    core = sky_mask(L)
+    sk = {'sky_fraction': float(sky.mean()), 'sky_p5': float(np.percentile(L[core], 5)) if core.any() else None}
+    if mean < 25:
+        return {'veil': 0.0, 'flat': False, 'stretch_ok': False, 'night': True, 'p0.5': lo, 'p99.7': hi, 'range': rng, **sk}
+    veil = max(0.0, lo - 6.0) if lo > 8 else 0.0
+    return {'veil': veil, 'flat': rng < 60, 'stretch_ok': rng < 60 or veil > 0, 'night': False, 'p0.5': lo, 'p99.7': hi, 'range': rng, **sk}
+
+
 def sha256(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 

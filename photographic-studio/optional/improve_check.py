@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.6 - improve check: is each of the brief's improvement moves visible in the finished photo?
+"""Photographic Studio v1.2.7 - improve check: is each of the brief's improvement moves visible in the finished photo?
 Usage: python3 improve_check.py ORIGINAL FINISHED PARAMS_JSON [RECEIPT_JSON] [--base=GRADE_INPUT]
   PARAMS_JSON  the grade parameters with "moves" (grade.py). FINISHED must have the original's framing (run it before
                any crop), it is resized to the original if needed.
@@ -147,6 +147,25 @@ def own_share(base, params, k, lf):
 src_global = [None]
 
 
+def auto_reference(base, params):
+    """v1.2.7: with the automatic base adjustment on, a move is measured against the photo after auto (and the rest of
+    the global grade, and the keep regions) but before any move. Otherwise auto's own change counts for or against
+    the move: on a flat photo auto lifts the whole sky while a move deepens its top (2026-11-20 test: "top deeper"
+    read as +7.6 brighter and was pushed three rounds harder), and a contrast move would get auto's contrast for free."""
+    import tempfile, contextlib, io, grade as G
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td); pj = td / 'p.json'
+        pj.write_text(json.dumps({k: v for k, v in params.items() if k != 'moves'}), encoding='utf-8')
+        with contextlib.redirect_stdout(io.StringIO()):
+            G.clamps.clear(); G.main(str(base), str(td / 'b.png'), str(pj))
+        if params.get('keep'):
+            import keep_regions as K
+            from ps_common import save_png
+            res, _ = K.apply(load_rgb(src_global[0]), load_rgb(td / 'b.png'), K.regions_of(params))
+            save_png(res, td / 'b.png')
+        return srgb_to_lab(load_rgb(td / 'b.png'))
+
+
 def check(src, fin, params, base=None):
     src_global[0] = src
     import grade as G
@@ -157,6 +176,13 @@ def check(src, fin, params, base=None):
         f = np.asarray(Image.fromarray(np.uint8(np.rint(f * 255))).resize((o.shape[1], o.shape[0]), Image.LANCZOS)).astype(np.float32) / 255
     lo, lf = srgb_to_lab(o), srgb_to_lab(f)
     h, w = o.shape[:2]
+    lm = lo   # what each move is measured against
+    if base and params.get('auto'):
+        try:
+            r = auto_reference(base, params)
+            if r.shape == lo.shape: lm = r
+        except Exception:
+            pass
     hue = np.degrees(np.arctan2(lo[..., 2], lo[..., 1])) % 360
     out = []
     for i, mv in enumerate(params.get('moves') or []):
@@ -171,7 +197,7 @@ def check(src, fin, params, base=None):
             for bx in [mv.get('box')] + list(mv.get('also') or []):
                 if not bx: continue
                 mb = G.region_mask({**mv, 'also': None, 'box': bx}, h, w, np.clip(lo[..., 0] / 100, 0, 1), hue, lo[..., 0])
-                vb, sb = subdue_measure(lo, lf, mb)
+                vb, sb = subdue_measure(lm, lf, mb)
                 if vb is not None: vals.append((vb, sb))
             v = float(np.median([x[0] for x in vals])) if vals else None
             small = all(x[1] for x in vals) if vals else True
@@ -181,7 +207,7 @@ def check(src, fin, params, base=None):
                         'at_target': v is None or v >= tgt, 'over_cap': bool(v is not None and not small and v > SUBDUE_CAP),
                         'target': tgt, 'halo': [0.0, 0.0], 'halo_found': False, 'area': round(float(m.mean()), 4)})
             continue
-        v = measure(lo, lf, m, effect, sign) if effect else None
+        v = measure(lm, lf, m, effect, sign) if effect else None
         hl, hc = 0.0, 0.0
         if mv.get('shape', 'rect') in ('rect', 'ellipse'):
             if base:

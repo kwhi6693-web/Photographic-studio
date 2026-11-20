@@ -1,5 +1,5 @@
 """settle.py: step 6 in one call. By default (v1.0.9) it only removes what is over a limit (never under a floor) and
-leaves everything else as the photo's own parameters made it; --bands adds the old floor lift and band anchoring.
+leaves everything else as the photo's own parameters made it; --bands (removed in v1.2.7) is ignored.
 Neither mode may introduce a physics problem."""
 import json
 import numpy as np
@@ -56,13 +56,13 @@ def test_light_edit_is_left_as_the_brief_chose(tmp_path):
     assert not rec['steps'] and np.array_equal(load(out), load(flat))
 
 
-def test_flat_edit_gets_lifted_to_the_floor_with_bands(tmp_path):
+def test_bands_flag_is_ignored(tmp_path):
+    """v2.3.0 (v1.2.7): the unused floor lift and band anchoring are gone; --bands is accepted and changes nothing."""
     src = REAL / '03_canal.jpg'
     flat = graded(tmp_path, src, {'saturation': 0.97}, 'flat')
-    assert checks(src, flat)['verdict'].startswith('OUT_OF_RANGE')
-    out, rec = settle(tmp_path, src, flat, '--bands')
-    assert any(s['direction'] == 'up' for s in rec['steps'])
-    assert not rec['physics_problems']
-    weak_after = [k for k, v in checks(src, out)['checks'].items() if isinstance(v, dict) and v.get('direction') == 'too weak']
-    weak_before = [k for k, v in checks(src, flat)['checks'].items() if isinstance(v, dict) and v.get('direction') == 'too weak']
-    assert len(weak_after) < len(weak_before)
+    out1, _ = settle(tmp_path, src, flat)
+    (tmp_path / 'b').mkdir()
+    out2, rec = settle(tmp_path / 'b', src, flat, '--bands')
+    assert not any(s['direction'] in ('up', 'anchor') for s in rec['steps'])
+    assert np.array_equal(load(out1), load(out2))
+
