@@ -71,24 +71,6 @@ Photographic Studio sits in between: **one word, one finished photo**. It reads 
 
 ---
 
-## 📖 Words used on this page
-
-| Word | Meaning |
-|---|---|
-| **Skill** | the `photographic-studio/` folder: instructions plus tools that an AI agent follows |
-| **Agent / host** | the AI app you chat with. It must be an **LLM agent with image generation**: it can look at a photo and edit it with its own image model |
-| **G** | the image model of your agent (or of an API). It makes a draft; **only its light and colour are used** |
-| **N** | this project's own tools: fixed rules, no AI; they make the actual finished photo from your original's pixels |
-| **Director's brief** | what the agent writes after reading the photo: the point of interest (a story is one kind; also geometry, light, colour, texture, mood, space, minimalism), diagnoses, subject, tone, colour, what must not change, crop |
-| **Label** | how a photo was made: `original pixels + G light & colour → N refine` (normal) · `N direct` (no usable G draft, N only) · `G + detail restore` (rare upgrade route) |
-| **Receipt** | the record of one photo: brief, prompt, parameters, check results. Hidden unless you say `show receipt` |
-| **Capability tiers** | what the skill does when your agent can't edit images or run Python (T1–T4, below) |
-| **Engine** | the same pipeline as a Python program, using model APIs with your own key (developers) |
-| **Replay** | an engine test mode that answers from recorded real runs instead of calling a paid model |
-| **Route** | which step of the automatic retry ladder produced the photo, e.g. `default`, `museum_strength` (stronger subject for museum pieces), `n_direct` |
-
----
-
 ## 🔁 Input &amp; output
 
 **In a chat (the skill)** — input: one photo and one word. Output: one finished photo, one line of point of interest and style, and a label saying how it was made. Two real deliveries from the test runs:
@@ -107,6 +89,9 @@ it:   (finished photo)
       N direct          ← the image model darkened the sky twice, both drafts were rejected, so only deterministic grading was used
 ```
 
+<details>
+<summary>Show the engine example (developers)</summary>
+
 **On the command line (the engine, prototype)** — input: a photo file. Output: a folder with `final.png` (or `final_full.jpg` for photos larger than the working size), `receipt.json` with every step, its time and the estimated model cost, plus the intermediate files. A real run, replaying a recorded museum photo:
 
 ```text
@@ -116,6 +101,26 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 ```
 
 (`cost_usd` is 0 here because the replay provider makes no paid call; with a real model API the receipt shows the estimate.)
+
+</details>
+
+---
+
+## 📖 Words used on this page
+
+| Word | Meaning |
+|---|---|
+| **Skill** | the `photographic-studio/` folder: instructions plus tools that an AI agent follows |
+| **Agent / host** | the AI app you chat with. It must be an **LLM agent with image generation**: it can look at a photo and edit it with its own image model |
+| **G** | the image model of your agent (or of an API). It makes a draft; **only its light and colour are used** |
+| **N** | this project's own tools: fixed rules, no AI; they make the actual finished photo from your original's pixels |
+| **Director's brief** | what the agent writes after reading the photo: the point of interest (a story is one kind; also geometry, light, colour, texture, mood, space, minimalism), diagnoses, subject, tone, colour, what must not change, crop |
+| **Label** | how a photo was made: `original pixels + G light & colour → N refine` (normal) · `N direct` (no usable G draft, N only) · `G + detail restore` (rare upgrade route) |
+| **Receipt** | the record of one photo: brief, prompt, parameters, check results. Hidden unless you say `show receipt` |
+| **Capability tiers** | what the skill does when your agent can't edit images or run Python (T1–T4, below) |
+| **Engine** | the same pipeline as a Python program, using model APIs with your own key (developers) |
+| **Replay** | an engine test mode that answers from recorded real runs instead of calling a paid model |
+| **Route** | which step of the automatic retry ladder produced the photo, e.g. `default`, `museum_strength` (stronger subject for museum pieces), `n_direct` |
 
 ---
 
@@ -202,6 +207,9 @@ Tested so far on image2.6 (phone and web apps); agents that support `SKILL.md` c
 
 ### Option 2 · Engine (your own API key)
 
+<details>
+<summary>Show engine setup (developers)</summary>
+
 **What you need**: Python 3.11 or newer; an API key from OpenAI or Google Gemini; the names of the models you want (check the provider's current model list). One model reads the photo and writes the brief; one edits images (G). They can come from the same provider.
 
 **Steps**
@@ -236,6 +244,8 @@ Tested so far on image2.6 (phone and web apps); agents that support `SKILL.md` c
 - Privacy: in this mode your photos are sent to the model provider you configured, under that provider's terms.
 - Status: the engine has been tested offline by replaying recorded real runs; it has not yet been run against a live model API.
 
+</details>
+
 ---
 
 ## 🕹️ Usage
@@ -252,11 +262,16 @@ Tested so far on image2.6 (phone and web apps); agents that support `SKILL.md` c
 
 ### On the command line (the engine)
 
+<details>
+<summary>Show engine commands (developers)</summary>
+
 | Command | Does |
 |---|---|
 | `python -m studio_engine.cli run PHOTO OUT_DIR` | one photo → `OUT_DIR/final.png` + `receipt.json` |
 | `python -m studio_engine.eval SET_DIR OUT_DIR --runs=2` | every photo in a folder, N times each → comparison sheets + `summary.md` (finish rate, time, cost, run-to-run difference, runs over 2 minutes) |
 | `uvicorn service.app:app` | HTTP API for the future app: upload, poll, download, delete (prototype: no accounts or payments) |
+
+</details>
 
 ### Capability tiers
 
