@@ -1,25 +1,14 @@
 #!/usr/bin/env python3
-"""Photographic Studio v2.2.0 - settle: step 6 safety trim in one call.
-Usage: python3 -I settle.py ORIGINAL FINISHED OUT_PNG [RECEIPT_JSON] [--genre=museum] [--n-direct] [--bands]
-  --g-chroma=X  v1.2.2: the finish.py receipt's "g_chroma" on the G route: the colour limit becomes G's own colour (max x1.65)
-v2.2.0 (v1.0.9, user 2026-11-14 "每张照片都有最适合它的参数"): by default settle ONLY removes what is over a limit
-(step 2 below). It no longer lifts a photo to a floor or pulls it into a common band, because that overrode the
-parameters chosen for this photo (a photo whose brief said "do not brighten" was brightened). The old behaviour
-(steps 1 and 3) is still available with --bands, for comparison only. --n-direct is accepted and ignored by default.
-  --n-direct  finish.py delivered an N direct route (G not used): lift to the middle of each band, not its edge
+"""Photographic Studio v2.3.0 - settle: step 6 safety trim in one call.
+Usage: python3 -I settle.py ORIGINAL FINISHED OUT_PNG [RECEIPT_JSON] [--genre=museum] [--g-chroma=X]
   ORIGINAL   the original photo;  FINISHED  the image finish.py delivered (or any later version)
-Does what step 6 used to do by hand, round after round:
-  1. too weak (intensity_check.py says a floor is not reached): adds the smallest amount of exposure / vibrance /
-     clarity that reaches the floor (at most the full step below), and keeps it only if the physics check finds no
-     new problem;
-  2. too strong (a limit is exceeded): removes the smallest amount that brings the measure back under the limit,
-     never more; if that would lose expressiveness (intensity_check.py --before says DO_NOT_DELIVER), it removes only
-     as much as keeps the expressiveness, and the rest stays as a flag;
-  3. (v1.0.6) anchor: pulls the overall brightness, warmth and colour into the narrow band the user's approved
-     photos sit in (BANDS below), so two runs of the same photo - whose G drafts always differ - come out alike.
-     Only measures outside their band move, and only to the band's nearest edge. Never adds a physics problem.
-Every candidate is a grade.py pass on FINISHED with one scaled parameter set (bisection, about 6 tries per direction).
-It never touches what is in range, never lowers a measure below its limit, and never stops to ask.
+  --g-chroma=X  v1.2.2: the finish.py receipt's "g_chroma" on the G route: the colour limit becomes G's own colour (max x1.65)
+It ONLY removes what is over a limit (v1.0.9, user 2026-11-14 "每张照片都有最适合它的参数"): the smallest amount that
+brings each measure back under its limit, never more; if that would lose expressiveness (intensity_check.py --before
+says DO_NOT_DELIVER), only as much as keeps it, and the rest stays as a flag. Each candidate is a grade.py pass on
+FINISHED with one scaled parameter set (bisection, about 6 tries). It never touches what is in range and never stops to ask.
+v2.3.0 (v1.2.7, user 2026-11-20): the unused floor lift and band anchoring (--bands, --n-direct, from v1.0.6) are
+removed; the default behaviour is unchanged. --bands and --n-direct are accepted and ignored.
 Deterministic. Needs numpy, Pillow (and what grade.py, intensity_check.py, physics_check.py need).
 """
 import json, shutil, sys, tempfile
@@ -31,35 +20,10 @@ HERE = Path(__file__).resolve().parent
 SEARCH_EDGE = 640   # v2.1.0: long edge of the copies the parameter search runs on
 PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep')
 # full step for each measure; the tool uses the smallest fraction of it that is enough
-UP = {'L_mean_change': {'exposure_ev': 0.25}, 'chroma_ratio': {'vibrance': 0.35}, 'subject_chroma_ratio': {'vibrance': 0.35},
-      'local_contrast_ratio': {'clarity': 0.25}, 'subject_local_contrast_ratio': {'clarity': 0.25},
-      'sky_L_change': {'sky_lift': 18}}   # 'too weak' for the sky means it was darkened past the limit
-# v1.0.6: the narrow bands two runs are pulled into (inside the user's ranges; from the approved samples).
-# (measure, grade parameter, low, high); None = open. Stability first (user, 2026-11-14).
-BANDS = {
-    'day':       [('L_mean_change', 'exposure_ev', 2.0, 4.0), ('lit_warmth_change', 'temp', -1.5, 3.0), ('chroma_ratio', 'saturation', 1.12, 1.26), ('local_contrast_ratio', 'contrast', 1.03, 1.30), ('mid_L_change', 'exposure_ev', 1.0, 3.5)],
-    'lowcolour': [('L_mean_change', 'exposure_ev', 2.0, 4.0), ('lit_warmth_change', 'temp', -1.5, 3.5), ('chroma_ratio', 'saturation', 1.30, 2.20), ('local_contrast_ratio', 'contrast', 1.03, 1.30), ('mid_L_change', 'exposure_ev', 1.0, 3.5)],
-    'night':     [('L_mean_change', 'exposure_ev', 1.2, 3.2), ('lit_warmth_change', 'temp', -1.5, 4.5), ('local_contrast_ratio', 'contrast', 1.03, 1.35), ('mid_L_change', 'exposure_ev', 0.5, 2.5)],
-    'museum':    [('subject_L_change', 'exposure_ev', -1.0, 3.5), ('lit_warmth_change', 'temp', -1.5, 4.0), ('subject_chroma_ratio', 'saturation', 1.35, 1.75), ('subject_local_contrast_ratio', 'contrast', 1.14, 1.40), ('mid_L_change', 'exposure_ev', 0.5, 3.0)],
-}
-SPAN = {'shadows': (-10.0, 15.0), 'exposure_ev': (-0.6, 0.6), 'temp': (-0.9, 0.9), 'saturation': (0.6, 1.5), 'contrast': (-0.4, 0.4)}
 DOWN = {'L_mean_change': {'exposure_ev': -0.3}, 'subject_L_change': {'exposure_ev': -0.3}, 'background_L_change': {'shadows': -6},
         'chroma_ratio': {'saturation': -0.25}, 'subject_chroma_ratio': {'saturation': -0.25},
         'lit_warmth_change': {'white_balance.temp': -0.35}, 'highlight_p99_change': {'highlights': -10},
         'sky_L_change': {'sky_lift': -8}}
-
-
-def mid_L_change(src, img):
-    # v1.0.6: mean L* change of the original's middle 40% of tones - where two G drafts differ most
-    import numpy as np
-    from PIL import Image
-    sys.path.insert(0, str(HERE)); from ps_common import load_rgb, srgb_to_lab
-    o = load_rgb(src); f = load_rgb(img)
-    if f.shape != o.shape:
-        f = np.asarray(Image.fromarray(np.uint8(np.rint(f * 255))).resize((o.shape[1], o.shape[0]), Image.LANCZOS)).astype(np.float32) / 255
-    Lo, Lf = srgb_to_lab(o)[..., 0], srgb_to_lab(f)[..., 0]
-    lo, hi = np.percentile(Lo, 30), np.percentile(Lo, 70); m = (Lo >= lo) & (Lo < hi)
-    return round(float((Lf - Lo)[m].mean()), 2)
 
 
 def run(tool, *args):
@@ -94,9 +58,7 @@ def main():
     if len(a) < 3: sys.exit(__doc__)
     src, fin, out = a[:3]; rec_p = a[3] if len(a) > 3 else None
     gopt = ([f"--genre={opt['genre']}"] if opt.get('genre') else []) + ([f"--g-chroma={opt['g-chroma']}"] if opt.get('g-chroma') else [])
-    center = opt.get('target') == 'center' or '--n-direct' in sys.argv
-    rec = {'tool': 'settle.py v2.2.0', 'steps': [], 'mode': 'bands' if '--bands' in sys.argv else 'trim_only'}
-    bands = '--bands' in sys.argv
+    rec = {'tool': 'settle.py v2.3.0', 'steps': [], 'mode': 'trim_only'}
     with tempfile.TemporaryDirectory() as td:
         td = Path(td); n = [0]
 
@@ -130,33 +92,8 @@ def main():
         rec['start'] = it0.get('verdict')
         base_phys = serious(src, cur)
 
-        # 1. too weak: smallest lift that reaches every floor it can (two passes: the sky first, then the rest)
-        for k_pass in range(2 if bands else 0):
-            weak = {k: v for k, v in failing(run('intensity_check.py', src, cur, *gopt), 'too weak').items() if k in UP}
-            if not weak: break
-            step = {}
-            for k in weak:
-                for pk, pv in UP[k].items(): step[pk] = max(step.get(pk, 0), pv)
-            if 'sky_L_change' in weak: step.pop('exposure_ev', None)   # the sky first; a global lift would undo it only partly
-            target = [k for k in weak if any(pk in step for pk in UP[k])]
-            o, it = graded(cur, params_for(step, 1.0))
-            if o is None: break
-            best = (1.0, o, it) if not any(k in failing(it, 'too weak') for k in target) else None
-            lo, hi = 0.0, 1.0
-            for _ in range(5):
-                m = (lo + hi) / 2; o2, it2 = graded(cur, params_for(step, m))
-                if o2 is not None and not any(k in failing(it2, 'too weak') for k in target): best, hi = (m, o2, it2), m
-                else: lo = m
-            if best is None: best = (1.0, o, it)   # the floor cannot be reached with a full step: take the full step
-            new_phys = [k for k in serious(src, best[1]) if k not in base_phys]
-            entry = {'direction': 'up', 'for': sorted(target), 'params': params_for(step, best[0]), 'result': best[2].get('verdict')}
-            rec['steps'].append(entry)
-            if new_phys:
-                entry['undone'] = 'new physics problem: ' + ', '.join(new_phys); break
-            accept(params_for(step, best[0])); it0 = None   # the image changed: measure again below
-
-        # 2. too strong: smallest trim that brings the measures under their limits, without losing expressiveness
-        it1 = it0 or run('intensity_check.py', src, cur, *gopt)   # trim-only mode: reuse the first measurement
+        # too strong: smallest trim that brings the measures under their limits, without losing expressiveness
+        it1 = it0
         over = {k: v for k, v in failing(it1, 'too strong').items() if k in DOWN}
         if over:
             step = {}
@@ -190,51 +127,6 @@ def main():
             else:
                 entry['undone'] = 'any trim loses expressiveness: kept as it was'
             rec['steps'].append(entry)
-
-        # 3. anchor into the narrow bands (v1.0.6; v1.0.7: no new out-of-range measure, shadows fallback, --n-direct)
-        it3 = run('intensity_check.py', src, cur, *gopt) if bands else {}   # only the --bands mode anchors
-        for key, par0, blo, bhi in (BANDS.get(it3.get('genre'), []) if bands else []):
-            meas = (lambda img, it, key=key: mid_L_change(src, img) if key == 'mid_L_change'
-                    else (it.get('checks', {}).get(key) or {}).get('value') if it else None)
-            v0 = meas(cur, it3)
-            if v0 is None: continue
-            edge = blo if (blo is not None and v0 < blo) else bhi if (bhi is not None and v0 > bhi) else None
-            # N direct (G not used) has nothing from G to carry it: lift to the middle of the band (never warmth)
-            if center and par0 != 'temp' and blo is not None and bhi is not None and v0 < (blo + bhi) / 2:
-                edge = (blo + bhi) / 2
-            if edge is None: continue
-            for par in ([par0, 'shadows'] if par0 == 'exposure_ev' else [par0]):   # exposure blocked by sky/highlights -> shadows
-                v0 = meas(cur, it3)
-                tol = 0.15 if key.endswith('_change') else 0.01
-                if v0 is None or abs(v0 - edge) <= tol or (par == 'shadows' and edge < v0): break
-                if par == 'shadows' and abs(v0 - edge) <= 3 * tol: break
-                up = edge > v0
-                bad_before = set(failing(it3, 'too strong')) | set(failing(it3, 'too weak'))
-                mk = (lambda x, par=par: {'white_balance': {'temp': round(x, 4)}} if par == 'temp' else {par: round(x, 4)})
-                lo_, hi_ = SPAN[par]
-                neutral = 1.0 if par == 'saturation' else 0.0
-                lo_, hi_ = (neutral, hi_) if up else (lo_, neutral)
-                best = None
-                for _ in range(7):
-                    m = (lo_ + hi_) / 2; o, it = graded(cur, mk(m))
-                    if o is None: break
-                    v = meas(o, it)
-                    if v is None: break
-                    breaks = (set(failing(it, 'too strong')) | set(failing(it, 'too weak'))) - bad_before   # never push another measure out of range
-                    if breaks:
-                        if up: hi_ = m
-                        else: lo_ = m
-                        continue
-                    best = (m, o, v)
-                    if v < edge: lo_ = m
-                    else: hi_ = m
-                if best is None: continue
-                entry = {'direction': 'anchor', 'for': [key], 'from': v0, 'band': [blo, bhi], 'params': mk(best[0]), 'to': best[2]}
-                new_phys = [k for k in serious(src, best[1]) if k not in base_phys]
-                rec['steps'].append(entry)
-                if new_phys:
-                    entry['undone'] = 'new physics problem: ' + ', '.join(new_phys); break
-                accept(mk(best[0])); it3 = run('intensity_check.py', src, cur, *gopt)
 
         shutil.copy(cur_full, out)
         itf = run('intensity_check.py', src_full, out, *gopt)

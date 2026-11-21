@@ -70,6 +70,14 @@ def step_light(Lo, L, a, b, r, want_inv=True, want_dark=True, ao=None, bo=None, 
     eps = 25.0
     base_o, base_c = guided(Lo, Lo, r, eps), guided(L, L, r, eps)
     D = base_c - base_o
+    # v1.2.7: remove the global tone curve first (the same original brightness moving the same way everywhere). Opening up
+    #   a flat photo brightens all of the sky and darkens all of the buildings; at every sky/building edge that step
+    #   looked like a local bump of light and was 'repaired' into a dark smudge over the rooftops (2026-11-20 test).
+    bins = np.linspace(0, 100, 41); it = np.clip(np.digitize(base_o, bins) - 1, 0, 39)
+    cnt = np.bincount(it.ravel(), minlength=40); xs = (bins[:-1] + bins[1:]) / 2; med = np.zeros(40)
+    for i_ in np.nonzero(cnt > 50)[0]: med[i_] = np.median(D[it == i_])
+    ok_ = cnt > 50
+    if ok_.any(): D = D - np.interp(base_o, xs, np.interp(xs, xs[ok_], med[ok_])).astype(np.float32)
     bump = D - blur(D, 3 * r)                                  # what stands out from its surroundings
     src = (base_o - blur(base_o, 3 * r))                       # where the original itself had a local light
     invented = smooth(bump, 3.0, 8.0) * smooth(D, 2.0, 6.0) * (1 - smooth(src, 3.0, 8.0))   # brighter than the original AND than around it
@@ -128,6 +136,27 @@ def darken_mask(params_path, shape):
     return m
 
 
+def colour_mask(params_path, shape):
+    """v1.2.7: where the brief raises colour on purpose (moves with look colour+ or sat > 1.05): the subject's own colour."""
+    if not params_path or not Path(params_path).exists(): return None
+    try: P = json.loads(Path(params_path).read_text(encoding='utf-8') or '{}')
+    except Exception: return None
+    h, w = shape; m = np.zeros(shape, bool)
+    for mv in P.get('moves') or []:
+        if mv.get('look') != 'colour+' and float(mv.get('sat', 1) or 1) <= 1.05: continue
+        boxes = [mv['box']] if mv.get('box') else []
+        boxes += list(mv.get('also') or [])
+        if mv.get('shape') == 'gradient':
+            e = float(mv.get('end', 0.5)); fr = mv.get('from', 'top')
+            if fr == 'top': m[:int(h * e)] = True
+            elif fr == 'bottom': m[int(h * (1 - e)):] = True
+            elif fr == 'left': m[:, :int(w * e)] = True
+            else: m[:, int(w * (1 - e)):] = True
+        for bx in boxes:
+            l, t, r, b = bx; m[int(h * t):int(h * b), int(w * l):int(w * r)] = True
+    return m if m.any() else None
+
+
 def sep(L):
     s = blur(L, 12)
     return float(np.percentile(s, 85) - np.percentile(s, 15))
@@ -182,7 +211,7 @@ def step_depth(Lo, L, genre, protect=None):
     return L, info
 
 
-def step_colour(Lo, ao, bo, L, a, b):
+def step_colour(Lo, ao, bo, L, a, b, colour_moves=None):
     info = {}
     Co = np.hypot(ao, bo)
     # neutral drift: only where the original was near-neutral, feathered
@@ -217,9 +246,15 @@ def step_colour(Lo, ao, bo, L, a, b):
     rel_c = blur(C, r) / np.maximum(blur(C, 4 * r), 3.0)
     rel_o = blur(Co, r) / np.maximum(blur(Co, 4 * r), 3.0)
     jump = rel_c / np.maximum(rel_o, 0.3)
-    over = jump > 1.35
+    # v1.2.7 (user 2026-11-20): inside the brief's colour+ moves the subject's main colour is the point of the edit,
+    #   so a patch there may stand out up to 1.55x before it is calmed (1.35x elsewhere; the 1.65x frame ceiling holds)
+    lim = np.full(jump.shape, 1.35, np.float32)
+    if colour_moves is not None and colour_moves.shape == jump.shape:
+        lim = np.where(blur(colour_moves.astype(np.float32), 6) > 0.5, 1.55, 1.35).astype(np.float32)
+        info['colour_moves_limit'] = f'{float((lim > 1.4).mean()):.1%} of the frame (colour+ moves) allowed up to 1.55x'
+    over = jump > lim
     if over.mean() > 0.01:
-        f = np.where(over, 1.35 / np.maximum(jump, 1e-6), 1.0).astype(np.float32)
+        f = np.where(over, lim / np.maximum(jump, 1e-6), 1.0).astype(np.float32)
         f = np.minimum(blur(f, r // 2), 1.0)
         a, b = a * f, b * f
         info['saturated_patches'] = f'{float(over.mean()):.1%} of the frame stood out from its surroundings, calmed'
@@ -263,7 +298,7 @@ def main():
         rec['depth'], rec['colour'] = 'skipped (--light-only)', 'skipped (--light-only)'
     else:
         L, rec['depth'] = step_depth(Lo, L, genre, darken_mask(opt.get('--params'), L.shape))
-        a, b, rec['colour'] = step_colour(Lo, ao, bo, L, a, b)
+        a, b, rec['colour'] = step_colour(Lo, ao, bo, L, a, b, colour_mask(opt.get('--params'), L.shape))
     out = np.clip(to_srgb(lab_to_lin(np.stack([L, a, b], -1))), 0, 1)
     changed = float(np.abs(out - c).mean() * 255)
     rec['mean_change_8bit'] = round(changed, 2)

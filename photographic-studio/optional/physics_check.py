@@ -177,8 +177,18 @@ def main():
         Dl = blur(D, max(12, min(h, w) // 20))
         prof = np.array([np.median(Dl[bins == k]) if (bins == k).any() else 0 for k in range(12)], np.float32)
         return float(np.percentile(Dl - prof[bins], 0.5))
-    low = uneven_low(Lf - Lo)
-    low_c = uneven_low(colour_explained(Lo, lo[..., 1], lo[..., 2], Lf - Lo))
+    # v1.2.7: first remove the global tone curve (the same original brightness moving the same way everywhere): setting
+    #   the black point of a flat photo darkens every dark area together, which is a tone curve, not a blotch
+    D = Lf - Lo
+    bins_t = np.linspace(0, 100, 41); it = np.clip(np.digitize(Lo, bins_t) - 1, 0, 39)
+    cnt_t = np.bincount(it.ravel(), minlength=40); xs_t = (bins_t[:-1] + bins_t[1:]) / 2; med_t = np.zeros(40)
+    for i_ in np.nonzero(cnt_t > 50)[0]: med_t[i_] = np.median(D[it == i_])
+    good_t = cnt_t > 50
+    if good_t.any(): med_t = np.interp(xs_t, xs_t[good_t], med_t[good_t])
+    Dc = D - np.interp(Lo, xs_t, med_t)
+    # only ever less strict than v1.2.6: a global curve may explain a darkening away, it never adds one
+    low = max(uneven_low(D), uneven_low(Dc))
+    low_c = max(uneven_low(colour_explained(Lo, lo[..., 1], lo[..., 2], D)), uneven_low(colour_explained(Lo, lo[..., 1], lo[..., 2], Dc)))
     checks['darkening_patch'] = {'deepest_uneven_darkening_L': round(low, 2), 'not_explained_by_colour_L': round(low_c, 2),
                                  'ok': bool(not (low <= -20.0 or (low <= -14.0 and low_c <= -9.0))),
                                  'meaning': 'no dark blotch or off-centre vignette (an even edge falloff, or deepening all of one colour, is fine)'}

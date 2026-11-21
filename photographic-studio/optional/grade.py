@@ -26,12 +26,19 @@ PARAMS_JSON (all keys optional; values outside the range are clamped and reporte
                  {what: "deepen the sky towards the top", look: light+|light-|colour+|colour-|warm+|warm-|contrast+}.
                  They are graded exactly like regions; improve_check.py then measures whether each one is visible.
   vignette:      {amount: 0..10 (L at the corners), centre: [x, y] each 0.35..0.65, radius: 0.6..1.2} (v0.3.7: centred, no off-centre blotch)
+  auto:          v1.2.7 - the automatic base adjustment, computed from THIS image before everything above:
+                 true (all parts at full strength), false/absent (off), or {wb, dehaze, levels, contrast, vibrance: 0..1}.
+                 wb: white balance from the near-neutral pixels (a warm low-sun scene keeps most of its warmth);
+                 dehaze: evens out a grey veil that lifts the blacks in part of the frame; levels: black and white point
+                 from this photo's own darkest / brightest tones (not a fixed scale); contrast: S-curve pivoted on this
+                 photo's median; vibrance: a little more colour, more on a dull photo. A photo that already has clean
+                 blacks, clean whites, neutral greys and normal contrast is left almost unchanged.
 """
 import json, sys
 from pathlib import Path
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, blur, guided, structure_corr, sha256, HUES, hue_weight
+from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, blur, guided, structure_corr, sha256, HUES, hue_weight, tone_needs, sky_mask
 
 clamps = []
 
@@ -86,12 +93,166 @@ def region_mask(reg, h, w, L01, hue, L):
     return m
 
 
+AUTO_PARTS = ('wb', 'dehaze', 'levels', 'contrast', 'vibrance')
+
+
+def auto_strengths(v):
+    if v is True: return {k: 1.0 for k in AUTO_PARTS}
+    if isinstance(v, dict): return {k: cl(f'auto.{k}', v.get(k, 1.0), 0, 1) for k in AUTO_PARTS}
+    return None
+
+
+def auto_wb(lin, s, lab_ref):
+    """v1.2.7: white balance only from the ORIGINAL's near-neutral areas (chroma < 8: grey stone, concrete, white walls,
+    overcast sky - not foliage, not a blue sky). Returns (gains, info) or (None, info).
+    It does nothing when: the original has too little near-neutral area; it is a night or blue-hour frame (cool there is
+    the light, not a cast); the dark and light greys do not share the cast (a beige wall or a blue shadow alone is the
+    scene's colour); the shared cast is warm and mild (warm stone, wood, low sun). It corrects at most 3/4 of the cast
+    still present in THIS image at those same pixels, and never more than the original had - so on the G route a cast
+    G already removed is not corrected twice."""
+    Lr, ar, br = lab_ref[..., 0], lab_ref[..., 1], lab_ref[..., 2]
+    neu = (np.hypot(ar, br) < 8) & (Lr > 15) & (Lr < 96)
+    info = {'neutral_area_in_original': round(float(neu.mean()), 3)}
+    if float(Lr.mean()) < 40 and float(np.percentile(Lr, 90)) < 70:
+        info['skipped'] = 'night or blue-hour frame: its cool colour is the light, not a cast'; return None, info
+    lo_b, hi_b = neu & (Lr < 55), neu & (Lr >= 55)
+    if neu.mean() < 0.08 or lo_b.mean() < 0.02 or hi_b.mean() < 0.02:
+        info['skipped'] = 'not enough near-neutral area (dark and light greys) in the original: no correction'; return None, info
+    lab = lin_to_lab(lin); a, b = lab[..., 1], lab[..., 2]
+    def shared(ax, bx):
+        v1 = np.array([np.median(ax[lo_b]), np.median(bx[lo_b])]); v2 = np.array([np.median(ax[hi_b]), np.median(bx[hi_b])])
+        return np.where(np.sign(v1) == np.sign(v2), np.sign(v1) * np.minimum(np.abs(v1), np.abs(v2)), 0.0), v1, v2
+    c_ref, v1, v2 = shared(ar, br)
+    c_now, _, _ = shared(a, b)
+    info['cast_original_dark_light_greys'] = [[round(float(x), 2) for x in v1], [round(float(x), 2) for x in v2]]
+    cast = np.where(np.sign(c_ref) == np.sign(c_now), np.sign(c_now) * np.minimum(np.abs(c_ref), np.abs(c_now)), 0.0)
+    if cast[1] > 0 and cast[1] < 8:
+        cast[1] = 0.0; info['warm_kept'] = 'mild warmth in the greys is kept (warm materials or warm light)'
+    lit, shade = Lr > 60, (Lr > 15) & (Lr < 40)
+    k_b = 0.75 * s
+    if cast[1] > 0:
+        k_b = 0.3 * s
+        if lit.mean() > 0.03 and shade.mean() > 0.03 and float(br[lit].mean() - br[shade].mean()) > 4:
+            k_b = 0.15 * s; info['warm_light_kept'] = 'lit areas clearly warmer than shade: low sun, its warmth is kept'
+    corr = np.array([cast[0] * 0.75 * s, cast[1] * k_b])
+    if float(np.hypot(*corr)) < 1.0:
+        info.setdefault('skipped', 'no cast shared by the dark and light greys'); return None, info
+    m = lin[neu].mean(0)
+    lab_m = lin_to_lab(m[None, None, :].astype(np.float32))[0, 0]
+    want = lab_to_lin(np.array([[[lab_m[0], lab_m[1] - corr[0], lab_m[2] - corr[1]]]], np.float32))[0, 0]
+    g = np.clip(np.maximum(want, 1e-6) / np.maximum(m, 1e-6), 0.85, 1.18).astype(np.float32)
+    g = g / float(g @ np.array([0.2126729, 0.7151522, 0.072175], np.float32))   # keep luminance
+    info['removed_ab'] = [round(float(x), 2) for x in corr]; info['gains_rgb'] = [round(float(x), 4) for x in g]
+    return g, info
+
+
+def auto_tone(L, a, b, s, h, w, L_ref):
+    """v1.2.7: dehaze, levels and pivoted contrast. WHETHER a photo may be opened up is decided by the ORIGINAL
+    (tone_needs on L_ref: narrow range or lifted blacks); HOW MUCH is measured on this image, so on the G route what G
+    already stretched is not stretched again. Haze here means a grey veil over the whole frame (behind glass, flare, a
+    dull exposure): no true black anywhere. Weather fog that thickens with distance is the scene's mood: it has true
+    darks in front, so it is left alone. Returns L, a, b, info."""
+    info = {}
+    L_start = L.copy()
+    need_o = tone_needs(L_ref); need = tone_needs(L)
+    info['original'] = {k: (round(v, 1) if isinstance(v, float) else v) for k, v in need_o.items()}
+    if need_o['night']:
+        info['skipped'] = 'night or low-key original: its darkness is kept'; return L, a, b, info
+    if s['dehaze'] and need_o['veil'] > 0 and need['veil'] > 0:
+        V = min(need['veil'], need_o['veil']) * 0.75 * s['dehaze']     # subtract the veil, restore the colour it washed out
+        f = 100.0 / (100.0 - V)
+        L = (L - V) * f; a = a * f; b = b * f
+        info['dehaze'] = {'veil_removed_L': round(V, 1)}
+    # a BRIGHT sky (starting above L* 80) is kept as it is while the land opens up; a grey sky in a veiled photo is part
+    #   of the veil and opens up with everything else
+    sky_lo = need_o.get('sky_p5') if ((need_o.get('sky_fraction') or 0) > 0.03 and (need_o.get('sky_p5') or 0) >= 80) else None
+    if s['levels'] and sky_lo is not None and need_o['stretch_ok']:
+        # v1.2.7: bright sky over grey land - open the LAND up with one global curve that stops below where the sky
+        #   begins. One curve for the whole frame (no masks, so no rim along the treetops), and the sky's own tones are
+        #   left as they are (nothing pushed to dead white).
+        sm = sky_mask(L_ref, gaps=True) if L_ref.shape == L.shape else np.zeros(L.shape, bool)
+        land = L[~sm] if (~sm).mean() > 0.3 else L.ravel()
+        lo, hi = float(np.percentile(land, 0.5)), float(np.percentile(land, 99.7))
+        top = min(sky_lo - 4.0, 94.0)
+        tlo = lo + (2.0 - lo) * 0.9 * s['levels'] if lo > 4 else lo
+        thi = hi + (top - hi) * 0.7 * s['levels'] if hi < top else hi
+        if hi - lo > 5 and thi > tlo and (tlo != lo or thi > hi) and thi < sky_lo:
+            xs = [0.0, lo, hi, sky_lo, 100.0]; ys = [0.0, tlo, thi, sky_lo, 100.0]
+            if lo <= 0.5: xs, ys = xs[1:], ys[1:]
+            L = np.interp(L, xs, ys).astype(np.float32)
+            k = (thi - tlo) / (hi - lo); c = 1 + (min(k, 2.0) - 1) * 0.5
+            land_w = np.clip((sky_lo - L) / 6.0, 0, 1)            # colour follows the land's stretch, the sky's stays
+            a = a * (1 + (c - 1) * land_w); b = b * (1 + (c - 1) * land_w)
+            info['levels'] = {'land_from': [round(lo, 1), round(hi, 1)], 'land_to': [round(tlo, 1), round(thi, 1)],
+                              'sky_from_L': round(sky_lo, 1), 'sky': 'unchanged above this'}
+        else:
+            info['levels'] = {'skipped': 'land already open up to the sky'}
+    elif s['levels']:
+        lo, hi = float(np.percentile(L, 0.5)), float(np.percentile(L, 99.7))
+        tlo = lo + (2.0 - lo) * 0.9 * s['levels'] if lo > 4 else lo
+        if need_o['stretch_ok']:
+            thi = hi + (94.0 - hi) * 0.7 * s['levels'] if hi < 88 else hi
+        else:
+            # normal photo: whites at most 2.5 L* above the ORIGINAL's (the 2026-11-11 limit is 3; the rest is left for
+            #   the moves), and none at all when G already raised them - no stacking on the G route
+            cap = need_o['p99.7'] + 2.5
+            thi = max(hi, min(hi + (94.0 - hi) * 0.7 * s['levels'], cap)) if hi < 88 else hi
+        if hi - lo > 5 and (tlo != lo or thi != hi):
+            k = min((thi - tlo) / (hi - lo), 2.0)
+            mid_to = (tlo + thi) / 2                              # a capped stretch opens out from the middle
+            tlo, thi = mid_to - (hi - lo) * k / 2, mid_to + (hi - lo) * k / 2
+            L = mid_to + (L - (lo + hi) / 2) * k
+            c = 1 + (k - 1) * 0.5; a = a * c; b = b * c
+            info['levels'] = {'from': [round(lo, 1), round(hi, 1)], 'to': [round(tlo, 1), round(thi, 1)], 'stretch': round(k, 3)}
+        else:
+            info['levels'] = {'skipped': 'blacks and whites already set'}
+    med0, med1 = float(np.median(L_start)), float(np.median(L))
+    if med1 < med0 - 3 and 5 < med1 < 95:
+        # removing a veil darkens the midtones: give back all but 3 L* with a gamma that keeps black and white in place
+        g = np.log((med0 - 3) / 100) / np.log(med1 / 100)
+        L = np.where((L > 0) & (L < 100), 100 * np.clip(L / 100, 1e-6, 1) ** g, L)
+        info['midtones_kept'] = {'median_before': round(med0, 1), 'after': round(med1, 1), 'gamma': round(float(g), 3)}
+    if s['contrast']:
+        sm = sky_mask(L_ref, gaps=True) if (sky_lo is not None and L_ref.shape == L.shape) else None
+        land = L[~sm] if sm is not None and (~sm).mean() > 0.3 else L.ravel()
+        sd = float(land.std())
+        c = float(np.clip((22.0 - sd) / 40.0, 0, 0.18)) * s['contrast']     # flat photos get more, punchy ones none
+        if c > 0.01:
+            p = float(np.clip(np.median(land), 25, 75)) / 100
+            g = np.log(0.5) / np.log(p)
+            x = np.clip(L / 100, 0, 1) ** g
+            x = x - c * np.sin(2 * np.pi * x) / (2 * np.pi)
+            Ls = 100 * np.clip(x, 0, 1) ** (1 / g)
+            wgt = np.ones_like(L) if sky_lo is None else np.clip((sky_lo - 2.0 - L) / 8.0, 0, 1)   # v1.2.7: the sky keeps its tones
+            L = np.where((L >= 0) & (L <= 100), L + (Ls - L) * wgt, L)
+            info['contrast'] = {'amount': round(c, 3), 'pivot_L': round(p * 100, 1), 'L_std_before': round(sd, 1),
+                                **({'fades_out_from_L': round(sky_lo - 10, 1)} if sky_lo is not None else {})}
+        else:
+            info['contrast'] = {'skipped': f'contrast already normal (land L std {round(sd, 1)})'}
+    return L, a, b, info
+
+
 def main(inp, out, params_path, receipt=None):
     P = json.loads(Path(params_path).read_text(encoding='utf-8'))
     src = load_rgb(inp)
     h, w = src.shape[:2]
     lin = to_linear(src)
     used = {}
+    A = auto_strengths(P.get('auto'))
+    auto_info = {}
+    if A:
+        # v1.2.7: the original decides whether and what to correct; on the G route (finish.py passes "auto_ref") this
+        #   image is G-toned and only measured for how much is still left to do
+        ref = P.get('auto_ref')
+        ref_rgb = load_rgb(ref) if ref and Path(ref).exists() else src
+        if ref_rgb.shape != src.shape:
+            from PIL import Image as _I
+            ref_rgb = np.asarray(_I.fromarray(np.uint8(np.rint(ref_rgb * 255))).resize((w, h), _I.LANCZOS)).astype(np.float32) / 255
+        lab_ref = lin_to_lab(to_linear(ref_rgb))
+        if ref: auto_info['measured_against'] = 'original (auto_ref)'
+    if A and A['wb']:
+        g_auto, auto_info['wb'] = auto_wb(lin, A['wb'], lab_ref)
+        if g_auto is not None: lin = lin * g_auto
 
     wb = P.get('white_balance') or {}
     t, ti = cl('temp', wb.get('temp', 0), -1, 1), cl('tint', wb.get('tint', 0), -1, 1)
@@ -108,6 +269,8 @@ def main(inp, out, params_path, receipt=None):
     L, a, b = lab[..., 0].copy(), lab[..., 1].copy(), lab[..., 2].copy()
     lab0 = lin_to_lab(to_linear(src))
     L_in = lab0[..., 0]
+    if A:
+        L, a, b, info = auto_tone(L, a, b, A, h, w, lab_ref[..., 0]); auto_info.update(info)
 
     lv = P.get('levels') or {}
     bp, wp = cl('levels.black', lv.get('black', 0), 0, 25), cl('levels.white', lv.get('white', 100), 75, 100)
@@ -138,6 +301,12 @@ def main(inp, out, params_path, receipt=None):
 
     C = np.hypot(a, b); hue = np.degrees(np.arctan2(b, a)) % 360
     sat, vib = cl('saturation', P.get('saturation', 1), 0, 1.6), cl('vibrance', P.get('vibrance', 0), -0.5, 0.8)
+    if A and A['vibrance'] and tone_needs(lab_ref[..., 0])['stretch_ok']:
+        # v1.2.7: only for a flat or veiled original (the veil washed its colour out); a normal photo's colour is the
+        #   brief's business (on the 2026-11-15 sunset gate an automatic vibrance pushed the warmth over its limit)
+        av = (0.22 if float(np.hypot(lab_ref[..., 1], lab_ref[..., 2]).mean()) < 10 else 0.12) * A['vibrance']
+        vib = min(0.8, vib + av); auto_info['vibrance'] = round(av, 3)
+    if auto_info: used['auto'] = auto_info
     if sat != 1 or vib:
         m = sat * (1 + vib * np.clip(1 - C / 60.0, 0, 1))
         a *= m; b *= m; C = C * m
@@ -228,7 +397,7 @@ def main(inp, out, params_path, receipt=None):
     if m['clipped_white_out'] > max(m['clipped_white_in'], 0.001) * 1.5: flags.append('NEW_HIGHLIGHT_CLIPPING')
     if m['clipped_black_out'] > max(m['clipped_black_in'], 0.002) * 2: flags.append('NEW_SHADOW_CLIPPING')
     if clamps: flags.append('PARAMS_CLAMPED')
-    rec = {'tool': 'grade.py v1.2.0 (deterministic, non-generative)', 'input': {'file': Path(inp).name, 'sha256': sha256(inp), 'size': [w, h]},
+    rec = {'tool': 'grade.py v1.2.7 (deterministic, non-generative)', 'input': {'file': Path(inp).name, 'sha256': sha256(inp), 'size': [w, h]},
            'output': {'file': Path(out).name, 'sha256': sha256(out), 'size': [w, h]}, 'params_used': used, 'clamped': clamps, 'measurements': m, 'flags': flags,
            'verdict': 'DONE' + (' | FLAGS: ' + '; '.join(flags) if flags else '') + ' - judge by eye against the brief'}
     text = json.dumps(rec, ensure_ascii=False, indent=1)

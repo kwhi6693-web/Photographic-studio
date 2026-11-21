@@ -30,6 +30,7 @@ v0.3.0 起，N 从“只防过冲”扩展为**按导演单执行的确定性调
 | `hues.<色>.sat / lum / shift` | 0…1.8 / −15…15 / −20…20° | 单独调某一类颜色（red、orange、yellow、green、cyan、blue、purple、magenta） |
 | `tone_split.shadows / highlights` | 各 [a, b]，−8…8 | 暗部、亮部分别偏色（冷暖分离） |
 | `regions[]` | 见下 | 局部：`lift`(−20…20)、`sat`(0.5…1.6)、`warm`(−8…8)；v0.3.7 起正向 `lift` 只落在原本亮的地方，暗背景不会被提成光圈（真要提暗处写 `lift_dark: true`，并在验收记录说明光从哪来） |
+| `auto` | `true`／`false`／`{wb, dehaze, levels, contrast, vibrance: 0…1}` | v1.2.7 自动基础调整，先于其他参数执行，`finish.py` 默认开启。白平衡只从原片里低饱和的近中性区算（深浅两档都要有、偏色一致才纠，最多纠 3/4；温和暖色、园林、蓝调、夜景不纠）；去整片灰雾、定黑白场、补一点自然饱和度只在原片地面（排除天空）明暗跨度 < 60 或黑场悬空时做，明亮的天空保持不动；正常照片最亮处最多 +2.5；对比度以照片自己的中间亮度为中心，已经够的不加；G 路线上不补饱和度、正常照片不重定黑白场，白平衡减半，G 已加的局部反差按比例扣掉自动对比度 |
 | `vignette.amount / centre / radius` | 0…10 / [x,y] 各 0.35…0.65 / 0.6…1.2 | 画面四周自然变暗；v0.3.7 起中心只能在画面中部，不会在一侧压出暗斑 |
 
 `regions` 的形状：`rect` 或 `ellipse`（`box: [x0,y0,x1,y1]`，画面比例）、`gradient`（`from: top|bottom|left|right`，`end`）。可加 `feather`、`edge_aware: true`（沿物体边缘收住）、`only_hue`（只作用于某类颜色，例如只压蓝天）、`only_L: [lo, hi]`。

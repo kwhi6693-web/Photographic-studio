@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.6 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+"""Photographic Studio v1.2.7 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
 Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum] [--no-g]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit
   --no-g      v1.2.0: no G for this photo (the brief says every move can be done by N): only the N attempts run, with
@@ -9,7 +9,7 @@ Chain: look_transfer -> grade -> physics_check + intensity_check. An attempt pas
 no problem AND nothing is over a strength limit (v1.0.9: a strength floor is not a failure - the photo's own
 parameters decide how light the edit is). Otherwise it retries, in order: (1) with --genre=museum, only when the
 default attempt's sole problem is that nobody can see the change, the same grade raised to museum strength (level 3),
-(2) the grade without positive region lifts and without vignette, (3) look_transfer --local=0, (4) N direct: the
+(2) the grade without positive region lifts, its vignette halved (v1.2.7: removed only if a darkening patch remains), (3) look_transfer --local=0, (4) N direct: the
 original graded without G, (5) N direct at museum strength (again only when N direct's sole problem is no visible
 change). The first attempt that passes is delivered; if none passes, the one with the fewest physics problems,
 then the fewest strength problems, is delivered and its problems are listed (v0.3.8). It never stops to ask.
@@ -30,6 +30,11 @@ the on-structure fix. Photos with a short edge under 900 px get clarity at most 
 small photo turns into grain: the 2026-11-15 book at clarity 0.4).
 v1.2.2: on the G route the colour upper limit is G's own colour (at most x1.65; intensity_check.py --g-chroma), and the
 receipt records it as "g_chroma" for settle.py. The user chose this on 2026-11-19 (lake: G x1.61 was trimmed to x1.30).
+v1.2.7: the automatic base adjustment (grade.py "auto": white balance from the greys, whole-frame veil, black and
+white point and contrast from this photo's own tones, a little vibrance) runs on every attempt unless the brief says
+"auto": false. On the G route it runs on the G-toned image, so what G already did is not done twice, and its white
+balance runs at half strength (G's colour is part of the look). The user, 2026-11-20: auto tone, contrast and colour
+were missing; the photo's expressiveness must come out.
 v1.2.5: a G attempt whose only physics problems are local wrong light (a lamp put out, a darkening patch, a halo or
 spotlight glow) is first repaired in place by harmonize.py --light-only; G is dropped only when the repair does not pass.
 Deterministic. Needs numpy, Pillow, OpenCV.
@@ -79,11 +84,16 @@ def local_contrast_gain(src, img):
 
 
 def unstack(params, gain):
-    """v1.0.9: clarity minus what G already added (G +25 % local contrast or more -> no clarity)."""
+    """v1.0.9: clarity minus what G already added (G +25 % local contrast or more -> no clarity).
+    v1.2.7: the same for the automatic contrast: G's added contrast and auto's S-curve do not stack."""
     c = float(params.get('clarity', 0) or 0)
-    if c <= 0 or gain <= 1.0: return params, None
-    q = json.loads(json.dumps(params)); q['clarity'] = round(c * max(0.0, 1.0 - (gain - 1.0) / 0.25), 3)
-    return q, {'g_local_contrast_gain': round(gain, 3), 'clarity': [c, q['clarity']]}
+    if gain <= 1.0: return params, None
+    k = max(0.0, 1.0 - (gain - 1.0) / 0.25)
+    q = json.loads(json.dumps(params)); info = {'g_local_contrast_gain': round(gain, 3)}
+    if c > 0: q['clarity'] = round(c * k, 3); info['clarity'] = [c, q['clarity']]
+    if isinstance(q.get('auto'), dict):
+        ac = float(q['auto'].get('contrast', 1)); q['auto']['contrast'] = round(ac * k, 3); info['auto_contrast'] = [ac, q['auto']['contrast']]
+    return (q, info) if len(info) > 1 else (params, None)
 
 
 MOVE_LIMITS = {'lift': (-20, 20), 'warm': (-8, 8), 'clarity': (0, 0.5)}
@@ -142,11 +152,16 @@ def render(lt, params, pj, out, src, kj):
     return kept
 
 
-def safer(params):
+def safer(params, drop_vignette=False):
     q = json.loads(json.dumps(params))
     for mv in q.get('moves', []):   # v1.2.0: a move is the point of the edit - kept, its added light halved
         if float(mv.get('lift', 0)) > 0: mv['lift'] = round(float(mv['lift']) / 2, 3)
-    q.pop('vignette', None)
+    # v1.2.7 (user 2026-11-20): the vignette guides the eye - halved (at least 1.5), not removed; it goes only when a
+    #   safer attempt with it still shows a darkening patch (the one physics problem a vignette can cause)
+    vg = q.get('vignette')
+    if drop_vignette: q.pop('vignette', None)
+    elif isinstance(vg, dict) and float(vg.get('amount', 0) or 0) > 0:
+        vg['amount'] = round(max(1.5, float(vg['amount']) / 2), 3) if float(vg['amount']) > 1.5 else float(vg['amount'])
     regs = [r for r in q.get('regions', []) if float(r.get('lift', 0)) <= 0]
     if regs: q['regions'] = regs
     else: q.pop('regions', None)
@@ -185,17 +200,36 @@ def main():
         if str(HERE) not in sys.path: sys.path.insert(0, str(HERE))
         from ps_common import sha256 as _sha
         no_g = _sha(g) == _sha(src)
+    if 'auto' not in params:   # v1.2.7: on by default; the brief can switch it off with "auto": false
+        params['auto'] = True
+    if params['auto']: params['auto_ref'] = str(Path(src).resolve())   # the original decides what auto may correct
+    if params['auto'] and genre == 'museum':
+        # museum colour comes from the user's level-3 strength (MUSEUM_L3), which is the rescue for an edit nobody can
+        #   see; auto's vibrance alone made a weak edit just visible and so blocked that rescue (2026-11-20 bronze ox:
+        #   subject colour x1.26 instead of the level-3 result). No auto vibrance on museum photos.
+        base_auto = params['auto'] if isinstance(params['auto'], dict) else {k: 1 for k in ('wb', 'dehaze', 'levels', 'contrast', 'vibrance')}
+        params['auto'] = {**base_auto, 'vibrance': 0}
+    # v1.2.7 on the G route G sets the look: no auto vibrance on top of G's colour, and the tones are opened up only for
+    #   an original that asks for it (flat or veiled, tone_needs). On a normal photo a black/white point measured on
+    #   the G-toned image would just undo what G did (2026-11-20, c1_05: G's dimmed lamps stretched back up, colour and
+    #   warmth over their limits).
+    if str(HERE) not in sys.path: sys.path.insert(0, str(HERE))
+    from ps_common import load_rgb as _lr, srgb_to_lab as _sl, tone_needs as _tn
+    _open = _tn(_sl(_lr(src))[..., 0])['stretch_ok']
+    G_AUTO = {'wb': 0.5, 'dehaze': 1, 'levels': 1 if _open else 0, 'contrast': 1 if _open else 0, 'vibrance': 0}
     if no_g:   # v1.2.0: its own N route - no look_transfer of the original against itself
         tries = [('n_direct', params, [], None), ('n_direct_safer', safer(params), [], None)]
     else:
+        if params['auto'] is True: params['auto'] = G_AUTO   # G's own colour is part of the look
+        elif isinstance(params['auto'], dict): params['auto'] = {**params['auto'], **{k: min(float(params['auto'].get(k, 1)), v) for k, v in G_AUTO.items()}}
         tries = [('default', params, [], g)]
         if genre == 'museum': tries.append(('museum_strength', boost(params), [], g))
         tries += [('no_region_lift_no_vignette', safer(params), [], g), ('local0_safer_grade', safer(params), ['--local=0'], g),
-                  ('n_direct', safer(params), [], None)]
+                  ('n_direct', {**safer(params), 'auto': ({**params['auto'], 'wb': 1} if isinstance(params['auto'], dict) else params['auto'])}, [], None)]
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
     if lowres:   # the museum-strength step raises clarity again: cap every attempt
         tries = [(nm, lowres_cap(pp, short_edge)[0], lo, gs) for nm, pp, lo, gs in tries]
-    rec = {'tool': 'finish.py v1.2.6', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    rec = {'tool': 'finish.py v1.2.7', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
     if lowres: rec['low_resolution'] = lowres
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
 
@@ -210,6 +244,9 @@ def main():
                 if base != ([], ['no_visible_change']): continue
             if gsrc is None and best is not None and best[0][0] == 0 and best[0][1] == 0:
                 continue   # a clean, visible G attempt already exists: an N-direct attempt cannot outrank it (score order)
+            if name in ('local0_safer_grade', 'n_direct') and p.get('vignette') and any(
+                    'darkening_patch' in (result.get(nm) or ([], []))[0] for nm in ('no_region_lift_no_vignette', 'local0_safer_grade')):
+                p = {k: v for k, v in p.items() if k != 'vignette'}   # v1.2.7: the halved vignette still made a dark patch
             key = json.dumps([p, ltopt, gsrc is None], sort_keys=True)
             if key in seen: continue
             seen.add(key)

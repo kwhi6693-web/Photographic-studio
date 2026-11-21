@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, srgb_to_lab, blur, sha256, daylight_sky
+from ps_common import load_rgb, srgb_to_lab, blur, sha256, daylight_sky, tone_needs
 
 ANCHORS = {   # (low, high); None = no limit. Units: L* and Lab b.
     'day':       {'L_mean_change': (1.0, 5.0), 'chroma_ratio': (1.08, 1.30), 'lit_warmth_change': (None, 4.0),
@@ -87,9 +87,22 @@ def main():
     m_note = None
     if darkbg > 0.25:
         m_note = f'dark background {round(darkbg, 2)}: overall-brightness floor not applied; do not lift the background to reach it'
+    # v1.2.7 (user 2026-11-20): a flat (range < 60) or veiled (blacks lifted) original needs its tones opened up - its blacks set and its whites
+    #   made clean - and that is the correction, not an excess. For such an original the brightest-tones limit becomes the
+    #   room it had below a clean white, the overall-brightness limit +9 and the colour limit +0.15 (the veil had washed
+    #   the colour out). Normal originals keep the 2026-11-11 limits.
+    need_o = tone_needs(Lo); rng_o, p05, p997 = need_o['range'], need_o['p0.5'], need_o['p99.7']
+    opens = genre in ('day', 'lowcolour') and need_o['stretch_ok']
+    relax = {}
+    if opens:
+        relax = {'highlight_p99_change': max(3.0, round(94.0 - float(np.percentile(Lo, 99)), 1)), 'L_mean_change': 9.0,
+                 'chroma_ratio': round(ANCHORS[genre]['chroma_ratio'][1] + 0.15, 2)}
     res, out_of_range = {}, []
     for k, v in m.items():
         lo_, hi_ = ANCHORS[genre][k]
+        if k in relax: hi_ = max(hi_, relax[k])
+        if k == 'sky_L_change' and genre == 'day' and sky.mean() > 0.05 and float(Lo[sky].mean()) > 75:
+            lo_ = -7.0   # v1.2.7 (user 2026-11-20): a pale, bright sky may be deepened further; a deep blue sky keeps -4
         if m_note and k == 'L_mean_change': lo_ = None
         if genre == 'museum' and k in ('L_mean_change',): lo_ = None
         if k == 'chroma_ratio' and hi_ is not None and opt.get('g-chroma'):
@@ -125,8 +138,8 @@ def main():
         if kept['chroma_kept'] < 0.97 and not was_over: lost.append('colour reduced although it was not over the limit')
         if was_over and hi_c is not None and m['chroma_ratio'] < hi_c - 0.05: lost.append('colour cut further than needed (aim just under the limit)')
         kept['verdict'] = 'EXPRESSIVENESS_KEPT' if not lost else 'EXPRESSIVENESS_LOST: ' + '; '.join(lost) + ' - undo and correct only the items that were over'
-    rec = {'tool': 'intensity_check.py v0.3.8', 'original': {'file': Path(o_p).name, 'sha256': sha256(o_p)}, 'final': {'file': Path(f_p).name, 'sha256': sha256(f_p)},
-           'genre': genre, 'dark_background_note': m_note, 'checks': res, 'calibration': kept, 'verdict': 'IN_RANGE' if not out_of_range else 'OUT_OF_RANGE: ' + '; '.join(out_of_range)}
+    rec = {'tool': 'intensity_check.py v1.2.7', 'original': {'file': Path(o_p).name, 'sha256': sha256(o_p)}, 'final': {'file': Path(f_p).name, 'sha256': sha256(f_p)},
+           'genre': genre, 'dark_background_note': m_note, 'tones_opened_up': ({'why': f'flat or veiled original (range {round(rng_o, 1)}, darkest {round(p05, 1)}, brightest {round(p997, 1)})', 'limits': relax} if opens else None), 'checks': res, 'calibration': kept, 'verdict': 'IN_RANGE' if not out_of_range else 'OUT_OF_RANGE: ' + '; '.join(out_of_range)}
     # v0.3.8: a calibration that lost expressiveness may not be delivered - say so in the headline, not only in a sub-field
     if kept and str(kept.get('verdict', '')).startswith('EXPRESSIVENESS_LOST'):
         rec['verdict'] = 'DO_NOT_DELIVER: ' + kept['verdict'] + ' | ' + rec['verdict']
