@@ -49,7 +49,7 @@ def main():
     src, g, pj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
-    rec = {'tool': 'pipeline.py v1.2.9', 'steps': {}, 'next': []}
+    rec = {'tool': 'pipeline.py v1.3.0', 'steps': {}, 'next': []}
     settled = Path(str(out) + '.settled.png')
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
