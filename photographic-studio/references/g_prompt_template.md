@@ -32,6 +32,7 @@ Do not create a poster, collage or graphic design. Do not add text.
 - **v0.3.8：提示词里不写数字目标**（例如“提亮 7 L*”“两倍亮度”“色彩浓 20%”）。图像模型执行不了数字，数字只会让 G 偏离；数字目标只写在导演单里，由 `grade.py` 和检查工具实现。
 - **v0.3.8：保留真实的反光和高光**：在“摄影意图”里写 `keep the real glaze, glass and metal highlights and the existing light patches in the scene`；不写 “controlled specular highlights”，那会让 G 压掉釉光。
 - 来自 A 阶段对原片的观察：主体、光线方向、冷暖关系、空间层次。写具体的光和色，不写“subtle / slightly / only tonal”这类压低强度的词。
+- **v1.2.8：平的阴天或灰白天空**（原片天空亮而平、没有云的纹理）：在“摄影意图”里写 `keep the overcast sky smooth and soft - only a gentle gradient, darker at the top - do not add clouds; put the light, depth and contrast into the trees, buildings, water and foreground`。G 画的云块不会进入成片（`look_transfer.py` 在平的亮天空上只取 G 的平滑渐变），只会把 G 的力气从景物上分走。
 - 不再默认加文字、石材、人物保护行：这些由贴回负责。只有当某个物体**无法贴回**（例如大面积招牌超过画面三分之一）时，才加一行 `Keep <对象> exactly as in the source.`
 
 ## 3. 强度（宿主没有强度参数，只靠措辞）

@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, srgb_to_lab, blur, sha256, daylight_sky, tone_needs
+from ps_common import load_rgb, srgb_to_lab, blur, sha256, daylight_sky, tone_needs, sky_mask
 
 ANCHORS = {   # (low, high); None = no limit. Units: L* and Lab b.
     'day':       {'L_mean_change': (1.0, 5.0), 'chroma_ratio': (1.08, 1.30), 'lit_warmth_change': (None, 4.0),
@@ -66,6 +66,12 @@ def main():
     lit = Lo > 55
     tex = np.abs(Lo - blur(Lo, 4)); h = Lo.shape[0]
     sky = (lo[..., 2] < -12) & (tex < 2.5); sky[h // 2:] = False
+    # v1.2.8 (user 2026-11-21): a grey or white overcast sky was not checked at all (only blue skies were), so photo 01's
+    #   sky went -13.4 L* unchecked. With no blue sky, the plain bright sky (sky_mask, branch gaps included) is checked.
+    grey_sky = False
+    if sky.mean() <= 0.05 and genre in ('day', 'lowcolour'):
+        sg = sky_mask(Lo, gaps=True)
+        if sg.mean() > 0.05: sky, grey_sky = sg, True
     m = {'L_mean_change': round(float(Lf.mean() - Lo.mean()), 2),
          'chroma_ratio': round(float(Cf.mean() / max(Co.mean(), 1e-6)), 3),
          'lit_warmth_change': round(float((lf[..., 2] - lo[..., 2])[lit].mean()), 2) if lit.mean() > 0.02 else None,
@@ -101,8 +107,8 @@ def main():
     for k, v in m.items():
         lo_, hi_ = ANCHORS[genre][k]
         if k in relax: hi_ = max(hi_, relax[k])
-        if k == 'sky_L_change' and genre == 'day' and sky.mean() > 0.05 and float(Lo[sky].mean()) > 75:
-            lo_ = -7.0   # v1.2.7 (user 2026-11-20): a pale, bright sky may be deepened further; a deep blue sky keeps -4
+        if k == 'sky_L_change' and genre in ('day', 'lowcolour') and sky.mean() > 0.05 and (grey_sky or float(Lo[sky].mean()) > 75):
+            lo_ = -7.0   # v1.2.7/v1.2.8: a pale bright sky or a grey overcast sky may be deepened to -7; a deep blue sky keeps -4
         if m_note and k == 'L_mean_change': lo_ = None
         if genre == 'museum' and k in ('L_mean_change',): lo_ = None
         if k == 'chroma_ratio' and hi_ is not None and opt.get('g-chroma'):
@@ -138,7 +144,7 @@ def main():
         if kept['chroma_kept'] < 0.97 and not was_over: lost.append('colour reduced although it was not over the limit')
         if was_over and hi_c is not None and m['chroma_ratio'] < hi_c - 0.05: lost.append('colour cut further than needed (aim just under the limit)')
         kept['verdict'] = 'EXPRESSIVENESS_KEPT' if not lost else 'EXPRESSIVENESS_LOST: ' + '; '.join(lost) + ' - undo and correct only the items that were over'
-    rec = {'tool': 'intensity_check.py v1.2.7', 'original': {'file': Path(o_p).name, 'sha256': sha256(o_p)}, 'final': {'file': Path(f_p).name, 'sha256': sha256(f_p)},
+    rec = {'tool': 'intensity_check.py v1.2.8', 'original': {'file': Path(o_p).name, 'sha256': sha256(o_p)}, 'final': {'file': Path(f_p).name, 'sha256': sha256(f_p)},
            'genre': genre, 'dark_background_note': m_note, 'tones_opened_up': ({'why': f'flat or veiled original (range {round(rng_o, 1)}, darkest {round(p05, 1)}, brightest {round(p997, 1)})', 'limits': relax} if opens else None), 'checks': res, 'calibration': kept, 'verdict': 'IN_RANGE' if not out_of_range else 'OUT_OF_RANGE: ' + '; '.join(out_of_range)}
     # v0.3.8: a calibration that lost expressiveness may not be delivered - say so in the headline, not only in a sub-field
     if kept and str(kept.get('verdict', '')).startswith('EXPRESSIVENESS_LOST'):

@@ -270,6 +270,18 @@ def main():
             if p.get('keep'): kj.write_text(json.dumps({'keep': p['keep']}), encoding='utf-8')   # v1.1.0, before anything is judged
             kept = render(lt, p, pj, fin, src, kj)
             bad, weak, iv, pv = problems(src, fin, genre, gc)
+            if gsrc is not None and ((r1.get('measurements') or {}).get('sky_kept_to_smooth_gradient')):
+                # v1.2.8: smoothing G's sky must not be what lets a G through. Whether G is usable is judged as in
+                #   v1.2.7, on the same attempt without the sky smoothing (2026-11-21, photo 03: with the sky smoothed,
+                #   a G that v1.2.7 rightly refused passed and left a white patch on the water)
+                lt_n, fin_n = td / f'lt{i}n.png', td / f'fin{i}n.png'
+                run('look_transfer.py', src, gsrc, lt_n, *ltopt, '--no-sky-trend')
+                if lt_n.exists():
+                    render(lt_n, p, pj, fin_n, src, kj)
+                    if fin_n.exists():
+                        b_n = problems(src, fin_n, genre, gc)[0]
+                        extra = [k for k in b_n if k not in bad]
+                        if extra: bad = bad + extra; r1.setdefault('flags', []).append('judged without sky smoothing: ' + ', '.join(extra))
             light_fix = None
             if gsrc is not None and bad and set(bad) <= LIGHT_REPAIRABLE:
                 # v1.2.5: wrong light in one place (a lamp put out, a glow invented) is repaired there, on the
