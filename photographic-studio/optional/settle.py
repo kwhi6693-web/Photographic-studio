@@ -18,7 +18,7 @@ from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 SEARCH_EDGE = 640   # v2.1.0: long edge of the copies the parameter search runs on
-PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep')
+PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep', 'ghost_edges')
 # full step for each measure; the tool uses the smallest fraction of it that is enough
 DOWN = {'L_mean_change': {'exposure_ev': -0.3}, 'subject_L_change': {'exposure_ev': -0.3}, 'background_L_change': {'shadows': -6},
         'chroma_ratio': {'saturation': -0.25}, 'subject_chroma_ratio': {'saturation': -0.25},

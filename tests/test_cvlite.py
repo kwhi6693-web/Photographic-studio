@@ -74,3 +74,19 @@ def test_pipeline_runs_with_opencv_blocked(tmp_path):
                        capture_output=True, text=True, env=env)
     assert json.loads(t.stdout)['verdict'].startswith('SKIPPED_NO_OPENCV')
     assert np.array_equal(load(out), load(tmp_path / 't.png'))
+
+
+def test_ghost_outline_from_a_redrawn_g_is_caught():
+    """v1.2.9: b2_01's G redrew the folding screen off its place; the outline came through the light transfer as a
+    ghost frame. physics_check.py's ghost_edges catches it (with or without OpenCV); good G drafts pass."""
+    import tempfile
+    from conftest import run_tool
+    with tempfile.TemporaryDirectory() as td:
+        res = {}
+        for case in ('b2_01', 'b1_03', 'b2_07', 'b2_02'):
+            d = REALG / case; lt = Path(td) / f'{case}.png'
+            run_tool('look_transfer.py', next(d.glob('original.*')), d / 'g.png', lt)
+            r = json.loads(run_tool('physics_check.py', next(d.glob('original.*')), lt).stdout)
+            res[case] = r['checks']['ghost_edges']
+        assert res['b2_01']['ok'] is False, res
+        assert all(res[c]['ok'] for c in ('b1_03', 'b2_07', 'b2_02')), res

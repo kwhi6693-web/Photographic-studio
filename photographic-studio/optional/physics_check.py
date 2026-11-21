@@ -9,6 +9,8 @@ Checks (each a number + pass/flag; the agent still judges by eye):
   sky_gradient      the sky keeps its natural brightness gradient (towards the horizon not darker than at the top)
   halo              no bright/dark rims along strong edges created by the edit
   highlight_order   the brightest light sources stay the brightest (nothing outshines the light that lights it)
+  ghost_edges       v1.2.9: the light change has no sharp edges where the original has none (a G that redrew or
+                    shifted an object leaves its outline in the transferred light: a ghost or double edge)
 """
 import json, sys
 from pathlib import Path
@@ -196,6 +198,23 @@ def main():
     # 6 highlight order: the top 1% brightest areas stay among the brightest
     tb = so >= np.percentile(so, 99)
     share = float((sf[tb] >= np.percentile(sf, 95)).mean())
+    # v1.2.9 ghost / double edges (2026-11-21, real_g b2_01: G redrew a folding screen one panel-width off; its outline
+    #   came through the light transfer as a dark ghost frame). Light that is real changes smoothly, or along edges the
+    #   photo already has; an edge in the CHANGE where the photo has no edge is something G drew. Measured on a fixed
+    #   working size; the 99.5th percentile of the change's slope away from the photo's own edges. Calibrated on the 17
+    #   real G drafts in tests/fixtures/real_g plus three 2026-11-21 drafts (light transfer only): good ones 0.15-0.84, the ghost
+    #   1.39 (1.63 without OpenCV).
+    gk = 1024 / max(h, w)
+    gsz = (max(16, round(w * gk)), max(16, round(h * gk)))
+    rs = lambda a: np.asarray(Image.fromarray(np.ascontiguousarray(a, np.float32), 'F').resize(gsz, Image.BOX), np.float32)
+    Lo_s, D_s = rs(Lo), rs(Lf - Lo)
+    D_s = blur(D_s, 2)
+    gy, gx = np.gradient(D_s); gD = np.hypot(gx, gy)
+    ey, ex = np.gradient(blur(Lo_s, 2)); Eo = np.hypot(ex, ey)
+    near = blur((Eo > 1.2).astype(np.float32), 6) > 0.02
+    ghost = float(np.percentile(gD[~near], 99.5)) if (~near).mean() > 0.05 else 0.0
+    checks['ghost_edges'] = {'off_edge_change_slope': round(ghost, 2), 'limit': 1.0, 'ok': bool(ghost <= 1.0),
+                             'meaning': 'the light change has no sharp edges where the photo has none (no ghost or double outline)'}
     checks['highlight_order'] = {'top_lights_still_brightest': round(share, 3), 'ok': bool(share >= 0.7),
                                  'meaning': 'the light sources and brightest highlights stay the brightest things in the frame'}
 
