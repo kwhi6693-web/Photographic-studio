@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.7 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
+"""Photographic Studio v1.2.9 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
 Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
                               [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (or SOURCE / --no-g when there is no G)
@@ -49,7 +49,7 @@ def main():
     src, g, pj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
-    rec = {'tool': 'pipeline.py v1.2.7', 'steps': {}, 'next': []}
+    rec = {'tool': 'pipeline.py v1.2.9', 'steps': {}, 'next': []}
     settled = Path(str(out) + '.settled.png')
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
