@@ -7,7 +7,11 @@ Boxes are in SOURCE pixel coordinates and should cover the text with a small mar
 """
 import hashlib, json, sys
 from pathlib import Path
-import numpy as np, cv2
+import numpy as np
+try:
+    import cv2
+except ImportError:   # v1.2.9: no OpenCV on the host - numpy + Pillow stand-in
+    sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__))); import cvlite as cv2
 from PIL import Image
 import sys as _sys
 from pathlib import Path as _Path
@@ -47,6 +51,15 @@ def global_h(src, g):
 
 
 def main():
+    if getattr(cv2, 'LITE', False):
+        # v1.2.9: this step needs OpenCV (feature matching, optical flow / template matching), which the host lacks.
+        #   It changes nothing: the output is the input image, and the receipt says why.
+        import shutil
+        a = [x for x in sys.argv[1:] if not x.startswith('--')]
+        if len(a) >= 3: shutil.copy(a[1], a[2])
+        rec = {'tool': Path(__file__).name, 'verdict': 'SKIPPED_NO_OPENCV: needs OpenCV; output = input, unchanged (v1.2.9)'}
+        if len(a) >= 4 and a[3].endswith('.json'): Path(a[3]).write_text(json.dumps(rec, ensure_ascii=False), encoding='utf-8')
+        print(json.dumps(rec, ensure_ascii=False)); return 0
     src_p, g_p, out_p, rec_p = sys.argv[1:5]
     boxes = [tuple(int(v) for v in b.split(',')) for b in sys.argv[5:]]
     src = np.asarray(Image.open(src_p).convert('RGB')).astype(np.float32)

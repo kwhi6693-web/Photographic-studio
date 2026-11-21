@@ -10,7 +10,10 @@ and a PASS/FAIL verdict. On FAIL, deliver the INPUT image (label it 'G'), not th
 Initial values come from ONE test (R1, water photo). Limits are provisional, not validated."""
 import hashlib, json, platform, sys
 from pathlib import Path
-import cv2
+try:
+    import cv2
+except ImportError:   # v1.2.9: no OpenCV on the host - numpy + Pillow stand-in
+    sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__))); import cvlite as cv2
 import numpy as np
 from PIL import Image
 import sys as _sys
@@ -105,7 +108,7 @@ def main():
         'verdict': 'PASS: N executed and within limits (label may be G->N)' if ok
                    else 'FAIL: deliver the INPUT image and label it G (not G->N)',
         'environment': {'python': platform.python_version(), 'pillow': Image.__version__,
-                        'numpy': np.__version__, 'opencv': cv2.__version__},
+                        'numpy': np.__version__, 'opencv': getattr(cv2, '__version__', '?')},
         'note': 'Provisional values from one water-photo test; hashes identify files, they do not prove cross-environment byte reproducibility.',
     }
     text = json.dumps(report, ensure_ascii=False, indent=2)

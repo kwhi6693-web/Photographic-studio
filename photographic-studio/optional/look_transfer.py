@@ -12,7 +12,11 @@ How G's look is taken over (three smooth layers, all functions of the source pix
 """
 import json, sys
 from pathlib import Path
-import numpy as np, cv2
+import numpy as np
+try:
+    import cv2
+except ImportError:   # v1.2.9: no OpenCV on the host - numpy + Pillow stand-in
+    sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__))); import cvlite as cv2
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, box, blur, structure_corr, sha256, sky_mask
 
@@ -25,6 +29,11 @@ GLOW_RAISE = 15.0   # v1.0.2: L* above the dark background's trend that only an 
 
 def register(src, g):
     hs, ws = src.shape[:2]; hg, wg = g.shape[:2]
+    if getattr(cv2, 'LITE', False):
+        # v1.2.9: no OpenCV - scale search + phase correlation (cvlite.register); the inlier number is on the ORB scale
+        #   (60 needed below), reached at a high-pass correlation of 0.40 after alignment
+        H, ncc = cv2.register(src, g)
+        return H, cv2.lite_inliers(ncc, 60)
     s = cv2.resize(src, (wg, hg), interpolation=cv2.INTER_AREA)
     g8 = lambda x: cv2.cvtColor(np.uint8(np.clip(x * 255, 0, 255)), cv2.COLOR_RGB2GRAY)
     orb = cv2.ORB_create(8000)

@@ -22,7 +22,12 @@ own example crop kept about 0.64 and went from 3:4 to 1:1). What still limits a 
 the output's short edge should stay >= 900 px so detail survives, and |rotate| <= 5 deg (larger tilts are usually
 part of the scene). Both only warn; the agent decides."""
 import sys, io, json, math, hashlib, argparse
-import numpy as np, cv2
+import numpy as np
+from pathlib import Path
+try:
+    import cv2
+except ImportError:   # v1.2.9: no OpenCV on the host - numpy + Pillow stand-in
+    sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__))); import cvlite as cv2
 from PIL import Image, ImageCms, ImageOps
 
 SRGB = ImageCms.createProfile('sRGB')

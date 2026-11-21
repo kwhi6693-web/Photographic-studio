@@ -6,8 +6,10 @@ from conftest import TOOLS, load, run_tool
 
 def test_selfcheck_reports_all_tools_runnable():
     r = json.loads(run_tool('selfcheck.py').stdout)
-    assert all(r['tools'].values()), r['tools']
-    assert set(r['tools']) | {'ps_common.py', 'selfcheck.py'} == {p.name for p in TOOLS.glob('*.py')}
+    # v1.2.9: without OpenCV only text restore and texture blend cannot run (cvlite stands in for the rest)
+    need_cv = {'text_restore.py', 'texture_blend.py'} if r['modules']['cv2'] is None else set()
+    assert all(v for k, v in r['tools'].items() if k not in need_cv), r['tools']
+    assert set(r['tools']) | {'ps_common.py', 'selfcheck.py', 'cvlite.py'} == {p.name for p in TOOLS.glob('*.py')}
 
 
 def test_measure_runs_on_every_scene(scene):
