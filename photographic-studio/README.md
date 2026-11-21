@@ -74,7 +74,7 @@
 - `finish.py`：重做阶梯里的 `safer()` 不再删掉暗角，改为减半（不低于 1.5）；减半后仍报暗斑才去掉。
 
 **工具整理**
-- 新增 `pipeline.py`：薄封装，按 `SKILL.md` 顺序调用 finish → settle → 构图（参数里的 `reframe`，原片自动同框）→ n_trim → harmonize；不改任何工具。`selfcheck.py` 列入它。
+- 新增 `pipeline.py`：薄封装，按 `SKILL.md` 顺序调用 finish → settle → 构图（参数里的 `reframe`，原片自动同框）→ n_trim → harmonize；不改任何工具。`selfcheck.py` 列入它。运行时不加 `-I`（宿主的 OpenCV 常装在用户目录，`-I` 会把它藏起来）。
 - `settle.py` v2.3.0：删掉默认不用的 `--bands` 与抬底旧代码，默认行为不变（同一输入逐字节相同）。
 
 **验证**

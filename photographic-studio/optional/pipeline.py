@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Photographic Studio v1.2.7 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
-Usage: python3 -I pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
+Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
                               [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (or SOURCE / --no-g when there is no G)
   PARAMS_JSON the director brief's parameters (grade.py, "moves", "keep", "auto"), plus optionally
@@ -23,8 +23,9 @@ HERE = Path(__file__).resolve().parent
 
 
 def tool(name, *args):
-    """Run a tool as its own process (-I: isolated) and return its JSON report (or the error text)."""
-    p = subprocess.run([sys.executable, '-I', '-B', str(HERE / name), *map(str, args)], capture_output=True, text=True)
+    """Run a tool as its own process, the same way ps_common.run_tool does, and return its JSON report (or the error).
+    No -I: hosts often install OpenCV in the user's site-packages, which -I hides (2026-11-21: cv2 'missing' in ChatGPT)."""
+    p = subprocess.run([sys.executable, '-B', str(HERE / name), *map(str, args)], capture_output=True, text=True)
     try:
         return json.loads(p.stdout)
     except Exception:
