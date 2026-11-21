@@ -43,7 +43,7 @@ import json, sys, tempfile, shutil
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep', 'lamps_kept')
+PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep', 'lamps_kept', 'ghost_edges')
 LIGHT_REPAIRABLE = {'spotlight_glow', 'darkening_patch', 'halo', 'lamps_kept'}   # v1.2.5: harmonize.py --light-only can fix these locally
 
 

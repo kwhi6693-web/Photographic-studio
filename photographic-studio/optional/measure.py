@@ -20,7 +20,10 @@ def distractions(L, C, h, w):
     here too: the agent decides which to quiet and leaves real lights alone. A bright spot straight below another one is
     reported as its reflection ("reflection_of"): quiet both, or the water shows a light the bank no longer has.
     Whitish only (L* > 74, chroma < 18, 20 above the surroundings): sunlit leaves and flowers are bright but colourful."""
-    import cv2
+    try:
+        import cv2
+    except ImportError:   # v1.2.9: no OpenCV - numpy + Pillow stand-in
+        import cvlite as cv2
     k = max(6, min(h, w) // 60)
     exc = L - blur(L, 3 * k)
     core = (L > 74) & (exc > 20) & (C < 18)            # whitish: sunlit leaves are bright too, but colourful

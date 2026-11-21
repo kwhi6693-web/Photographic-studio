@@ -98,7 +98,10 @@ def subdue_measure(lo, lf, m):
     The eye reads a white shirt at L* 90 among leaves at 30 by the difference (60), not by the 11 L* taken off it
     (2026-11-19, garden 04). Small spots should lose half of it; a patch the size of clothing about 40% (at most 45%),
     or it turns into a dull grey patch. Returns (reduction or None, small)."""
-    import cv2
+    try:
+        import cv2
+    except ImportError:   # v1.2.9: no OpenCV - numpy + Pillow stand-in
+        import cvlite as cv2
     h, w = m.shape
     core = m > 0.5
     if core.sum() < 20: return None, True

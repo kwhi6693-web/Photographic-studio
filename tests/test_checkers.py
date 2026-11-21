@@ -13,9 +13,9 @@ CAUGHT = [
     ('museum', 'dark_blotch', {'cx': 340, 'cy': 260}),
     ('night', 'invented_spotlight', {}), ('night', 'rim_glow', {}), ('night', 'tone_inversion', {}), ('night', 'removed_light', {}),
     ('day', 'warm_shade', {}),
+    ('night', 'flat_hdr', {}),   # v1.2.9: caught by ghost_edges
 ]
 GAPS = [
-    ('night', 'flat_hdr', {}, 'synthetic night lifted flat: physics_check passes (intensity_check objects; caught on the real night photo)'),
     ('museum', 'rim_glow', {}, 'ring of light around the synthetic exhibit: passes here, caught on all ten real photos (the synthetic exhibit is unlike real ones)'),
     ('museum', 'removed_light', {}, "highlights pressed down: not separable from grade.py's own highlight recovery (-25 lowers the top 0.5% by up to 25 L*); look_transfer.py puts back light G removed"),
 ]

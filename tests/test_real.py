@@ -33,15 +33,10 @@ def test_honest_edit_is_not_accused(tmp_path, name):
 
 CAUGHT = [(n, d) for n in PHOTOS for d in ('tone_inversion', 'flat_hdr', 'rim_glow')] + \
          [('museum_glass_sunflowers', 'invented_spotlight'), ('02_night_tower', 'invented_spotlight'),
-          ('museum_glass_sunflowers', 'edge_halo'), ('museum_glass_orchid_panels', 'edge_halo'), ('02_night_tower', 'edge_halo'), ('05_bronze_ox', 'edge_halo')]
+          ('museum_glass_sunflowers', 'edge_halo'), ('museum_glass_orchid_panels', 'edge_halo'), ('02_night_tower', 'edge_halo'), ('05_bronze_ox', 'edge_halo')] + \
+         [(n, 'edge_halo') for n in ('01_building', 'interior_arcade', 'museum_glass_lotus', '03_canal', '04_willow_lake', '06_blue_vase')]   # v1.2.9: ghost_edges
 GAPS = [
     ('museum_glass_orchid_panels', 'invented_spotlight', 'glowing oval on a mid-dark wall (L* ~30): lighter than what counts as a dark background; widening it also flagged G lifts on the approved bronze ox and a real G run'),
-    ('01_building', 'edge_halo', 'white band around the clock tower: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
-    ('interior_arcade', 'edge_halo', 'crunchy rims along the roof grid: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
-    ('museum_glass_lotus', 'edge_halo', 'white rims on petals and stems: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
-    ('03_canal', 'edge_halo', 'crunchy edges on clouds and branches: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
-    ('04_willow_lake', 'edge_halo', 'pale bands beside the willow strands: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
-    ('06_blue_vase', 'edge_halo', 'black outline around the vase: sharp halos along strong edges; two stronger measures were tried and both scored real G shadow detail as high (2026-11-13 batch)'),
 ]
 
 

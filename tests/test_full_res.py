@@ -2,7 +2,10 @@
 far better than a plain upscale, and keep the original's fine detail."""
 import json
 
-import cv2
+try:
+    import cv2
+except ImportError:   # v1.2.9: the suite also runs without OpenCV
+    import sys as _s, pathlib as _p; _s.path.insert(0, str(_p.Path(__file__).resolve().parents[1] / "photographic-studio" / "optional")); import cvlite as cv2
 import numpy as np
 from PIL import Image
 

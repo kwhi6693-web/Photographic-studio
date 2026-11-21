@@ -13,7 +13,10 @@ import json
 import sys
 from pathlib import Path
 
-import cv2
+try:
+    import cv2
+except ImportError:   # v1.2.9: no OpenCV on the host - numpy + Pillow stand-in
+    sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__))); import cvlite as cv2
 import numpy as np
 from PIL import Image, ImageOps
 

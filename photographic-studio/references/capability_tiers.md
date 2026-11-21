@@ -4,7 +4,7 @@
 
 ## 1. 开工自检
 
-运行 `python3 -I optional/selfcheck.py`（不能运行代码就跳过，直接按下表判断）。缺依赖且宿主允许安装时，安装后**再运行一次**，以第二次的结果定级，并把级别写进回执（v0.3.1）。命令里的 `-I` 用来隔离环境；依赖装在用户目录、加了 `-I` 就找不到时，可以不加（v0.3.2）。`texture_blend.py`、`look_transfer.py` 需要 OpenCV，不需要 scikit-image。它报告 Python 与各依赖是否可用，并给出建议的级别。再由 agent 自己确认：能否看图；有没有**以原片为输入**的图像编辑工具（记作 G）。
+运行 `python3 -I optional/selfcheck.py`（不能运行代码就跳过，直接按下表判断）。缺依赖且宿主允许安装时，安装后**再运行一次**，以第二次的结果定级，并把级别写进回执（v0.3.1）。命令里的 `-I` 用来隔离环境；依赖装在用户目录、加了 `-I` 就找不到时，可以不加（v0.3.2）。没有 OpenCV 也能走完 G 路线（v1.2.9，`cvlite.py` 用 numpy + Pillow 代替；只有 `text_restore.py`、`texture_blend.py` 跳过），不需要 scikit-image，也不要为此安装任何包。它报告 Python 与各依赖是否可用，并给出建议的级别。再由 agent 自己确认：能否看图；有没有**以原片为输入**的图像编辑工具（记作 G）。
 
 ## 2. 四个级别
 
@@ -15,7 +15,7 @@
 | T3 生成 | 看图 + G，不能运行代码 | 读片 → 导演单 → G → 人眼复核 → 交付；不贴回、不测量，写明“未做确定性检查” | G（未检查） |
 | T4 顾问 | 只能看图 | 只输出读片结果、导演单和可照着做的调整建议 | 无成片 |
 
-- 只有 numpy 和 Pillow、没有 OpenCV 时：`measure.py`、`grade.py`、`physics_check.py`、`intensity_check.py` 可用；`finish.py`、`look_transfer.py`、`check_g_output.py`、`text_restore.py`、`texture_blend.py`、`n_trim.py`、`reframe.py` 不可用。此时 T1 和 T2 都改为手动 N 直出：`grade.py` 出片后自己运行 `physics_check.py` 和 `intensity_check.py`，不合格就调参数重做；不做光色迁移、不重构构图，回执写明哪些步骤没做。
+- **只有 numpy 和 Pillow、没有 OpenCV 时（v1.2.9，T1-lite）**：除 `text_restore.py`（文字贴回）和 `texture_blend.py`（补纹理）外，所有工具照常运行，`pipeline.py` 一条命令出片。缺的部分由 `optional/cvlite.py` 用 numpy + Pillow 代替；G 稿对齐改用“缩放搜索 + 相位相关 + 分块细调”，G 稿被旋转或扭曲得对不上时照常拒绝。两个跳过的工具输出原图不变，回执写 `SKIPPED_NO_OPENCV`；成片回执里写明“无 OpenCV：未做文字贴回、未补纹理”。实测（3 张真实 G 稿）：和有 OpenCV 时走的路线相同，成片平均色差 ΔE 0.25–0.58，每张多花约 1 分钟。
 - 级别在回执里写明。不得用低级别的结果冒充高级别（例如把 N 直出标成 G）。
 
 ## 3. 宿主无关的要求

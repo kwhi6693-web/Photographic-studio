@@ -8,7 +8,11 @@ v0.1.3: also reports framing drift (global scale / rotation / centre shift fitte
 same-aspect zoom or shift is visible. Framing numbers are reported with a provisional warning, not a gate.
 It does NOT check text/detail fidelity: always inspect 1:1 crops yourself."""
 import sys, io, json
-import numpy as np, cv2
+import numpy as np
+try:
+    import cv2
+except ImportError:   # v1.2.9: no OpenCV on the host - numpy + Pillow stand-in
+    sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__))); import cvlite as cv2
 from PIL import Image, ImageCms
 import sys as _sys
 from pathlib import Path as _Path
@@ -28,6 +32,12 @@ def structure_corr(a, b, size=(120,160)):
         h = l - cv2.GaussianBlur(l, (0,0), 6); return (h-h.mean())/(h.std()+1e-9)
     return float((f(a)*f(b)).mean())
 def orb_fit(a, b):
+    if getattr(cv2, 'LITE', False):
+        # v1.2.9: no OpenCV - cvlite's scale search + phase correlation, reported on the ORB inlier scale (300 needed)
+        H, ncc = cv2.register(a.astype(np.float32) / 255, b.astype(np.float32) / 255)
+        hs, ws = a.shape[:2]; hb, wb = b.shape[:2]
+        Hs = np.diag([543 / wb, 724 / hb, 1.0]) @ H @ np.diag([ws / 543, hs / 724, 1.0])   # on the 543x724 grid framing() uses
+        return cv2.lite_inliers(ncc, 300), Hs
     g = lambda x: cv2.cvtColor(cv2.resize(x.astype(np.uint8), (543,724)), cv2.COLOR_RGB2GRAY)
     o = cv2.ORB_create(3000); ka, da = o.detectAndCompute(g(a), None); kb, db = o.detectAndCompute(g(b), None)
     if da is None or db is None: return 0, None
