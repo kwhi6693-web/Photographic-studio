@@ -142,7 +142,7 @@ def test_dimmed_highlights_come_back_unless_the_brief_darkens_them(tmp_path):
     c = tmp_path / 'c.png'; from_lab(y, c)
     out, rec = run(o, c, tmp_path)
     p99 = lambda f: float(np.percentile(L(load(f)), 99))
-    assert p99(out) >= p99(o) - 3.5, (rec['light'], rec['depth'])      # by the light step or the highlight floor
+    assert p99(out) >= p99(o) - 7.5, (rec["light"], rec["depth"])      # by the light step, the highlight floor or (v1.2.8) the plain-sky floor of -7
     pj = tmp_path / 'p.json'
     pj.write_text(json.dumps({'moves': [{'what': 'sky darker at the top', 'look': 'light-', 'shape': 'gradient', 'from': 'top', 'end': 1.0, 'lift': -6}]}))
     out2, rec2 = run(o, c, tmp_path, f'--params={pj}')

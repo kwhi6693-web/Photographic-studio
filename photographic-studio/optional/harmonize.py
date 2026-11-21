@@ -40,7 +40,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, save_png, srgb_to_lab, lab_to_lin, to_srgb, blur, guided, sha256, run_tool
+from ps_common import load_rgb, save_png, srgb_to_lab, lab_to_lin, to_srgb, blur, guided, sha256, run_tool, sky_mask
 
 VERSION = 'harmonize.py v1.2.5'
 FUSE_AREA = 0.20
@@ -86,18 +86,28 @@ def step_light(Lo, L, a, b, r, want_inv=True, want_dark=True, ao=None, bo=None, 
     src_px = Lo - blur(Lo, max(6, min(h, w) // 60))            #   (lamps_kept: L* > 80 and > 25 above their surroundings)
     light_src = smooth(src_px, 18.0, 25.0) * smooth(Lo, 72.0, 80.0)
     light_src = np.maximum(light_src, blur(light_src, 2))
-    darkened = smooth(Lo - L, 4.0, 10.0) * light_src
+    # v1.2.8: a light counts as put out only when it went darker than the rest of the frame at its brightness. When the
+    #   whole sky and its reflection go down together (G's smooth gradient on a grey sky, allowed to -7), restoring every
+    #   bright patch to the original left white blotches on the water and a pale ring in a sky gap (2026-11-21, photo 03)
+    dk_all = Lo - L
+    bins_d = np.linspace(0, 100, 41); id_ = np.clip(np.digitize(Lo, bins_d) - 1, 0, 39)
+    cnt_d = np.bincount(id_.ravel(), minlength=40); xs_d = (bins_d[:-1] + bins_d[1:]) / 2; med_d = np.zeros(40)
+    for i_ in np.nonzero(cnt_d > 200)[0]: med_d[i_] = np.median(dk_all[id_ == i_])
+    ok_d = cnt_d > 200
+    curve_d = np.interp(Lo, xs_d, np.interp(xs_d, xs_d[ok_d], med_d[ok_d])).astype(np.float32) if ok_d.any() else 0 * Lo
+    excess = dk_all - np.maximum(curve_d, 0)                   # darker than the frame's own darkening at that brightness
+    darkened = smooth(excess, 4.0, 10.0) * light_src
     corr_inv = corr_inv if want_inv else 0 * corr_inv
     corr_inv = guided(L, corr_inv.astype(np.float32), max(4, r // 2), eps)   # edge-aware, no grey patches
     # a real light the candidate put out comes back at the original's own brightness (it is the original's light),
     # feathered so the edge of the mask does not show
     # the whole bright opening around a put-out light comes back, not just its rim (a half-restored sky gap shows a ring)
     zone = blur((darkened > 0.3).astype(np.float32), r) > 0.02
-    opening = smooth(Lo, 68.0, 82.0) * smooth(Lo - L, 2.0, 6.0) * zone
+    opening = smooth(Lo, 68.0, 82.0) * smooth(excess, 2.0, 6.0) * zone
     darkened = np.maximum(darkened, opening)
     if protect is not None: darkened = darkened * ~protect      # the brief darkens there on purpose
     m = np.maximum(darkened, blur(darkened, max(2, r // 8)))
-    corr_dark = (np.maximum(Lo - L, 0) * m) if want_dark else 0 * Lo
+    corr_dark = (np.maximum(excess, 0) * m) if want_dark else 0 * Lo
     corr = (corr_inv + corr_dark).astype(np.float32)
     area = float((np.abs(corr) > 2.0).mean())
     info = {'invented_glow_area': round(float((corr_inv < -2).mean()), 4), 'darkened_light_area': round(float((corr_dark > 2).mean()), 4),
@@ -168,6 +178,10 @@ def lc(L):
 
 def step_depth(Lo, L, genre, protect=None):
     info = {}
+    # v1.2.8: the plain, bright sky of the original (2026-11-21, photo 03: after G's smooth sky deepening the
+    #   light/shade floor lifted the whole sky back +9 L* and clipped its blue channel)
+    sm = sky_mask(Lo, gaps=True) if genre not in ('night', 'museum') else None
+    sky_w = np.clip(blur(sm.astype(np.float32), 6) * 1.5, 0, 1) if sm is not None and sm.mean() > 0.03 else None
     q5o, q5 = float(np.percentile(Lo, 5)), float(np.percentile(L, 5))
     lowkey = float(np.median(Lo)) < 35 or genre in ('museum', 'night')
     lim = q5o + (3.0 if lowkey else 6.0)
@@ -185,6 +199,7 @@ def step_depth(Lo, L, genre, protect=None):
             d = (base - m) * (g - 1)
             # mostly the sunlit side comes up (what reads as sunlight); the shade only a little, so darks are not crushed
             d = np.where(d > 0, d * 1.6, d * 0.4) * (1 - smooth(L, 92.0, 99.0))
+            if sky_w is not None: d = d * (1 - sky_w)   # v1.2.8: a plain sky is not the sunlit side; it keeps G's gradient
             L = np.clip(L + d, 0, 100)
             ratio = sep(L) / max(sep(Lo), 1e-6)
             if ratio >= SEP_FLOOR - 0.005: break
@@ -192,6 +207,7 @@ def step_depth(Lo, L, genre, protect=None):
     # highlights: the brightest 1% may not end up much darker than in the original, except where the brief
     #   darkens on purpose (a light- move: a sky graded darker at the top)
     keep_dark = protect if protect is not None else np.zeros_like(L, bool)
+    if sky_w is not None: keep_dark = keep_dark | (sky_w > 0.5)   # v1.2.8: a grey sky may sit up to 7 L* lower (intensity_check)
     free = ~keep_dark
     if free.mean() > 0.2:
         t99o, t99 = float(np.percentile(Lo[free], 99)), float(np.percentile(L[free], 99))
@@ -200,6 +216,14 @@ def step_depth(Lo, L, genre, protect=None):
             w = smooth(L, float(np.percentile(L[free], 85)), t99) * free
             L = np.clip(L + lift * w, 0, 100)
             info['highlights'] = f'top 1% {t99:.1f} -> {float(np.percentile(L[free], 99)):.1f} (original {t99o:.1f})'
+    if sky_w is not None:
+        # v1.2.8: the plain sky may sit up to 7 L* lower (intensity_check's grey-sky floor), not more
+        sk = (sky_w > 0.5) & ~(protect if protect is not None else np.zeros_like(L, bool))
+        if sk.mean() > 0.02:
+            so, sc = float(np.percentile(Lo[sk], 90)), float(np.percentile(L[sk], 90))
+            if sc < so - 7.0:
+                L = np.clip(L + (so - 7.0 - sc) * sky_w * sk, 0, 100)
+                info['sky_floor'] = f'sky {sc:.1f} -> {float(np.percentile(L[sk], 90)):.1f} (original {so:.1f}, may sit 7 lower)'
     r0 = r = lc(L) / max(lc(Lo), 1e-6)
     for _ in range(3):   # up to three small passes: one large unsharp step would halo
         if r >= 1.0: break
