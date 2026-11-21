@@ -11,13 +11,15 @@ Checks (each a number + pass/flag; the agent still judges by eye):
   highlight_order   the brightest light sources stay the brightest (nothing outshines the light that lights it)
   ghost_edges       v1.2.9: the light change has no sharp edges where the original has none (a G that redrew or
                     shifted an object leaves its outline in the transferred light: a ghost or double edge)
+  sky_glow          v1.3.0: no light invented on a plain sky next to the land (a lift that spills off a tower or a
+                    treeline into the sky reads as a glow around it)
 """
 import json, sys
 from pathlib import Path
 import numpy as np
 from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, srgb_to_lab, blur, sha256, daylight_sky
+from ps_common import load_rgb, srgb_to_lab, blur, sha256, daylight_sky, sky_mask
 
 
 def rank(x):
@@ -54,6 +56,38 @@ def colour_explained(Lo, ao, bo, D):
     starts = np.searchsorted(ks, np.arange(2560)); med = np.zeros(2560, np.float32)
     for k in np.nonzero(cnt > 200)[0]: med[k] = np.median(ds[starts[k]:starts[k] + cnt[k]])
     return D - np.where(cnt[key] > 200, med[key], 0).reshape(D.shape)
+
+
+SKY_GLOW_LIMIT = 3.0
+
+
+def sky_glow(Lo, D):
+    """v1.3.0 (2026-11-21, key light trial on the rain-mist pagoda: a light lift whose ellipse covered the sky put a
+    pale glow around the tower, and no check saw it). On a plain bright sky (sky_mask) the change next to the land is
+    compared with the sky's own smooth change (a deeper top and a lighter horizon are fitted away from the land and
+    taken out). Only the plain sky counts (bright and smooth in the original - not branch tips inside the coarse sky
+    mask) and not the frame border. Calibrated: approved finals 0.0-2.3 L* (the 2026-11-20 rain pond 2.3), the
+    pagoda glow 3.9."""
+    sky = sky_mask(Lo)
+    if sky.mean() < 0.05: return {'ok': None, 'note': 'no plain sky'}
+    land = 1 - sky.astype(np.float32)
+    core = sky & ~(blur(land, 2) > 0.02)
+    tex = np.abs(Lo - blur(Lo, 2))
+    core = core & (Lo >= np.percentile(Lo[sky], 10) - 2) & (blur(tex, 2) < 1.0)
+    band = core & (blur(land, 14) > 0.02)
+    mg = max(8, round(0.03 * max(D.shape)))
+    band[:mg] = band[-mg:] = False; band[:, :mg] = band[:, -mg:] = False
+    far = sky & ~(blur(land, 40) > 0.02)
+    if band.sum() < 50: return {'ok': None, 'note': 'no plain sky along the land'}
+    hh, ww = D.shape; yy, xx = np.mgrid[0:hh, 0:ww].astype(np.float32); yy /= hh; xx /= ww
+    fit_on = far if far.sum() > 500 else core
+    A = np.stack([np.ones_like(xx), xx, yy, yy * yy], -1)
+    coef = np.linalg.lstsq(A[fit_on], D[fit_on], rcond=None)[0]
+    R = D - A @ coef
+    Rl = blur(np.where(core, R, 0).astype(np.float32), 6) / np.maximum(blur(core.astype(np.float32), 6), 1e-3)
+    g = float(np.percentile(Rl[band], 99))
+    return {'sky_next_to_land_brighter_L': round(g, 2), 'limit': SKY_GLOW_LIMIT, 'ok': bool(g <= SKY_GLOW_LIMIT),
+            'meaning': 'no glow invented on the plain sky around a tower, a roof line or a treeline'}
 
 
 def main():
@@ -208,6 +242,7 @@ def main():
     gsz = (max(16, round(w * gk)), max(16, round(h * gk)))
     rs = lambda a: np.asarray(Image.fromarray(np.ascontiguousarray(a, np.float32), 'F').resize(gsz, Image.BOX), np.float32)
     Lo_s, D_s = rs(Lo), rs(Lf - Lo)
+    D_s0 = D_s
     D_s = blur(D_s, 2)
     gy, gx = np.gradient(D_s); gD = np.hypot(gx, gy)
     ey, ex = np.gradient(blur(Lo_s, 2)); Eo = np.hypot(ex, ey)
@@ -215,6 +250,7 @@ def main():
     ghost = float(np.percentile(gD[~near], 99.5)) if (~near).mean() > 0.05 else 0.0
     checks['ghost_edges'] = {'off_edge_change_slope': round(ghost, 2), 'limit': 1.0, 'ok': bool(ghost <= 1.0),
                              'meaning': 'the light change has no sharp edges where the photo has none (no ghost or double outline)'}
+    checks['sky_glow'] = sky_glow(Lo_s, D_s0)
     checks['highlight_order'] = {'top_lights_still_brightest': round(share, 3), 'ok': bool(share >= 0.7),
                                  'meaning': 'the light sources and brightest highlights stay the brightest things in the frame'}
 

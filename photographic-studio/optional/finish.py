@@ -43,7 +43,7 @@ import json, sys, tempfile, shutil
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep', 'lamps_kept', 'ghost_edges')
+PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep', 'lamps_kept', 'ghost_edges', 'sky_glow')
 LIGHT_REPAIRABLE = {'spotlight_glow', 'darkening_patch', 'halo', 'lamps_kept'}   # v1.2.5: harmonize.py --light-only can fix these locally
 
 
@@ -162,6 +162,8 @@ def safer(params, drop_vignette=False):
     if drop_vignette: q.pop('vignette', None)
     elif isinstance(vg, dict) and float(vg.get('amount', 0) or 0) > 0:
         vg['amount'] = round(max(1.5, float(vg['amount']) / 2), 3) if float(vg['amount']) > 1.5 else float(vg['amount'])
+    kl = q.get('key_light')   # v1.3.0: the key light stays (it is the photo's light), at half strength
+    if isinstance(kl, dict): kl['strength'] = round(max(0.5, float(kl.get('strength', 1.0)) / 2), 3)
     regs = [r for r in q.get('regions', []) if float(r.get('lift', 0)) <= 0]
     if regs: q['regions'] = regs
     else: q.pop('regions', None)
@@ -232,6 +234,8 @@ def main():
     rec = {'tool': 'finish.py v1.2.7', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
     if lowres: rec['low_resolution'] = lowres
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
+    elif not (params.get('key_light') or {}).get('box'):
+        rec['brief'] = 'NO_KEY_LIGHT: v1.3.0 asks for one key_light per photo (where the subject is, where the light comes from)'
 
     best = None
     with tempfile.TemporaryDirectory() as td:
@@ -280,7 +284,9 @@ def main():
                     render(lt_n, p, pj, fin_n, src, kj)
                     if fin_n.exists():
                         b_n = problems(src, fin_n, genre, gc)[0]
-                        extra = [k for k in b_n if k not in bad]
+                        # v1.3.0: not sky_glow - the unsmoothed run carries G's raw sky on purpose, and the smoothing is
+                        #   exactly what keeps G's sky light out of the photo (real_g b2_08 / b2_10)
+                        extra = [k for k in b_n if k not in bad and k != 'sky_glow']
                         if extra: bad = bad + extra; r1.setdefault('flags', []).append('judged without sky smoothing: ' + ', '.join(extra))
             light_fix = None
             if gsrc is not None and bad and set(bad) <= LIGHT_REPAIRABLE:
@@ -295,6 +301,23 @@ def main():
                     light_fix = {'was': bad, 'action': (hz.get('light') or {}).get('action'), 'left': b2}
                     if not b2:
                         fin, bad, weak, iv, pv = fin_r, b2, w2, _iv, _pv
+            sky_fix = None
+            if bad == ['sky_glow'] and p.get('moves'):
+                # v1.3.0: light spilled onto a plain sky comes from a move whose area covers the sky (the key light never
+                #   touches it): a local lift goes on structure, a band gets a softer edge - the same repair as a halo
+                p2 = json.loads(json.dumps(p)); idx = []
+                for k, mv in enumerate(p2['moves']):
+                    if float(mv.get('lift', 0) or 0) > 0 or mv.get('look') == 'light+':   # a glow is added light
+                        if full_span(mv): mv['feather'] = max(0.3, float(mv.get('feather', 0.08)))
+                        else: mv['on_structure'] = True
+                        idx.append(k)
+                if idx:
+                    pj2 = td / f'p{i}g.json'; fin2 = td / f'fin{i}g.png'; pj2.write_text(json.dumps(p2), encoding='utf-8')
+                    render(lt, p2, pj2, fin2, src, kj)
+                    b2, w2, _iv, _pv = problems(src, fin2, genre, gc) if fin2.exists() else (['sky_glow'], [], None, None)
+                    sky_fix = {'moves_on_structure': idx, **({'left': b2} if b2 else {})}
+                    if not b2:
+                        p, pj, fin, bad, weak, iv, pv = p2, pj2, fin2, b2, w2, _iv, _pv
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
             ic = None
             only_subdue = bool(set(weak) - {'no_visible_change'})   # v1.2.6: over a range - only distractions may still be quieted
@@ -330,6 +353,7 @@ def main():
                 ic = {'verdict': ic.get('verdict'), 'moves': ic.get('moves'), 'strengthened': rounds}
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak,
                                     **({'light_repair': light_fix} if light_fix else {}),
+                                    **({'sky_glow_fix': sky_fix} if sky_fix else {}),
                                     **({'clarity_unstacked': unstacked} if unstacked else {}),
                                     **({'keep': kept.get('verdict')} if kept else {}),
                                     **({'improve': ic, 'params': p} if ic else {})})

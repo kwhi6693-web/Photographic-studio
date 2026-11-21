@@ -49,12 +49,14 @@ def test_an_invisible_move_is_strengthened(tmp_path):
 
 def test_a_halo_in_the_sky_is_found_and_moved_onto_the_building(tmp_path):
     """The first gate brief lifted an ellipse around the pavilion: a warm ring in the smooth sky that the physics checks
-    did not catch. The halo check finds it and the move is put on structure only."""
+    did not catch. The halo check (v1.3.0: the sky_glow check) finds it and the move is put on structure only."""
     p = json.loads((BRIEFS / '09_gate_sunset.json').read_text())
     mv = p['moves'][1]; mv.pop('on_structure'); mv.update({'look': 'light+', 'lift': 3, 'sat': 1.2})
     _, _, r = finish(tmp_path, '09_gate_sunset', p)
     a = r['attempts'][0]
-    assert a['improve']['strengthened'][0].get('halo_fix') == [1], a['improve']
+    # v1.3.0: physics_check.py's sky_glow now catches the ring itself (sky_glow_fix); before that only improve_check's
+    #   halo test found it (halo_fix). Either way the move ends up on structure and the attempt is clean.
+    assert a.get('sky_glow_fix', {}).get('moves_on_structure') == [1] or a['improve']['strengthened'][0].get('halo_fix') == [1], a
     assert r['attempts'][0]['params']['moves'][1].get('on_structure') is True
     assert not a['problems'], a
 

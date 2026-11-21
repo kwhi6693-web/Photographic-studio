@@ -146,6 +146,14 @@ def darken_mask(params_path, shape):
     return m
 
 
+def has_key_light(params_path):
+    """v1.3.0: does the brief set a key light (grade.py key_light)?"""
+    if not params_path or not Path(params_path).exists(): return False
+    try: P = json.loads(Path(params_path).read_text(encoding='utf-8') or '{}')
+    except Exception: return False
+    return bool((P.get('key_light') or {}).get('box'))
+
+
 def colour_mask(params_path, shape):
     """v1.2.7: where the brief raises colour on purpose (moves with look colour+ or sat > 1.05): the subject's own colour."""
     if not params_path or not Path(params_path).exists(): return None
@@ -176,7 +184,7 @@ def lc(L):
     return float(np.abs(L - blur(L, 8)).mean())
 
 
-def step_depth(Lo, L, genre, protect=None):
+def step_depth(Lo, L, genre, protect=None, key_light=False):
     info = {}
     # v1.2.8: the plain, bright sky of the original (2026-11-21, photo 03: after G's smooth sky deepening the
     #   light/shade floor lifted the whole sky back +9 L* and clipped its blue channel)
@@ -198,7 +206,9 @@ def step_depth(Lo, L, genre, protect=None):
             base = blur(L, 12); m = float(np.median(base)); g = min(SEP_FLOOR / ratio, 1.3)
             d = (base - m) * (g - 1)
             # mostly the sunlit side comes up (what reads as sunlight); the shade only a little, so darks are not crushed
-            d = np.where(d > 0, d * 1.6, d * 0.4) * (1 - smooth(L, 92.0, 99.0))
+            # v1.3.0: with a key light the brief already set where the shade falls - pushing the shade down again on
+            #   top of it made a dark patch (2026-11-21 vase); only the lit side comes up
+            d = np.where(d > 0, d * 1.6, d * (0.0 if key_light else 0.4)) * (1 - smooth(L, 92.0, 99.0))
             if sky_w is not None: d = d * (1 - sky_w)   # v1.2.8: a plain sky is not the sunlit side; it keeps G's gradient
             L = np.clip(L + d, 0, 100)
             ratio = sep(L) / max(sep(Lo), 1e-6)
@@ -321,7 +331,7 @@ def main():
     if light_only:   # finish.py v1.2.5: repair a G attempt's wrong light before deciding whether to keep G
         rec['depth'], rec['colour'] = 'skipped (--light-only)', 'skipped (--light-only)'
     else:
-        L, rec['depth'] = step_depth(Lo, L, genre, darken_mask(opt.get('--params'), L.shape))
+        L, rec['depth'] = step_depth(Lo, L, genre, darken_mask(opt.get('--params'), L.shape), has_key_light(opt.get('--params')))
         a, b, rec['colour'] = step_colour(Lo, ao, bo, L, a, b, colour_mask(opt.get('--params'), L.shape))
     out = np.clip(to_srgb(lab_to_lin(np.stack([L, a, b], -1))), 0, 1)
     changed = float(np.abs(out - c).mean() * 255)

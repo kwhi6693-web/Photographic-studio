@@ -51,6 +51,25 @@ def sky_mask(L, gaps=False):
     return out
 
 
+def light_character(L, C=None):
+    """v1.3.0 (key light): is the original's light directional (a side light, a window, a lamp - there is a light/shade
+    structure to build the subject's light on) or diffuse (a flat overcast or grey-sky day, or a frame whose land has
+    hardly any large-scale light difference)? Judged on a small copy, on the land only. A diffuse frame gets a quieter
+    key light (user 2026-11-21: no spotlight on a rain-mist pagoda - mostly the edges and foreground recede)."""
+    h, w = L.shape
+    k = max(1, int(round(max(h, w) / 640)))
+    sm = lambda z: z[:h // k * k, :w // k * k].reshape(h // k, k, w // k, k).mean((1, 3)) if k > 1 else z
+    Ls = sm(L)
+    sky = sky_mask(Ls, gaps=True); land = ~sky
+    if land.mean() < 0.05: return {'light': 'diffuse', 'land_spread': 0.0, 'grey_sky': True, 'sky_fraction': round(float(sky.mean()), 3)}
+    Lb = blur(Ls, max(8, min(Ls.shape) // 12))
+    spread = float(np.percentile(Lb[land], 90) - np.percentile(Lb[land], 10))
+    # a grey or white sky (overcast, rain, mist); a blue or sunset sky is daylight with a direction
+    grey_sky = bool(sky.mean() > 0.10 and (C is None or float(sm(C)[sky].mean()) < 6.0))
+    light = 'diffuse' if (grey_sky or spread < 18) else 'directional'
+    return {'light': light, 'land_spread': round(spread, 1), 'grey_sky': grey_sky, 'sky_fraction': round(float(sky.mean()), 3)}
+
+
 def tone_needs(L):
     """v1.2.7 (shared by grade.py "auto" and intensity_check.py): what an original's own tones ask for, judged on the
     land only - a bright sky above a grey forest or street would otherwise make the photo look "wide range" (user

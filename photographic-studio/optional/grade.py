@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.0 - N as a directed, deterministic grading tool ("the hands that follow the brief").
+"""Photographic Studio v1.3.0 - N as a directed, deterministic grading tool ("the hands that follow the brief").
 Usage: python3 -I grade.py INPUT_IMAGE OUTPUT_PNG PARAMS_JSON [RECEIPT_JSON]
 Pure numpy + Pillow. No generative step, no resampling, no sharpening of fine detail, no added texture:
 every output pixel is a tone/colour function of the input pixel and its smooth neighbourhood.
@@ -25,6 +25,10 @@ PARAMS_JSON (all keys optional; values outside the range are clamped and reporte
   moves:         v1.2.0 - the brief's improvement moves: the same fields as a region plus
                  {what: "deepen the sky towards the top", look: light+|light-|colour+|colour-|warm+|warm-|contrast+}.
                  They are graded exactly like regions; improve_check.py then measures whether each one is visible.
+  key_light:     v1.3.0 - {box: subject [x0,y0,x1,y1], from: left|right|top|bottom|front, light: auto|diffuse, strength: 0..1,
+                 what: text}. The frame's light gathers on the subject and the surroundings fall off; the size comes from
+                 the original's own light (directional about 7 L* of separation, diffuse/overcast about 4, mostly by the
+                 edges receding). A plain sky is never lifted or darkened.
   vignette:      {amount: 0..10 (L at the corners), centre: [x, y] each 0.35..0.65, radius: 0.6..1.2} (v0.3.7: centred, no off-centre blotch)
   auto:          v1.2.7 - the automatic base adjustment, computed from THIS image before everything above:
                  true (all parts at full strength), false/absent (off), or {wb, dehaze, levels, contrast, vibrance: 0..1}.
@@ -232,6 +236,77 @@ def auto_tone(L, a, b, s, h, w, L_ref):
     return L, a, b, info
 
 
+KEY_TARGET = {'directional': 7.0, 'diffuse': 4.0}      # L* added between the subject and its surroundings
+KEY_SPLIT = {'directional': 0.4, 'diffuse': 0.25}      # share of that done by lifting the subject (the rest: surroundings fall off)
+KEY_RAMP = {'left': lambda xx, yy: 1 - xx, 'right': lambda xx, yy: xx, 'top': lambda xx, yy: 1 - yy, 'bottom': lambda xx, yy: yy}
+
+
+def key_light(kl, L, L_in, lab0, ref, h, w):
+    """v1.3.0: the key light - the frame's light gathers on the subject and its surroundings fall off, the way the
+    light in the scene already runs. One move for the whole frame, in place of scattered small region lifts.
+      box: the subject [x0, y0, x1, y1]; from: left|right|top|bottom|front (where the light in the original comes
+      from); light: auto|directional|diffuse; strength 0..1.
+    How much is set by the ORIGINAL's light (ps_common.light_character), not by the brief: a directional light gets
+    about 7 L* more separation between the subject and its surroundings, a diffuse overcast light about 4, done mostly
+    by letting the edges and foreground recede (user 2026-11-21: no spotlight on a flat rain sky). The brief can make
+    it quieter ("light": "diffuse", or a lower strength), never stronger than the light allows.
+    Guards: a plain bright sky gets neither light nor shade (no halo around a tower, no blotch in a flat sky); the
+    light follows the surfaces (edge-aware, in proportion to their own brightness, so a dark background does not
+    glow); near-black and clipped tones are left alone."""
+    from ps_common import light_character
+    ref_lab = lab0
+    if ref and Path(ref).exists():
+        rr = load_rgb(ref)
+        if rr.shape[:2] == (h, w): ref_lab = lin_to_lab(to_linear(rr))
+    ch = light_character(ref_lab[..., 0], np.hypot(ref_lab[..., 1], ref_lab[..., 2]))
+    mode = ch['light']
+    if kl.get('light') == 'diffuse': mode = 'diffuse'          # the brief may only make it quieter
+    st = cl('key_light.strength', kl.get('strength', 1.0), 0, 1)
+    x0, y0, x1, y1 = [float(v) for v in kl['box']]
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32); yy /= max(h - 1, 1); xx /= max(w - 1, 1)
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    rx, ry = max((x1 - x0) / 2, 0.05), max((y1 - y0) / 2, 0.05)
+    d = np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2)
+    S = 1 - smoothstep((d - 0.7) / 1.1)                         # full on the subject, falling off over about one subject width
+    src_dir = kl.get('from', 'front')
+    if src_dir in KEY_RAMP:                                     # the side the light comes from stays a little brighter
+        S = np.clip(0.8 * S + 0.2 * KEY_RAMP[src_dir](xx, yy), 0, 1)
+    L01 = np.clip(L_in / 100, 0, 1); r = max(6, min(h, w) // 30)
+    S = np.clip(guided(L01, S.astype(np.float32), r, 1e-3), 0, 1)       # the light stops at object edges, not in mid-air
+    sky = sky_mask(L_in, gaps=True)
+    surf = (~sky).astype(np.float32)
+    if sky.any():
+        surf = np.clip(guided(L01, surf, max(3, min(h, w) // 200), 1e-4), 0, 1) * (~sky)   # never any change on the plain sky
+    tot = KEY_TARGET[mode] * st; lift = tot * KEY_SPLIT[mode]; fall = tot - lift
+    bright = np.clip((L_in - 6.0) / 30.0, 0, 1) ** 1.5                    # a lit surface takes light, a black void does not
+    sub = S * surf * bright
+    out_w = (1 - S) * surf * smoothstep((L_in - 4.0) / 20.0)               # near-black shadows are not pushed into black
+    if mode == 'diffuse':
+        # overcast: the eye is led by the frame edges and the foreground receding, not by a pool of light
+        edge = np.clip(np.maximum(np.abs(xx - 0.5), np.abs(yy - 0.5)) * 2, 0, 1)
+        out_w = out_w * (0.45 + 0.55 * smoothstep(np.maximum(edge, yy * 1.2 - 0.3)))
+    out_w = out_w * (1 - smoothstep((L_in - 92.0) / 6.0) * 0.5)            # leave lamps and white reflections mostly alone
+    # on the G route the input already carries G's light: where G already let the surroundings fall off (or already
+    #   lifted the subject) that counts towards the key light (2026-11-21 vase: G had darkened the left screens by up to
+    #   20 L*; another 6 on top read as a dark patch)
+    g_dark = np.clip(blur(ref_lab[..., 0] - L_in, max(8, min(h, w) // 40)), 0, None) if ref_lab is not lab0 else 0.0
+    g_lift = np.clip(blur(L_in - ref_lab[..., 0], max(8, min(h, w) // 40)), 0, None) if ref_lab is not lab0 else 0.0
+    sub_m, sur_m = (S > 0.7) & ~sky, (S < 0.25) & ~sky
+    sep = lambda X: float(X[sub_m].mean() - X[sur_m].mean()) if sub_m.any() and sur_m.any() else 0.0
+    # the masks follow the surfaces and their brightness, so the separation actually gained is less than lift + fall:
+    #   measure it once and scale to the target (at most 2.2x; the lift never over 6 L*, the falloff never over 8)
+    shape = lambda li, fa: L + np.clip(li - g_lift, 0, None) * sub - np.clip(fa - g_dark, 0, None) * out_w
+    gain = sep(shape(lift, fall)) - sep(L)
+    if gain > 0.3:
+        k = min(2.2, tot / gain); lift, fall = min(6.0, lift * k), min(8.0, fall * k)
+    Lk = shape(lift, fall)
+    info = {'light_in_original': ch, 'mode': mode, 'from': src_dir, 'strength': st, 'lift_L': round(lift, 2), 'falloff_L': round(fall, 2),
+            'subject_minus_surroundings_L': {'before': round(sep(L), 2), 'after': round(sep(Lk), 2)},
+            'sky_untouched': bool(sky.any()), 'box': [x0, y0, x1, y1]}
+    if kl.get('what'): info['what'] = kl['what']
+    return Lk, info
+
+
 def main(inp, out, params_path, receipt=None):
     P = json.loads(Path(params_path).read_text(encoding='utf-8'))
     src = load_rgb(inp)
@@ -357,6 +432,9 @@ def main(inp, out, params_path, receipt=None):
             L = L + lift * m_l; a *= 1 + (rs - 1) * m; b = b * (1 + (rs - 1) * m) + warm * m
             used['regions'].append({**{k: reg[k] for k in reg if k in ('what', 'look', 'shape', 'box', 'also', 'subdue', 'from', 'end', 'feather', 'edge_aware', 'only_hue', 'only_L', 'lift_dark', 'on_structure')},
                                     'lift': lift, 'sat': rs, 'warm': warm, 'clarity': rcl, 'mask_area_fraction': round(float(m.mean()), 3)})
+    kl = P.get('key_light')
+    if isinstance(kl, dict) and kl.get('box'):
+        L, used['key_light'] = key_light(kl, L, L_in, lab0, P.get('auto_ref'), h, w)
     vg = P.get('vignette') or {}
     va = cl('vignette.amount', vg.get('amount', 0), 0, 10)
     if va:
@@ -397,7 +475,7 @@ def main(inp, out, params_path, receipt=None):
     if m['clipped_white_out'] > max(m['clipped_white_in'], 0.001) * 1.5: flags.append('NEW_HIGHLIGHT_CLIPPING')
     if m['clipped_black_out'] > max(m['clipped_black_in'], 0.002) * 2: flags.append('NEW_SHADOW_CLIPPING')
     if clamps: flags.append('PARAMS_CLAMPED')
-    rec = {'tool': 'grade.py v1.2.7 (deterministic, non-generative)', 'input': {'file': Path(inp).name, 'sha256': sha256(inp), 'size': [w, h]},
+    rec = {'tool': 'grade.py v1.3.0 (deterministic, non-generative)', 'input': {'file': Path(inp).name, 'sha256': sha256(inp), 'size': [w, h]},
            'output': {'file': Path(out).name, 'sha256': sha256(out), 'size': [w, h]}, 'params_used': used, 'clamped': clamps, 'measurements': m, 'flags': flags,
            'verdict': 'DONE' + (' | FLAGS: ' + '; '.join(flags) if flags else '') + ' - judge by eye against the brief'}
     text = json.dumps(rec, ensure_ascii=False, indent=1)
