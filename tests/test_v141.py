@@ -1,10 +1,13 @@
 """Regression coverage for source-based sky and invented-light handling."""
 import json
+import sys
 
 import numpy as np
 import pytest
+from PIL import Image
 
 import finish
+import harmonize
 from grade import key_light
 from look_transfer import glow_region, sky_delta, source_light_support
 from ps_common import sky_surfaces
@@ -132,3 +135,23 @@ def test_residual_glow_is_a_warning_unless_g_also_deleted_light():
     assert finish.transfer_light_problems({'flags': [
         glow, 'G_LIGHT_REMOVAL_NOT_CARRIED 0.02: restored original light',
     ]}) == ['conflicting_light_artifacts']
+
+
+def test_final_depth_trial_must_pass_the_same_physics_check(tmp_path, monkeypatch):
+    src, candidate, out, receipt = [tmp_path / f'{name}.png' for name in ('s', 'c', 'o', 'r')]
+    for p in (src, candidate):
+        Image.new('RGB', (80, 70), '#4a6884').save(p)
+    monkeypatch.setattr(sys, 'argv', ['harmonize.py', *map(str, (src, candidate, out, receipt)), '--genre=night'])
+    monkeypatch.setattr(harmonize, 'step_depth', lambda Lo, L, *args, **kw: (L + 3, {}))
+
+    def check(tool, original, trial, *args):
+        if tool == 'physics_check.py' and str(trial).endswith('/d.png'):
+            return {'checks': {'ghost_edges': {'ok': False}}}
+        return {'checks': {}, 'verdict': 'PASS'}
+
+    monkeypatch.setattr(harmonize, 'run_tool', check)
+    assert harmonize.main() == 0
+    record = json.loads(receipt.read_text())
+    assert len(record['depth_backoff']) == 2
+    assert record['depth']['action'].startswith('kept input depth')
+    assert record['check']['failed_physics'] == []
