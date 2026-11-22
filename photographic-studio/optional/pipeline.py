@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.9 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
+"""Photographic Studio v1.4.0 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
 Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
                               [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (or SOURCE / --no-g when there is no G)
@@ -15,6 +15,9 @@ the original (so harmonize.py always compares like with like - this was a manual
 n_trim.py (only acts when highlights clip) -> harmonize.py (the last step; nothing changes the photo after it).
 It does not call G and does not judge by eye: the receipt's "next" says when SKILL.md asks for G to be called once
 more (finish.py fell back to N direct with G used once, or harmonize.py says REGEN_G). Deterministic; never asks.
+v1.4.0: after harmonize.py the four expressiveness gates (improve_check.py --gates) are measured once more on the file
+that is delivered, against the original framed the same way, and written to the receipt ("gates"); after a crop the
+subject gate is skipped (the brief's box no longer applies).
 """
 import json, shutil, subprocess, sys, tempfile
 from pathlib import Path
@@ -49,7 +52,7 @@ def main():
     src, g, pj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
-    rec = {'tool': 'pipeline.py v1.3.0', 'steps': {}, 'next': []}
+    rec = {'tool': 'pipeline.py v1.4.0', 'steps': {}, 'next': []}
     settled = Path(str(out) + '.settled.png')
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
@@ -60,7 +63,7 @@ def main():
         else:
             fin = td / 'finish.png'
             r = tool('finish.py', src, g, pj, fin, td / 'finish.json', *(['--no-g'] if '--no-g' in sys.argv else []),
-                     *([f'--genre={genre}'] if genre == 'museum' else []))
+                     *([f'--genre={genre}'] if genre in ('museum', 'night') else []))   # v1.4.0: night too (shadow clamp)
             if not fin.exists(): sys.exit('finish.py produced no image: ' + json.dumps(r, ensure_ascii=False)[:400])
             rec['steps']['finish'] = {'delivered': r.get('delivered'), 'verdict': r.get('verdict'), 'g_chroma': r.get('g_chroma'),
                                       'attempts': r.get('attempts')}
@@ -100,6 +103,9 @@ def main():
                  *([f'--genre={genre}'] if genre in ('museum', 'night') else []))
         if not Path(out).exists(): shutil.copy(cur, out)
         rec['steps']['harmonize'] = {'verdict': h.get('verdict'), **{k: h.get(k) for k in ('light', 'depth', 'colour') if h.get(k)}}
+        gt = tool('improve_check.py', src_framed, out, pj, '--gates', *(['--no-subject'] if rf else []),
+                  *([f'--genre={genre}'] if genre in ('museum', 'night') else []))
+        rec['gates'] = gt.get('gates') or gt.get('verdict')
         if str(h.get('verdict', '')).startswith('REGEN_G'):
             rec['next'].append('harmonize.py says REGEN_G: if G has not been re-called yet, call G once more and rerun this command')
     rec['output'] = str(out)

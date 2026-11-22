@@ -38,10 +38,13 @@ def test_final_pixels_come_from_the_original_not_from_g(tmp_path, scene, finish)
 def test_an_edit_the_eye_cannot_see_is_never_a_clean_pass(scene, finish):
     for name in synth.SCENES:
         src = scene(name)
-        _, rec = finish(src, src, {}, genre='museum' if name == 'museum' else None, tag=name)
+        out, rec = finish(src, src, {}, genre='museum' if name == 'museum' else None, tag=name + '_f')
         # v1.0.9: an invisible museum edit is rescued by the museum-strength step of the ladder, which IS visible
         # (v1.2.0: the original passed as G is the N route, so the rescue is n_direct_museum_strength)
-        assert rec['verdict'] != 'DELIVER' or rec['delivered'].endswith('museum_strength'), name
+        # v1.4.0: the default black anchor, split toning and texture make even an empty brief a visible edit; what must
+        #   never happen is a clean pass for an edit nobody can see
+        seen = float(np.abs(load(out) - synth.SCENES[name]()).mean() * 255) >= 1.5
+        assert rec['verdict'] != 'DELIVER' or rec['delivered'].endswith('museum_strength') or seen, name
 
 
 def _dark_lift(src, other):

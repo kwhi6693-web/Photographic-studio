@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.3.0 - N as a directed, deterministic grading tool ("the hands that follow the brief").
+"""Photographic Studio v1.4.0 - N as a directed, deterministic grading tool ("the hands that follow the brief").
 Usage: python3 -I grade.py INPUT_IMAGE OUTPUT_PNG PARAMS_JSON [RECEIPT_JSON]
 Pure numpy + Pillow. No generative step, no resampling, no sharpening of fine detail, no added texture:
 every output pixel is a tone/colour function of the input pixel and its smooth neighbourhood.
@@ -29,6 +29,12 @@ PARAMS_JSON (all keys optional; values outside the range are clamped and reporte
                  what: text}. The frame's light gathers on the subject and the surroundings fall off; the size comes from
                  the original's own light (directional about 7 L* of separation, diffuse/overcast about 4, mostly by the
                  edges receding). A plain sky is never lifted or darkened.
+                 v1.4.0: lift only on the original's lit mid-tones, wide falloff kept off bright sky; strength up to 1.2
+                 (finish.py's gate remedy); "light": "directional" locks directional mode where the original has sun.
+  anchor:        v1.4.0 - true | {target: -3..0}: the original's darkest 15 % pressed ~2.5 L* (base layer only)
+  split_tone:    v1.4.0 - true | {warm: 0..2, cool: -1.5..0}: lit faces warmer, shadows neutral/cool (not near-neutral)
+  texture:       v1.4.0 - 0..0.28: structure-aware mid-frequency micro-contrast (+-3.5 L* per pixel, never on sky)
+  chroma_compress: v1.4.0 - 0..3: compress only the over-saturated top of the chroma (settle.py uses it)
   vignette:      {amount: 0..10 (L at the corners), centre: [x, y] each 0.35..0.65, radius: 0.6..1.2} (v0.3.7: centred, no off-centre blotch)
   auto:          v1.2.7 - the automatic base adjustment, computed from THIS image before everything above:
                  true (all parts at full strength), false/absent (off), or {wb, dehaze, levels, contrast, vibrance: 0..1}.
@@ -236,8 +242,10 @@ def auto_tone(L, a, b, s, h, w, L_ref):
     return L, a, b, info
 
 
-KEY_TARGET = {'directional': 7.0, 'diffuse': 4.0}      # L* added between the subject and its surroundings
-KEY_SPLIT = {'directional': 0.4, 'diffuse': 0.25}      # share of that done by lifting the subject (the rest: surroundings fall off)
+KEY_TARGET = {'directional': 9.0, 'diffuse': 4.0}      # L* added between the subject and its surroundings (v1.4.0: 7 -> 9)
+KEY_SPLIT = {'directional': 0.45, 'diffuse': 0.25}     # share of that done by lifting the subject (the rest: surroundings fall off)
+KEY_LIFT_MAX = {'directional': 6.0, 'diffuse': 3.0}    # v1.4.0: the lit side of the subject +4.5..6 L* (directional)
+KEY_FALL_MAX = {'directional': 7.5, 'diffuse': 7.5}    # v1.4.0: the surroundings -4.5..7.5 L*
 KEY_RAMP = {'left': lambda xx, yy: 1 - xx, 'right': lambda xx, yy: xx, 'top': lambda xx, yy: 1 - yy, 'bottom': lambda xx, yy: yy}
 
 
@@ -245,47 +253,64 @@ def key_light(kl, L, L_in, lab0, ref, h, w):
     """v1.3.0: the key light - the frame's light gathers on the subject and its surroundings fall off, the way the
     light in the scene already runs. One move for the whole frame, in place of scattered small region lifts.
       box: the subject [x0, y0, x1, y1]; from: left|right|top|bottom|front (where the light in the original comes
-      from); light: auto|directional|diffuse; strength 0..1.
+      from); light: auto|directional|diffuse; strength 0..1 (v1.4.0: finish.py may raise it to 1.2 when a gate fails).
     How much is set by the ORIGINAL's light (ps_common.light_character), not by the brief: a directional light gets
-    about 7 L* more separation between the subject and its surroundings, a diffuse overcast light about 4, done mostly
-    by letting the edges and foreground recede (user 2026-11-21: no spotlight on a flat rain sky). The brief can make
-    it quieter ("light": "diffuse", or a lower strength), never stronger than the light allows.
-    Guards: a plain bright sky gets neither light nor shade (no halo around a tower, no blotch in a flat sky); the
-    light follows the surfaces (edge-aware, in proportion to their own brightness, so a dark background does not
-    glow); near-black and clipped tones are left alone."""
+    about 9 L* more separation between the subject and its surroundings (v1.4.0), a diffuse overcast light about 4,
+    done mostly by letting the edges and foreground recede (user 2026-11-21: no spotlight on a flat rain sky). The brief
+    can make it quieter ("light": "diffuse", or a lower strength). v1.4.0: "light": "directional" locks directional
+    mode, but only when the original shows direct sun (sun patches or a clear gradient towards "from"; an overcast frame
+    stays diffuse whatever the brief says).
+    v1.4.0 - driven by two luminance masks of the ORIGINAL:
+      lift  only the subject's lit mid-tones (L* about 35..88, smooth), so the shadow gaps inside the subject box are
+            not lifted - the light falls on the lit faces, the dark seams stay dark;
+      fall  a wide, soft falloff around the subject that fades out on bright sky and highlights (L* > 80), so a sky
+            gets no ring and the corners no dirty vignette.
+    Guards: a plain bright sky gets neither light nor shade; the light follows the surfaces (edge-aware); near-black
+    and clipped tones are left alone."""
     from ps_common import light_character
     ref_lab = lab0
     if ref and Path(ref).exists():
         rr = load_rgb(ref)
         if rr.shape[:2] == (h, w): ref_lab = lin_to_lab(to_linear(rr))
-    ch = light_character(ref_lab[..., 0], np.hypot(ref_lab[..., 1], ref_lab[..., 2]))
+    src_dir = kl.get('from', 'front')
+    ch = light_character(ref_lab[..., 0], np.hypot(ref_lab[..., 1], ref_lab[..., 2]), src_dir, ref_lab[..., 2])
     mode = ch['light']
-    if kl.get('light') == 'diffuse': mode = 'diffuse'          # the brief may only make it quieter
-    st = cl('key_light.strength', kl.get('strength', 1.0), 0, 1)
+    if kl.get('light') == 'diffuse': mode = 'diffuse'          # the brief may make it quieter
+    elif kl.get('light') == 'directional' and mode == 'diffuse':
+        # v1.4.0: the brief may lock directional only where the original shows direct sun
+        if ch.get('sun_patches', 0) >= 0.005 or ch.get('gradient_L', 0) >= 3.0:
+            mode = 'directional'; ch['locked_by_brief'] = True
+        else:
+            ch['lock_refused'] = 'no sun patches and no gradient towards "from" in the original: kept diffuse'
+    st = cl('key_light.strength', kl.get('strength', 1.0), 0, 1.2)
     x0, y0, x1, y1 = [float(v) for v in kl['box']]
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32); yy /= max(h - 1, 1); xx /= max(w - 1, 1)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     rx, ry = max((x1 - x0) / 2, 0.05), max((y1 - y0) / 2, 0.05)
     d = np.sqrt(((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2)
     S = 1 - smoothstep((d - 0.7) / 1.1)                         # full on the subject, falling off over about one subject width
-    src_dir = kl.get('from', 'front')
+    So = 1 - smoothstep((d - 0.8) / 1.8)                        # v1.4.0: the falloff starts later and is much softer
     if src_dir in KEY_RAMP:                                     # the side the light comes from stays a little brighter
         S = np.clip(0.8 * S + 0.2 * KEY_RAMP[src_dir](xx, yy), 0, 1)
+        So = np.clip(0.8 * So + 0.2 * KEY_RAMP[src_dir](xx, yy), 0, 1)
     L01 = np.clip(L_in / 100, 0, 1); r = max(6, min(h, w) // 30)
     S = np.clip(guided(L01, S.astype(np.float32), r, 1e-3), 0, 1)       # the light stops at object edges, not in mid-air
+    So = np.clip(blur(So.astype(np.float32), max(8, min(h, w) // 12)), 0, 1)   # wide feather: no edge to the falloff
     sky = sky_mask(L_in, gaps=True)
     surf = (~sky).astype(np.float32)
     if sky.any():
         surf = np.clip(guided(L01, surf, max(3, min(h, w) // 200), 1e-4), 0, 1) * (~sky)   # never any change on the plain sky
     tot = KEY_TARGET[mode] * st; lift = tot * KEY_SPLIT[mode]; fall = tot - lift
-    bright = np.clip((L_in - 6.0) / 30.0, 0, 1) ** 1.5                    # a lit surface takes light, a black void does not
-    sub = S * surf * bright
-    out_w = (1 - S) * surf * smoothstep((L_in - 4.0) / 20.0)               # near-black shadows are not pushed into black
+    Lr = ref_lab[..., 0]                                                   # masks from the ORIGINAL's light
+    Lrs = guided(np.clip(Lr / 100, 0, 1), Lr, max(3, min(h, w) // 200), 4e-3)
+    lit_mid = smoothstep((Lrs - 30.0) / 10.0) * (1 - smoothstep((Lrs - 84.0) / 8.0))   # L* ~35..88: the lit faces
+    sub = S * surf * lit_mid
+    out_w = (1 - So) * surf * smoothstep((L_in - 4.0) / 20.0)              # near-black shadows are not pushed into black
     if mode == 'diffuse':
         # overcast: the eye is led by the frame edges and the foreground receding, not by a pool of light
         edge = np.clip(np.maximum(np.abs(xx - 0.5), np.abs(yy - 0.5)) * 2, 0, 1)
         out_w = out_w * (0.45 + 0.55 * smoothstep(np.maximum(edge, yy * 1.2 - 0.3)))
-    out_w = out_w * (1 - smoothstep((L_in - 92.0) / 6.0) * 0.5)            # leave lamps and white reflections mostly alone
+    out_w = out_w * (1 - smoothstep((Lrs - 76.0) / 8.0))                    # v1.4.0: bright sky, lamps, white reflections: no falloff
     # on the G route the input already carries G's light: where G already let the surroundings fall off (or already
     #   lifted the subject) that counts towards the key light (2026-11-21 vase: G had darkened the left screens by up to
     #   20 L*; another 6 on top read as a dark patch)
@@ -297,14 +322,133 @@ def key_light(kl, L, L_in, lab0, ref, h, w):
     #   measure it once and scale to the target (at most 2.2x; the lift never over 6 L*, the falloff never over 8)
     shape = lambda li, fa: L + np.clip(li - g_lift, 0, None) * sub - np.clip(fa - g_dark, 0, None) * out_w
     gain = sep(shape(lift, fall)) - sep(L)
+    lmax, fmax = KEY_LIFT_MAX[mode] * max(st, 1.0), KEY_FALL_MAX[mode] * max(st, 1.0)
     if gain > 0.3:
-        k = min(2.2, tot / gain); lift, fall = min(6.0, lift * k), min(8.0, fall * k)
+        k = min(2.2, tot / gain); lift, fall = min(lmax, lift * k), min(fmax, fall * k)
     Lk = shape(lift, fall)
     info = {'light_in_original': ch, 'mode': mode, 'from': src_dir, 'strength': st, 'lift_L': round(lift, 2), 'falloff_L': round(fall, 2),
             'subject_minus_surroundings_L': {'before': round(sep(L), 2), 'after': round(sep(Lk), 2)},
             'sky_untouched': bool(sky.any()), 'box': [x0, y0, x1, y1]}
     if kl.get('what'): info['what'] = kl['what']
     return Lk, info
+
+
+def _ref_lab(ref, lab0, h, w):
+    if ref and Path(ref).exists():
+        rr = load_rgb(ref)
+        if rr.shape[:2] == (h, w): return lin_to_lab(to_linear(rr))
+    return lab0
+
+
+def black_anchor(an, L, Lref, h, w):
+    """v1.4.0: the black anchor. The darkest 15 % of the ORIGINAL (a fixed region, "fixed_dark_L") is pressed about
+    2.5 L* below the original - as a tone curve of the original's own brightness, so no patch can appear - which
+    gives the frame its depth instead of the lifted, grey HDR shadows G tends to make (2026-11-22 courtyard: darks
+    +11.6..+14.5 from G, the final's light/shade separation 10.5 % under the original's). Bounds: never more than
+    3.5 under the original (no dead black screen); a night photo (finish.py: target 0) or a frame where nothing is
+    properly exposed is only kept from rising.
+      anchor: true | {target: -3..0 (L*, default -2.5)}"""
+    from ps_common import dark_anchor_mask, unexposed
+    tgt = -2.5 if an is True else cl('anchor.target', (an or {}).get('target', -2.5), -3.0, 0.0)
+    night = unexposed(Lref) or tgt >= 0      # finish.py passes target 0 for a declared night photo
+    if night: tgt = max(tgt, 0.0)
+    m = dark_anchor_mask(Lref)
+    if not m.any(): return L, {'skipped': 'no dark region'}
+    cur = float(L[m].mean() - Lref[m].mean())
+    # band: pressed to the target from above; from below (G or the key light already pressed the darks deeper) it is
+    #   eased back to just under the target - the later steps (texture, toe) take a little more, and -3.5 is the floor
+    lower = -3.0 if night else tgt - 0.6
+    want = cur
+    if cur > tgt: want = tgt
+    elif cur < lower: want = lower + 0.35
+    info = {'fixed_dark_L_before': round(cur, 2), 'target': tgt}
+    if abs(want - cur) < 0.1:
+        info['action'] = 'already anchored'; return L, info
+    # a tone curve of the ORIGINAL's brightness - the same change for the same original tone everywhere, so it can
+    #   never read as a dark patch (a spatial mask, or a curve of the current smoothed light, did on the b2_08 museum
+    #   background: physics_check removes exactly such a curve before it looks for blotches)
+    base = blur(Lref, 1.5)
+    q_mid, q45 = np.percentile(base[m], 50), np.percentile(base, 45)
+    # the curve fades out over at least 12 L* of original brightness: a steeper one turned smooth gradients into a
+    #   visible step on a very dark frame (b1_01: ghost_edges 1.32)
+    wgt = np.clip(1 - smoothstep((base - q_mid) / max(q45 - q_mid, 12.0)), 0, 1)
+    if want < cur: wgt = wgt * smoothstep((L - 1.5) / 8.0)          # the very blackest is not pushed into dead black
+    k = want - cur
+    for _ in range(4):   # the weight is < 1 in parts of the region: scale until the region's mean lands on the target
+        Ln = L + np.clip(k * wgt, -7.0, 7.0)      # per pixel at most 7 L* (base layer only)
+        got = float(Ln[m].mean() - Lref[m].mean())
+        if abs(got - want) < 0.15 or abs(got - cur) < 1e-3: break
+        k = float(np.clip(k * (want - cur) / (got - cur), -12.0, 12.0))
+    info.update({'fixed_dark_L_after': round(float(Ln[m].mean() - Lref[m].mean()), 2), 'action': f'{round(want - cur, 2)} L* as a tone curve of the original'})
+    return Ln, info
+
+
+def split_tone(sp, L, a, b, lab_ref, h, w):
+    """v1.4.0: a light warm/cool split. Lit faces +1.5..2.0 b* (not near-neutral white walls and grey stone, which stay
+    as they are), shadows neutral to slightly cool (-1.0..1.5 b*). What G already did counts: no stacking.
+      split_tone: true | {warm: 0..2, cool: -1.5..0}"""
+    Lr, ar, br = lab_ref[..., 0], lab_ref[..., 1], lab_ref[..., 2]
+    from ps_common import unexposed
+    if unexposed(Lr): return a, b, {'skipped': 'nothing in the frame is properly exposed'}   # night: finish.py leaves it out
+    warm = 1.75 if sp is True else cl('split_tone.warm', (sp or {}).get('warm', 1.75), 0, 2.0)
+    cool = -1.25 if sp is True else cl('split_tone.cool', (sp or {}).get('cool', -1.25), -1.5, 0)
+    L01 = np.clip(L / 100, 0, 1)
+    base = guided(L01, L, max(6, min(h, w) // 40), 4.0)
+    Cr = blur(np.hypot(ar, br), 3)
+    colourful = np.clip((Cr - 6.0) / 4.0, 0, 1)                     # near-neutral (C* < ~8) gets nothing
+    lit_w = smoothstep((base - 55.0) / 20.0) * colourful
+    sh_w = (1 - smoothstep((base - 15.0) / 25.0)) * smoothstep((base - 3.0) / 8.0)
+    from ps_common import sky_mask as _sm
+    sky = _sm(Lr, gaps=True)
+    lit_w = lit_w * (~sky); sh_w = sh_w * (~sky)
+    gw = float(((b - br) * lit_w).sum() / max(lit_w.sum(), 1e-6)) if lit_w.sum() > 50 else 0.0
+    gc = float(((b - br) * sh_w).sum() / max(sh_w.sum(), 1e-6)) if sh_w.sum() > 50 else 0.0
+    w_add = float(np.clip(warm - max(gw, 0.0), 0, warm)); c_add = float(np.clip(cool - min(gc, 0.0), cool, 0))
+    # stay inside the lit-warmth limit (intensity_check: mean b* change on the original's L* > 55, at most 4.0): an
+    #   excess made here is taken off by settle.py with a GLOBAL white-balance shift, which drained the lanterns'
+    #   colour on b1_01 (2026-11-22). Budget 3.5.
+    lit_i = (Lr > 55) & (~sky)
+    budget = None
+    if lit_i.mean() > 0.02:
+        cur = float((b - br)[lit_i].mean()); per = float(lit_w[lit_i].mean())
+        budget = round(3.5 - cur, 2)
+        if per > 1e-3: w_add = float(np.clip(min(w_add, (3.5 - cur) / per), 0, w_add))
+    b = b + w_add * lit_w + c_add * sh_w
+    return a, b, {'warm_added_b': round(w_add, 2), 'cool_added_b': round(c_add, 2), 'already_from_earlier_steps': [round(gw, 2), round(gc, 2)],
+                  **({'lit_warmth_budget_b': budget} if budget is not None else {})}
+
+
+TEXTURE_AIM = 1.22   # v1.4.0: structure mid-frequency contrast vs the original (the gate's band is 1.15..1.35)
+
+
+def texture(tx, L, Lref, h, w):
+    """v1.4.0: material texture by structure-aware mid-frequency micro-contrast. Radius about 1.4 % of the short edge,
+    low amount (<= 0.28), each pixel's change soft-limited to +-3.5 L*, and only on the original's structure (stone,
+    wood, leaves): 0 on a plain sky and on flat shadow, damped on strong edges - no sharpening rims.
+      texture: 0..0.28 | {amount: 0..0.28}"""
+    from ps_common import structure_mask, midfreq
+    cap = cl('texture', tx.get('amount', 0.24) if isinstance(tx, dict) else tx, 0, 0.28)
+    if cap <= 0: return L, None
+    m = structure_mask(Lref)
+    d = midfreq(L)
+    damp = np.clip(1 - (np.abs(blur(d, 2)) - 8.0) / 12.0, 0.3, 1.0)   # big edges: already strong, damped
+    add_at = lambda k: 3.5 * np.tanh(k * d * damp / 3.5)
+    # the amount aims the structure's mid-frequency contrast at ~1.22x the original's (the brief's value is the cap):
+    #   where G or the grade already added texture, less is added; where G smoothed it, up to the cap
+    sel = m > 0.5
+    info = {'cap': cap, 'structure_area': round(float(sel.mean()), 3)}
+    amt = cap
+    if sel.mean() > 0.02:
+        ref = float(np.abs(midfreq(Lref))[sel].mean()) + 1e-6
+        r0 = float(np.abs(d)[sel].mean()) / ref
+        r1 = float(np.abs(midfreq(L + add_at(cap) * m))[sel].mean()) / ref
+        eff = (r1 - r0) / cap if r1 > r0 else 0.0
+        amt = float(np.clip((TEXTURE_AIM - r0) / eff, 0, cap)) if eff > 1e-3 else 0.0
+        info.update({'ratio_before': round(r0, 3), 'aim': TEXTURE_AIM})
+    add = add_at(amt)
+    L = L + add * m
+    info.update({'amount': round(amt, 3), 'max_abs_change_L': round(float(np.abs(add * m).max()), 2)})
+    return L, info
 
 
 def main(inp, out, params_path, receipt=None):
@@ -446,6 +590,20 @@ def main(inp, out, params_path, receipt=None):
         d = np.sqrt(((xx / max(w - 1, 1) - cx)) ** 2 + ((yy / max(h - 1, 1) - cyy)) ** 2) / (0.7071 * rad)
         L = L - va * smoothstep((d - 0.45) / 0.75); used['vignette'] = {'amount': va, 'centre': [cx, cyy], 'radius': rad}
 
+    # v1.4.0: depth, colour order and texture - measured against the ORIGINAL (auto_ref on the G route)
+    if any(P.get(k) for k in ('anchor', 'split_tone', 'texture', 'chroma_compress')):
+        lab_r = _ref_lab(P.get('auto_ref'), lab0, h, w)
+        if P.get('anchor'):
+            L, used['anchor'] = black_anchor(P['anchor'], L, lab_r[..., 0], h, w)
+        if P.get('split_tone'):
+            a, b, used['split_tone'] = split_tone(P['split_tone'], L, a, b, lab_r, h, w)
+        if P.get('texture'):
+            L, ti = texture(P['texture'], L, lab_r[..., 0], h, w)
+            if ti: used['texture'] = ti
+        if P.get('chroma_compress'):
+            from ps_common import zoned_chroma
+            a, b, used['chroma_compress'] = zoned_chroma(a, b, cl('chroma_compress', P['chroma_compress'], 0, 3))
+
     # soft shoulder and toe: no hard clipping introduced by the grade
     # (only where the grade itself pushed a pixel further out than it was; untouched pixels stay as they are)
     L = np.where((L > 94) & (L > L_in), np.maximum(93 + 5 * np.tanh((L - 93) / 5), np.minimum(L_in, 100)), L)
@@ -475,7 +633,7 @@ def main(inp, out, params_path, receipt=None):
     if m['clipped_white_out'] > max(m['clipped_white_in'], 0.001) * 1.5: flags.append('NEW_HIGHLIGHT_CLIPPING')
     if m['clipped_black_out'] > max(m['clipped_black_in'], 0.002) * 2: flags.append('NEW_SHADOW_CLIPPING')
     if clamps: flags.append('PARAMS_CLAMPED')
-    rec = {'tool': 'grade.py v1.3.0 (deterministic, non-generative)', 'input': {'file': Path(inp).name, 'sha256': sha256(inp), 'size': [w, h]},
+    rec = {'tool': 'grade.py v1.4.0 (deterministic, non-generative)', 'input': {'file': Path(inp).name, 'sha256': sha256(inp), 'size': [w, h]},
            'output': {'file': Path(out).name, 'sha256': sha256(out), 'size': [w, h]}, 'params_used': used, 'clamped': clamps, 'measurements': m, 'flags': flags,
            'verdict': 'DONE' + (' | FLAGS: ' + '; '.join(flags) if flags else '') + ' - judge by eye against the brief'}
     text = json.dumps(rec, ensure_ascii=False, indent=1)

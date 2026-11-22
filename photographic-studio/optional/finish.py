@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.7 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
-Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum] [--no-g]
+"""Photographic Studio v1.4.0 - finish: run the default N chain and retry safer settings by itself, so one good photo comes out.
+Usage: python3 finish.py SOURCE G_OUTPUT GRADE_JSON OUT_PNG [RECEIPT_JSON] [--genre=museum|night] [--no-g]
   SOURCE      original photo;  G_OUTPUT  the host's generative edit
   --no-g      v1.2.0: no G for this photo (the brief says every move can be done by N): only the N attempts run, with
               the brief's own parameters first. Passing the SOURCE as G_OUTPUT means the same.
@@ -37,7 +37,16 @@ balance runs at half strength (G's colour is part of the look). The user, 2026-1
 were missing; the photo's expressiveness must come out.
 v1.2.5: a G attempt whose only physics problems are local wrong light (a lamp put out, a darkening patch, a halo or
 spotlight glow) is first repaired in place by harmonize.py --light-only; G is dropped only when the repair does not pass.
-Deterministic. Needs numpy, Pillow, OpenCV.
+v1.4.0 (2026-11-22 courtyard/arcade receipts): an over-coloured G no longer skips the improvement check. An attempt
+that is over a strength limit is first settled (settle.py, which only trims the excess - colour by zoned compression)
+and improve_check.py then ALWAYS runs on the settled attempt: the moves, then four hard gates (subject separation
+>= +3.5 L*, global light/shade separation >= 1.05x directional / 1.0x diffuse, black anchor -3.5..+1.5 L*, colour
+order) and a texture check. When a light gate fails the remedy raises the key light (strength up to 1.2) and the
+black anchor / a gentle S-curve - never clarity - and each step reruns the physics checks (tone order, halo, darkening
+patch, ghost edges, sky glow) and the keep regions; any red line stops it and the step is undone.
+Defaults added unless the brief sets them: "anchor": true, "split_tone": true (not museum), "texture": 0.24 minus
+the brief's clarity (0.2 on a small photo).
+Deterministic. Needs numpy, Pillow (OpenCV optional: cvlite).
 """
 import json, sys, tempfile, shutil
 from pathlib import Path
@@ -85,12 +94,15 @@ def local_contrast_gain(src, img):
 
 def unstack(params, gain):
     """v1.0.9: clarity minus what G already added (G +25 % local contrast or more -> no clarity).
-    v1.2.7: the same for the automatic contrast: G's added contrast and auto's S-curve do not stack."""
+    v1.2.7: the same for the automatic contrast: G's added contrast and auto's S-curve do not stack.
+    v1.4.0: the same for the texture micro-contrast."""
     c = float(params.get('clarity', 0) or 0)
     if gain <= 1.0: return params, None
     k = max(0.0, 1.0 - (gain - 1.0) / 0.25)
     q = json.loads(json.dumps(params)); info = {'g_local_contrast_gain': round(gain, 3)}
     if c > 0: q['clarity'] = round(c * k, 3); info['clarity'] = [c, q['clarity']]
+    tx = q.get('texture')
+    if isinstance(tx, (int, float)) and not isinstance(tx, bool) and tx > 0: q['texture'] = round(float(tx) * k, 3); info['texture'] = [tx, q['texture']]
     if isinstance(q.get('auto'), dict):
         ac = float(q['auto'].get('contrast', 1)); q['auto']['contrast'] = round(ac * k, 3); info['auto_contrast'] = [ac, q['auto']['contrast']]
     return (q, info) if len(info) > 1 else (params, None)
@@ -164,10 +176,47 @@ def safer(params, drop_vignette=False):
         vg['amount'] = round(max(1.5, float(vg['amount']) / 2), 3) if float(vg['amount']) > 1.5 else float(vg['amount'])
     kl = q.get('key_light')   # v1.3.0: the key light stays (it is the photo's light), at half strength
     if isinstance(kl, dict): kl['strength'] = round(max(0.5, float(kl.get('strength', 1.0)) / 2), 3)
+    tx = q.get('texture')   # v1.4.0: half the texture on a safer attempt
+    if isinstance(tx, (int, float)) and not isinstance(tx, bool) and tx > 0: q['texture'] = round(float(tx) / 2, 3)
     regs = [r for r in q.get('regions', []) if float(r.get('lift', 0)) <= 0]
     if regs: q['regions'] = regs
     else: q.pop('regions', None)
     return q
+
+
+GATE_LIGHT = ('subject_separation', 'global_separation', 'black_anchor')
+
+
+def shortfall(g):
+    """v1.4.0: how far the light gates are from passing (0 = all pass), so a remedy step is kept only if it helps."""
+    if not g: return 9.0
+    s = 0.0
+    ss = g.get('subject_separation') or {}
+    if ss.get('ok') is False: s += max(0.0, ss['min'] - ss['gain_L']) / 3.5
+    gs = g.get('global_separation') or {}
+    if gs.get('ok') is False: s += max(0.0, gs['min'] - gs['ratio']) / 0.1
+    ba = g.get('black_anchor') or {}
+    if ba.get('ok') is False:
+        v = ba['fixed_dark_L_change']; s += max(0.0, v - ba['band'][1], ba['band'][0] - v) / 2.0
+    return s
+
+
+def remedy(params, gate):
+    """v1.4.0: one step of the gate remedy - more key light (up to 1.2), a firmer black anchor and a gentle S-curve.
+    Never clarity. A black anchor that went under -3.5 is eased instead."""
+    q = json.loads(json.dumps(params)); did = {}
+    fd = ((gate or {}).get('black_anchor') or {}).get('fixed_dark_L_change')
+    if fd is not None and fd < -3.5:
+        if q.get('anchor') is not False: q['anchor'] = {'target': -2.0}; did['anchor'] = -2.0
+        return q, did
+    kl = q.get('key_light')
+    if isinstance(kl, dict) and kl.get('box'):
+        s0 = float(kl.get('strength', 1.0)); kl['strength'] = round(min(1.2, max(s0, 1.0) + 0.1), 3); did['key_light_strength'] = [s0, kl['strength']]
+    if q.get('anchor') is not False:
+        an = q.get('anchor'); t0 = float(an.get('target', -2.5)) if isinstance(an, dict) else -2.5
+        q['anchor'] = {'target': max(-3.0, t0 - 0.25)}; did['anchor_target'] = q['anchor']['target']
+    c0 = float(q.get('contrast', 0) or 0); q['contrast'] = round(min(c0 + 0.04, max(c0, 0.12)), 3); did['contrast'] = [c0, q['contrast']]
+    return q, did
 
 
 def problems(src, out, genre, g_chroma=None):
@@ -219,6 +268,11 @@ def main():
     from ps_common import load_rgb as _lr, srgb_to_lab as _sl, tone_needs as _tn
     _open = _tn(_sl(_lr(src))[..., 0])['stretch_ok']
     G_AUTO = {'wb': 0.5, 'dehaze': 1, 'levels': 1 if _open else 0, 'contrast': 1 if _open else 0, 'vibrance': 0}
+    # v1.4.0 defaults: black anchor, warm/cool split, structure texture (the brief can switch each off with false)
+    params.setdefault('anchor', {'target': 0.0} if genre == 'night' else True)   # night: only kept from rising
+    if genre not in ('museum', 'night'): params.setdefault('split_tone', True)
+    if 'texture' not in params:
+        params['texture'] = round(max(0.0, (0.2 if lowres else 0.24) - float(params.get('clarity', 0) or 0)), 3)
     if no_g:   # v1.2.0: its own N route - no look_transfer of the original against itself
         tries = [('n_direct', params, [], None), ('n_direct_safer', safer(params), [], None)]
     else:
@@ -231,7 +285,7 @@ def main():
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
     if lowres:   # the museum-strength step raises clarity again: cap every attempt
         tries = [(nm, lowres_cap(pp, short_edge)[0], lo, gs) for nm, pp, lo, gs in tries]
-    rec = {'tool': 'finish.py v1.2.7', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    rec = {'tool': 'finish.py v1.4.0', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
     if lowres: rec['low_resolution'] = lowres
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
     elif not (params.get('key_light') or {}).get('box'):
@@ -239,7 +293,7 @@ def main():
 
     best = None
     with tempfile.TemporaryDirectory() as td:
-        td = Path(td); seen = set(); result = {}
+        td = Path(td); seen = set(); result = {}; remedy_used = [False]
         for i, (name, p, ltopt, gsrc) in enumerate(tries):
             if name.endswith('museum_strength'):
                 # v1.0.9: museum strength is only a rescue for an edit nobody can see. A stronger grade cannot fix a
@@ -260,7 +314,7 @@ def main():
             if gsrc is None:
                 shutil.copy(src, lt); r1 = {'flags': ['N direct: G not used']}
             else:
-                r1 = run('look_transfer.py', src, gsrc, lt, *ltopt)
+                r1 = run('look_transfer.py', src, gsrc, lt, *ltopt, *(['--night'] if genre == 'night' else []))
                 gcm = ((r1.get('measurements') or {}).get('chroma_ratio') or {}).get('G')
                 if gcm and 'g_chroma' not in rec: rec['g_chroma'] = gcm   # v1.2.2: pass to settle.py as --g-chroma
                 gc = rec.get('g_chroma')
@@ -279,7 +333,7 @@ def main():
                 #   v1.2.7, on the same attempt without the sky smoothing (2026-11-21, photo 03: with the sky smoothed,
                 #   a G that v1.2.7 rightly refused passed and left a white patch on the water)
                 lt_n, fin_n = td / f'lt{i}n.png', td / f'fin{i}n.png'
-                run('look_transfer.py', src, gsrc, lt_n, *ltopt, '--no-sky-trend')
+                run('look_transfer.py', src, gsrc, lt_n, *ltopt, '--no-sky-trend', *(['--night'] if genre == 'night' else []))
                 if lt_n.exists():
                     render(lt_n, p, pj, fin_n, src, kj)
                     if fin_n.exists():
@@ -319,8 +373,23 @@ def main():
                     if not b2:
                         p, pj, fin, bad, weak, iv, pv = p2, pj2, fin2, b2, w2, _iv, _pv
             if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
+            settled = None
+
+            def judge(f_in, tag):
+                """v1.4.0: settle an attempt that is over a strength limit (trim only), then judge it."""
+                b_, w_, iv_, pv_ = problems(src, f_in, genre, gc)
+                if not (set(w_) - {'no_visible_change'}): return f_in, b_, w_, iv_, pv_, None
+                f_s = td / f'{tag}_settled.png'
+                sr = run('settle.py', src, f_in, f_s, *([f'--genre={genre}'] if genre == 'museum' else []), *([f'--g-chroma={gc}'] if gc else []))
+                if not f_s.exists(): return f_in, b_, w_, iv_, pv_, {'error': str(sr.get('verdict'))[:120]}
+                b2_, w2_, iv2_, pv2_ = problems(src, f_s, genre, gc)
+                if len(b2_) > len(b_): return f_in, b_, w_, iv_, pv_, {'undone': 'new physics problem: ' + ', '.join(b2_)}
+                return f_s, b2_, w2_, iv2_, pv2_, {'was': [k for k in w_ if k != 'no_visible_change'], 'left': [k for k in w2_ if k != 'no_visible_change']}
+            if not bad and set(weak) - {'no_visible_change'}:
+                fin, bad, weak, iv, pv, settled = judge(fin, f'a{i}')
             ic = None
             only_subdue = bool(set(weak) - {'no_visible_change'})   # v1.2.6: over a range - only distractions may still be quieted
+            allowed = set(weak) if only_subdue else set()   # v1.4.0: fixed for the whole loop (it was replaced mid-loop)
             if p.get('moves') and not bad and (not only_subdue or any(mv.get('subdue') for mv in p['moves'])):   # an invisible edit is exactly what to strengthen
                 # v1.2.0: the improvement must show. Strengthen only the moves nobody can see, while nothing breaks.
                 ic = run('improve_check.py', src, fin, pj, f'--base={lt}'); rounds = []
@@ -331,7 +400,7 @@ def main():
                         else: p2['moves'][k]['on_structure'] = True
                     pj2 = td / f'p{i}h.json'; fin2 = td / f'fin{i}h.png'; pj2.write_text(json.dumps(p2), encoding='utf-8')
                     render(lt, p2, pj2, fin2, src, kj)
-                    b2, w2, _iv, _pv = problems(src, fin2, genre, gc)
+                    fin2, b2, w2, _iv, _pv, _s = judge(fin2, f'a{i}h')
                     rounds.append({'halo_fix': ic['halo'], **({'stopped_by': b2 + w2} if (b2 or w2) else {})})
                     if not (b2 or set(w2) - {'no_visible_change'}):
                         p, pj, fin, iv, pv, weak = p2, pj2, fin2, _iv, _pv, w2
@@ -343,30 +412,75 @@ def main():
                     p2 = strengthen(p, todo, 1.4); pj2 = td / f'p{i}s{rnd}.json'; fin2 = td / f'fin{i}s{rnd}.png'
                     pj2.write_text(json.dumps(p2), encoding='utf-8'); render(lt, p2, pj2, fin2, src, kj)
                     if not fin2.exists(): break
-                    b2, w2, _iv, _pv = problems(src, fin2, genre, gc)
-                    if b2 or (set(w2) - {'no_visible_change'}) - (set(weak) if only_subdue else set()):
+                    fin2, b2, w2, _iv, _pv, _s = judge(fin2, f'a{i}s{rnd}')
+                    if b2 or (set(w2) - {'no_visible_change'}) - allowed:
                         rounds.append({'round': rnd + 1, 'stopped_by': b2 + w2}); break
                     p, pj, fin, iv, pv, weak = p2, pj2, fin2, _iv, _pv, w2
                     ic = run('improve_check.py', src, fin, pj, f'--base={lt}'); rounds.append({'round': rnd + 1, 'verdict': ic.get('verdict')})
+                if ic.get('halo') and not only_subdue:
+                    # v1.4.0: a halo that only shows once a move was strengthened (the first check now runs on the
+                    #   settled attempt) gets the same fix: a local move on structure, a band a softer edge
+                    p2 = json.loads(json.dumps(p))
+                    for k in ic['halo']:
+                        if full_span(p2['moves'][k]): p2['moves'][k]['feather'] = max(0.3, float(p2['moves'][k].get('feather', 0.08)))
+                        else: p2['moves'][k]['on_structure'] = True
+                    pj2 = td / f'p{i}h2.json'; fin2 = td / f'fin{i}h2.png'; pj2.write_text(json.dumps(p2), encoding='utf-8')
+                    render(lt, p2, pj2, fin2, src, kj)
+                    fin2, b2, w2, _iv, _pv, _s = judge(fin2, f'a{i}h2')
+                    if not (b2 or set(w2) - {'no_visible_change'} - allowed):
+                        ic2 = run('improve_check.py', src, fin2, pj2, f'--base={lt}')
+                        rounds.append({'halo_fix_after_strengthening': ic['halo'], 'verdict': ic2.get('verdict')})
+                        if not ic2.get('halo'):
+                            p, pj, fin, iv, pv, weak, ic = p2, pj2, fin2, _iv, _pv, w2, ic2
+                    else:
+                        rounds.append({'halo_fix_after_strengthening': ic['halo'], 'stopped_by': b2 + w2})
                 if ic.get('weak'): weak = weak + ['move_not_visible']
                 if ic.get('halo') and not only_subdue: bad = bad + ['move_halo']
                 ic = {'verdict': ic.get('verdict'), 'moves': ic.get('moves'), 'strengthened': rounds}
+            # v1.4.0: the four hard gates, always, on the settled attempt; a failed light gate gets the remedy
+            gate, gate_rounds = None, []
+            if not bad:
+                gate = run('improve_check.py', src, fin, pj, '--gates', *([f'--genre={genre}'] if genre else [])).get('gates')
+                # the remedy runs once per photo, on the first attempt that passes the physics checks (the later rungs of
+                #   the ladder are safer variants of it; harmonize.py's floors still apply to whatever is delivered)
+                for rnd in range(0 if remedy_used[0] else 2):
+                    remedy_used[0] = True
+                    if not gate or not (set(gate.get('failed', [])) & set(GATE_LIGHT)): break
+                    p2, did = remedy(p, gate)
+                    if not did: break
+                    pj2 = td / f'p{i}r{rnd}.json'; fin2 = td / f'fin{i}r{rnd}.png'
+                    pj2.write_text(json.dumps(p2), encoding='utf-8'); render(lt, p2, pj2, fin2, src, kj)
+                    if not fin2.exists(): break
+                    fin2, b2, w2, _iv, _pv, _s = judge(fin2, f'a{i}r{rnd}')
+                    if b2:   # a red line (light order, halo, darkening patch, ghost edges, sky glow): undo and stop
+                        gate_rounds.append({'round': rnd + 1, 'did': did, 'stopped_by': b2}); break
+                    g2 = run('improve_check.py', src, fin2, pj2, '--gates', *([f'--genre={genre}'] if genre else [])).get('gates')
+                    better = g2 is not None and len(g2.get('failed', [])) <= len(gate.get('failed', [])) and \
+                        shortfall(g2) < shortfall(gate) - 0.02   # kept only when it actually moved the light gates
+                    gate_rounds.append({'round': rnd + 1, 'did': did, 'gates': (g2 or {}).get('verdict'), 'kept': bool(better)})
+                    if not better: break
+                    p, pj, fin, iv, pv, weak, gate = p2, pj2, fin2, _iv, _pv, w2 + [x for x in weak if x == 'move_not_visible'], g2
+            gfail = ['gate:' + x for x in (gate or {}).get('failed', [])]
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak,
                                     **({'light_repair': light_fix} if light_fix else {}),
                                     **({'sky_glow_fix': sky_fix} if sky_fix else {}),
                                     **({'clarity_unstacked': unstacked} if unstacked else {}),
                                     **({'keep': kept.get('verdict')} if kept else {}),
+                                    **({'settled_before_check': settled} if settled else {}),
+                                    **({'gates': gate, 'gates_failed': gfail} if gate else {}), **({'gate_remedy': gate_rounds} if gate_rounds else {}),
                                     **({'improve': ic, 'params': p} if ic else {})})
             result[name] = (bad, weak)
             # v1.0.2: a G route that passes the physics checks and visibly changes the photo beats N direct whatever the
             #   strength ranges say: ranges trim the excess afterwards (step 6), they are not a reason to drop G's look.
             #   (2026-11-13 batch: four of five photos lost G this way and came out nearly unchanged; the user
             #   preferred the G route on all four.)
-            score = (len(bad), 0 if (gsrc is not None and 'no_visible_change' not in weak) else 1, len(weak), i)
-            if best is None or score < best[0]: best = (score, fin, name, bad + weak)
-            if not bad and (not weak or weak == ['move_not_visible']): break   # a safer attempt cannot show more
+            score = (len(bad), 0 if (gsrc is not None and 'no_visible_change' not in weak) else 1, len(weak) + len(gfail), i)
+            if best is None or score < best[0]: best = (score, fin, name, bad + weak + gfail)
+            if not bad and (not weak or weak == ['move_not_visible']): break   # a safer attempt cannot show more (gates neither)
         shutil.copy(best[1], out)
     rec['delivered'] = best[2]
+    dg = next((x.get('gates') for x in rec['attempts'] if x['name'] == best[2] and x.get('gates')), None)
+    if dg: rec['gates'] = dg
     rec['verdict'] = 'DELIVER' if not best[3] else 'DELIVER_WITH_FLAGS: ' + ', '.join(best[3])
     t = json.dumps(rec, ensure_ascii=False, indent=1)
     if rec_p: Path(rec_p).write_text(t, encoding='utf-8')

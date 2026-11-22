@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.0.2 - look transfer: every output pixel is the ORIGINAL photo's pixel,
+"""Photographic Studio v1.4.0 - look transfer: every output pixel is the ORIGINAL photo's pixel,
 re-toned with the light and colour of the generative result G. Nothing G drew is kept, so no AI texture.
-Usage: python3 look_transfer.py SOURCE G_OUTPUT OUT_PNG [RECEIPT_JSON] [--strength 0..1] [--local 0..1] [--no-sky-trend]
+Usage: python3 look_transfer.py SOURCE G_OUTPUT OUT_PNG [RECEIPT_JSON] [--strength 0..1] [--local 0..1] [--no-sky-trend] [--no-shadow-clamp] [--night]
 Output has the SOURCE's size and framing. Deterministic. Needs numpy, Pillow, OpenCV.
 
 How G's look is taken over (three smooth layers, all functions of the source pixel and its neighbourhood):
@@ -9,6 +9,21 @@ How G's look is taken over (three smooth layers, all functions of the source pix
   L1  large-scale light: broad relighting, gradients, vignette (edge-aware, radius ~6% of the frame)
   L2  local light: finer shaping, used only where G and the source agree in structure (confidence map)
 --strength scales everything; --local scales L2 only (0 = safest against halos).
+v1.4.0 (2026-11-22 courtyard/arcade receipts: G lifted the darks +11.6..+14.5 L* - habitual HDR - and over-coloured):
+  shadow-lift clamp  on the original's darkest ~20 % (L* < 38, smooth edge) G's positive brightness change is held to
+                     about +1.75 L* (soft); deepening is allowed. Not with --night or on a frame where nothing is
+                     properly exposed (median L* < 12 and p95 < 45).
+  colour pre-scale   G's colour change is first halved on bright near-neutral areas (white walls, grey stone: C* < 8,
+                     L* > ~45), then
+                     the whole colour change is scaled so the output's mean chroma stays within 1.65x the original
+                     (G's own colour is kept up to the user's 1.65x ceiling: 2026-11-19, reconfirmed 2026-11-22 after a
+                     1.40x cap dulled the greens of three rainy garden photos).
+  high frequency     every pixel's fine detail is the original's: the transferred change is built only from smooth
+                     maps applied to the original's own pixels. The receipt measures what is left of G's own fine detail
+                     in the output (g_high_freq_leak: correlation of the fine-scale change with G's after removing the
+                     photo's own detail; ~0 means none; real G drafts 0.1). A tried guard that halved the local layer
+                     when G is sharper only moved this from 0.13 to 0.11 and let G's light spread onto a dark museum
+                     background (b2_08 leftover glow 1.7 -> 2.5 L*), so it was not kept.
 """
 import json, sys
 from pathlib import Path
@@ -25,6 +40,9 @@ AB = 90.0
 
 
 GLOW_RAISE = 15.0   # v1.0.2: L* above the dark background's trend that only an invented glow reaches
+SHADOW_T, SHADOW_CAP = 38.0, 1.75   # v1.4.0: the darkest ~20 % (L* < 38) may rise at most ~1.75 L*
+CHROMA_PRESCALE = 1.65              # v1.4.0: output mean chroma at most 1.65x the original (user 2026-11-22: 1.40 dulled G's greens)
+NEUTRAL_C = 8.0                     # v1.4.0: near-neutral in the original - G's colour change halved there
 
 
 def register(src, g):
@@ -113,7 +131,7 @@ def main():
     strength = min(max(opt.get('--strength', 1.0), 0), 1); local = min(max(opt.get('--local', 1.0), 0), 1)
     src, g = load_rgb(src_p), load_rgb(g_p)
     hs, ws = src.shape[:2]; hg, wg = g.shape[:2]
-    rec = {'tool': 'look_transfer.py v1.2.8 (deterministic; output pixels are the source photo, re-toned)',
+    rec = {'tool': 'look_transfer.py v1.4.0 (deterministic; output pixels are the source photo, re-toned)',
            'source': {'file': Path(src_p).name, 'sha256': sha256(src_p), 'size': [ws, hs]}, 'g': {'file': Path(g_p).name, 'sha256': sha256(g_p), 'size': [wg, hg]},
            'params': {'strength': strength, 'local': local}, 'flags': [], 'stop_reasons': []}
     H, inl = register(src, g); rec['registration_inliers'] = inl
@@ -253,6 +271,50 @@ def main():
     give = np.clip(-8.0 - R, 0, None) * np.clip((Llf - 10.0) / 15.0, 0, 1)
     removed_area = float((give > 2.0).mean())
     delta[..., 0] += give
+    # v1.4.0 shadow-lift clamp: no habitual HDR. On the original's darkest ~20 % G's added brightness is held to ~+1.75
+    #   L* (soft, tanh); deepening is untouched. A night or badly under-exposed original is excepted (lifting is the edit).
+    Lo_s = blur(lab0[..., 0], max(3, min(hs, ws) // 100))
+    L0m = lab0[..., 0]
+    # night (declared: --night, which finish.py passes for --genre=night) or a frame where nothing is properly exposed
+    #   (median L* < 12 and even the brightest 5 % under 45). Statistics alone cannot tell a night scene from a dim
+    #   interior lit by sun patches (b1_03: mean 24.9, p95 72) or a backlit garden - and on those G's even shadow lift
+    #   is exactly the HDR habit to hold back
+    from ps_common import unexposed
+    night_like = '--night' in sys.argv or unexposed(L0m)
+    shadow_clamp = {}
+    if not night_like and '--no-shadow-clamp' not in sys.argv:
+        T = min(SHADOW_T, float(np.percentile(Lo_s, 20)) + 4.0)
+        wd = 1 - np.clip((Lo_s - (T - 6.0)) / 12.0, 0, 1); wd = wd * wd * (3 - 2 * wd)
+        pos = np.maximum(delta[..., 0], 0); kept = SHADOW_CAP * np.tanh(pos / SHADOW_CAP)
+        cut = wd * (pos - kept)
+        dark = wd > 0.5
+        before_dk = float(delta[..., 0][dark].mean()) if dark.any() else 0.0
+        delta[..., 0] -= cut
+        k_ab = np.clip((8.0 + lab0[..., 0] + delta[..., 0]) / np.maximum(8.0 + lab0[..., 0] + delta[..., 0] + cut, 1e-3), 0.6, 1)
+        delta[..., 1] = (lab0[..., 1] + delta[..., 1]) * k_ab - lab0[..., 1]; delta[..., 2] = (lab0[..., 2] + delta[..., 2]) * k_ab - lab0[..., 2]
+        shadow_clamp = {'threshold_L': round(T, 1), 'area': round(float(dark.mean()), 3),
+                        'g_lift_in_darks_L': round(before_dk, 2), 'kept_L': round(float(delta[..., 0][dark].mean()) if dark.any() else 0.0, 2)}
+    else:
+        shadow_clamp = {'skipped': 'night or badly under-exposed original: lifting the darks is the edit' if night_like else '--no-shadow-clamp'}
+    # v1.4.0 colour pre-scale: G's colour change halved on near-neutral areas, then the output's mean chroma held to 1.65x
+    C0 = np.hypot(lab0[..., 1], lab0[..., 2]); Cn = blur(C0, 3)
+    # near-neutral AND reasonably bright (white walls, stone pillars, grey stone): a dark, low-chroma shadow is not a
+    #   white wall, and G's warmth there is the scene's light (b1_03: 69 % of the frame was 'near-neutral' shadow)
+    Lb0 = blur(lab0[..., 0], 3)
+    wn = 0.5 * np.clip((NEUTRAL_C + 2.0 - Cn) / 4.0, 0, 1) * np.clip((Lb0 - 40.0) / 15.0, 0, 1)
+    delta[..., 1] *= (1 - wn); delta[..., 2] *= (1 - wn)
+    cmean0 = float(C0.mean()) + 1e-6
+    ratio_at = lambda s_: float(np.hypot(lab0[..., 1] + s_ * delta[..., 1], lab0[..., 2] + s_ * delta[..., 2]).mean()) / cmean0
+    r_full = ratio_at(1.0); s_ab = 1.0
+    if r_full > CHROMA_PRESCALE:
+        lo_, hi_ = 0.0, 1.0
+        for _ in range(14):
+            mid = (lo_ + hi_) / 2
+            if ratio_at(mid) > CHROMA_PRESCALE: hi_ = mid
+            else: lo_ = mid
+        s_ab = lo_; delta[..., 1] *= s_ab; delta[..., 2] *= s_ab
+    colour_prescale = {'neutral_area_halved': round(float((wn > 0.25).mean()), 3), 'chroma_ratio_full': round(r_full, 3),
+                       'scale': round(s_ab, 3), 'chroma_ratio_after': round(ratio_at(1.0), 3)}
     # a lift larger than the original's shadow detail can carry turns milky: limit it, and keep local contrast under strong lifts
     dL = delta[..., 0]; lim = 24.0
     dLc = np.where(dL > 0, lim * np.tanh(dL / lim), dL)
@@ -301,6 +363,20 @@ def main():
     if capped > 0.05: rec['flags'].append(f'LIFT_LIMITED {round(capped, 3)}: G brightened dark areas more than the original detail can carry')
     if m['structure_corr_with_source'] < 0.9: rec['flags'].append('STRUCTURE_LOW')
     if sky_trend: m['sky_kept_to_smooth_gradient'] = sky_trend
+    m['shadow_lift_clamp'] = shadow_clamp; m['colour_prescale'] = colour_prescale
+    # v1.4.0: how much of G's own fine detail reached the output (correlation of the fine-scale change with G's)
+    #   only the part of G's fine detail that the photo does not have counts: both changes are first cleared of the
+    #   photo's own fine detail (G and the output may both scale it - that is the photo's texture, not G's)
+    hpf2 = lambda x: x - blur(x, 1.5)
+    vv = valid & (blur(valid.astype(np.float32), 3) > 0.99)
+    leak = 0.0
+    if vv.any():
+        hs2 = hpf2(labS[..., 0])[vv]
+        res = lambda x: x - hs2 * float((x * hs2).sum() / max(float((hs2 * hs2).sum()), 1e-9))
+        dg, do = res(hpf2(labG[..., 0] - labS[..., 0])[vv]), res(hpf2(og[..., 0] - labS[..., 0])[vv])
+        leak = float((dg * do).mean() / (np.sqrt((dg ** 2).mean() * (do ** 2).mean()) + 1e-9))
+    m['g_high_freq_leak'] = round(leak, 3)
+
     m['invented_light_removed_area'] = round(glow_area, 3); m['deleted_light_restored_area'] = round(removed_area, 3)
     # v1.0.2: check the result, not the intention - how much light above the background's smooth trend is left on the
     # flat dark background of the OUTPUT (a glow G invented that the clamp did not fully remove)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.7 - improve check: is each of the brief's improvement moves visible in the finished photo?
+"""Photographic Studio v1.4.0 - improve check: is each of the brief's improvement moves visible in the finished photo?
 Usage: python3 improve_check.py ORIGINAL FINISHED PARAMS_JSON [RECEIPT_JSON] [--base=GRADE_INPUT]
   PARAMS_JSON  the grade parameters with "moves" (grade.py). FINISHED must have the original's framing (run it before
                any crop), it is resized to the original if needed.
@@ -31,6 +31,16 @@ graded once more without that move and the difference is used, so a sky gradient
 v1.2.6 - a move with "subdue": true (a bright distraction to quiet) is measured as the share of its excess brightness
 over its surroundings that the edit took away: floor 0.20, target 0.50 for small spots and 0.40 for patches the size of
 clothing (cap 0.45 - more turns them into dull grey patches).
+v1.4.0 - gates (--gates; finish.py always runs them, after the attempt is settled): four hard low-frequency gates and
+one texture check, all in CIELAB against the original of the same framing. A local micro-contrast measure alone let
+flat, grey-shadowed finals through (2026-11-22 courtyard/arcade):
+  subject_separation  (L_subject - L_surround) rises by >= 3.5 L* (key_light box; skipped without one)
+  global_separation   global_sep(final) / global_sep(original) >= 1.05 (directional light) or 1.0 (diffuse: flat,
+                      overcast, rain - not flatter than the original; user 2026-11-22)
+  black_anchor        fixed_dark_L (the original's darkest 15 %) changes by -3.5 .. +1.5 L*: no grey lift, no dead black
+  colour_order        chroma ratio <= 1.65; near-neutral areas drift <= 3 in a*/b*; in daylight the lit-minus-shade
+                      warmth (b*) is kept (~90 % of the original's) and clear (>= 1.0)
+  texture (info)      mid-frequency micro-contrast on the original's structure 1.15 .. 1.35x (reported, not a gate)
 Deterministic, numpy + Pillow (+ grade.py's mask code).
 """
 import json, sys
@@ -225,15 +235,95 @@ def check(src, fin, params, base=None):
     return out
 
 
+SUBJECT_MIN, SEP_DIRECTIONAL, SEP_DIFFUSE = 3.5, 1.05, 1.0
+DARK_BAND = (-3.5, 1.5)
+CHROMA_MAX, NEUTRAL_DRIFT, TEXTURE_BAND = 1.65, 3.0, (1.15, 1.35)
+
+
+def gates(src, fin, params, genre=None, subject=True):
+    """v1.4.0: the four hard expressiveness gates and the texture check. FINISHED must have ORIGINAL's framing (it is
+    resized if needed); a different aspect ratio returns None."""
+    from ps_common import global_sep, fixed_dark_delta, structure_mask, midfreq, light_character, sky_mask
+    o = load_rgb(src); f = load_rgb(fin)
+    if abs(f.shape[1] / f.shape[0] - o.shape[1] / o.shape[0]) > 0.01: return None
+    if f.shape != o.shape:
+        f = np.asarray(Image.fromarray(np.uint8(np.rint(f * 255))).resize((o.shape[1], o.shape[0]), Image.LANCZOS)).astype(np.float32) / 255
+    lo, lf = srgb_to_lab(o), srgb_to_lab(f)
+    Lo, Lf = lo[..., 0], lf[..., 0]
+    Co, Cf = np.hypot(lo[..., 1], lo[..., 2]), np.hypot(lf[..., 1], lf[..., 2])
+    h, w = Lo.shape
+    kl = params.get('key_light') if isinstance(params.get('key_light'), dict) else None
+    sky = sky_mask(Lo, gaps=True)
+    out = {}
+    # 1 subject separation
+    if subject and kl and kl.get('box'):
+        x0, y0, x1, y1 = [float(v) for v in kl['box']]
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32); yy /= max(h - 1, 1); xx /= max(w - 1, 1)
+        d = np.sqrt(((xx - (x0 + x1) / 2) / max((x1 - x0) / 2, 0.05)) ** 2 + ((yy - (y0 + y1) / 2) / max((y1 - y0) / 2, 0.05)) ** 2)
+        t = np.clip((d - 0.7) / 1.1, 0, 1); S = 1 - t * t * (3 - 2 * t)
+        sub, sur = (S > 0.7) & ~sky, (S < 0.25) & ~sky
+        if sub.mean() > 0.005 and sur.mean() > 0.02:
+            so, sf = float(Lo[sub].mean() - Lo[sur].mean()), float(Lf[sub].mean() - Lf[sur].mean())
+            out['subject_separation'] = {'original': round(so, 2), 'final': round(sf, 2), 'gain_L': round(sf - so, 2),
+                                         'min': SUBJECT_MIN, 'ok': bool(sf - so >= SUBJECT_MIN)}
+        else:
+            out['subject_separation'] = {'ok': None, 'note': 'subject or surroundings too small to measure'}
+    else:
+        out['subject_separation'] = {'ok': None, 'note': 'no key_light box' if subject else 'framing changed: the box no longer applies'}
+    # 2 global light/shade separation
+    ch = light_character(Lo, Co, (kl or {}).get('from'), lo[..., 2])
+    dirl = ch['light'] == 'directional' and (kl or {}).get('light') != 'diffuse' and genre not in ('night', 'museum')
+    floor = SEP_DIRECTIONAL if dirl else SEP_DIFFUSE
+    r = global_sep(Lf) / max(global_sep(Lo), 1e-6)
+    out['global_separation'] = {'ratio': round(r, 3), 'min': floor, 'light': 'directional' if dirl else 'diffuse', 'ok': bool(r >= floor - 0.005)}
+    # 3 black anchor
+    fd = fixed_dark_delta(Lo, Lf)
+    out['black_anchor'] = {'fixed_dark_L_change': round(fd, 2), 'band': list(DARK_BAND), 'ok': bool(DARK_BAND[0] <= fd <= DARK_BAND[1])}
+    # 4 colour order
+    cr = float(Cf.mean() / max(Co.mean(), 1e-6))
+    flat = np.abs(Lo - blur(Lo, 4)) < 2.5
+    N = (Co < 6) & (Lo > 35) & (Lo < 92) & ~sky & ~(flat & (Lo > 70) & (np.arange(h)[:, None] < h // 2))
+    drift = None
+    if N.mean() > 0.02:
+        drift = [round(float((lf[..., 1] - lo[..., 1])[N].mean()), 2), round(float((lf[..., 2] - lo[..., 2])[N].mean()), 2)]
+    split = None
+    if float(Lo.mean()) >= 22 and genre not in ('night', 'museum'):
+        from harmonize import lit_shade
+        lit, shade, _, _ = lit_shade(Lo, lo[..., 2])
+        if lit.mean() > 0.05 and shade.mean() > 0.05:
+            do_ = float(lo[..., 2][lit].mean() - lo[..., 2][shade].mean()); df_ = float(lf[..., 2][lit].mean() - lf[..., 2][shade].mean())
+            want = max(min(0.9 * do_, do_ - 0.5), 1.0) if do_ > -1.0 else do_   # kept (~90 %) and clear (>= 1)
+            split = {'original': round(do_, 2), 'final': round(df_, 2), 'want': round(want, 2), 'ok': bool(df_ >= want - 0.25)}
+    ok_c = cr <= CHROMA_MAX + 0.005 and (drift is None or max(abs(drift[0]), abs(drift[1])) <= NEUTRAL_DRIFT) and (split is None or split['ok'])
+    out['colour_order'] = {'chroma_ratio': round(cr, 3), 'max': CHROMA_MAX, 'neutral_drift_ab': drift, 'lit_minus_shade_b': split, 'ok': bool(ok_c)}
+    # 5 texture (info)
+    m = structure_mask(Lo, sky) > 0.5
+    if m.mean() > 0.02:
+        tr = float(np.abs(midfreq(Lf))[m].mean() / max(np.abs(midfreq(Lo))[m].mean(), 1e-6))
+        out['texture'] = {'structure_midfreq_ratio': round(tr, 3), 'band': list(TEXTURE_BAND), 'ok': bool(TEXTURE_BAND[0] <= tr <= TEXTURE_BAND[1]), 'gate': False}
+    else:
+        out['texture'] = {'ok': None, 'note': 'little structure in the frame', 'gate': False}
+    failed = [k for k in ('subject_separation', 'global_separation', 'black_anchor', 'colour_order') if out[k].get('ok') is False]
+    out['failed'] = failed
+    out['verdict'] = 'GATES_PASS' if not failed else 'GATES_FAIL: ' + ', '.join(failed)
+    return out
+
+
 def main():
     a = [x for x in sys.argv[1:] if not x.startswith('--')]
     if len(a) < 3: sys.exit(__doc__)
     src, fin, pj = a[:3]; rec_p = a[3] if len(a) > 3 else None
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}')
     opt = {x.split('=')[0]: x.split('=', 1)[1] for x in sys.argv[1:] if x.startswith('--') and '=' in x}
+    if '--gates' in sys.argv:   # v1.4.0
+        g = gates(src, fin, params, opt.get('--genre'), subject='--no-subject' not in sys.argv)
+        rec = {'tool': 'improve_check.py v1.4.0', 'gates': g, 'verdict': (g or {}).get('verdict', 'SKIPPED: other framing')}
+        t = json.dumps(rec, ensure_ascii=False, indent=1)
+        if rec_p: Path(rec_p).write_text(t, encoding='utf-8')
+        print(t); return 0
     moves = check(src, fin, params, opt.get('--base'))
     if moves is None:
-        rec = {'tool': 'improve_check.py v1.2.6', 'verdict': 'SKIPPED: the finished photo has another framing (cropped); measure before the crop - the finish.py receipt is the record'}
+        rec = {'tool': 'improve_check.py v1.4.0', 'verdict': 'SKIPPED: the finished photo has another framing (cropped); measure before the crop - the finish.py receipt is the record'}
         print(json.dumps(rec, ensure_ascii=False, indent=1)); return 0
     weak = [m['move'] for m in moves if not m.get('visible')]
     below = [m['move'] for m in moves if not m.get('at_target')]
@@ -242,7 +332,7 @@ def main():
               ('VISIBLE' if not weak else 'WEAK: ' + '; '.join(f"{m['what'] or m['move']} ({m.get('effect')} {m.get('value')})" for m in moves if not m.get('visible')))
     if halos: verdict += ' | HALO: ' + '; '.join(m['what'] or str(m['move']) for m in moves if m.get('halo_found'))
     if not weak and below: verdict += ' | BELOW_TARGET: ' + '; '.join(m['what'] or str(m['move']) for m in moves if not m.get('at_target'))
-    rec = {'tool': 'improve_check.py v1.2.6', 'source_sha256': sha256(src), 'moves': moves, 'weak': weak, 'below_target': below, 'halo': halos, 'verdict': verdict}
+    rec = {'tool': 'improve_check.py v1.4.0', 'source_sha256': sha256(src), 'moves': moves, 'weak': weak, 'below_target': below, 'halo': halos, 'verdict': verdict}
     t = json.dumps(rec, ensure_ascii=False, indent=1)
     if rec_p: Path(rec_p).write_text(t, encoding='utf-8')
     print(t); return 0

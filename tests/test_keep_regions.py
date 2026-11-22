@@ -57,7 +57,7 @@ def test_content_mode_removes_what_g_repainted_and_keeps_the_scene_tone(tmp_path
     err_after = np.abs(hp(region(k, inner)) - hp(region(o, inner))).mean()
     assert err_after < 0.5 * err_before
     warm = region(k, inner)[..., 2].mean() - region(o, inner)[..., 2].mean()
-    assert warm > 2   # the scene's warmth still reaches the panel
+    assert warm > 1.5   # the scene's warmth still reaches the panel (v1.4.0: G's colour is pre-scaled to 1.40x, was > 2)
     assert rec['regions'][0]['seam_dE'] <= 3.0 and not rec['flags'], rec
 
 
