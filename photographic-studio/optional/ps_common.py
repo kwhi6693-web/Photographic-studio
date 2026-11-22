@@ -51,23 +51,122 @@ def sky_mask(L, gaps=False):
     return out
 
 
-def light_character(L, C=None):
+RAMP = {'left': lambda xx, yy: 1 - xx, 'right': lambda xx, yy: xx, 'top': lambda xx, yy: 1 - yy, 'bottom': lambda xx, yy: yy}
+PATCH_DIRECT = 0.015     # v1.4.0: share of the land in sharp-edged bright patches that marks direct sun (sun patches)
+GRAD_DIRECT = 6.0        # v1.4.0: L* the land rises towards the side the light comes from
+
+
+def light_character(L, C=None, frm=None, B=None):
     """v1.3.0 (key light): is the original's light directional (a side light, a window, a lamp - there is a light/shade
     structure to build the subject's light on) or diffuse (a flat overcast or grey-sky day, or a frame whose land has
     hardly any large-scale light difference)? Judged on a small copy, on the land only. A diffuse frame gets a quieter
-    key light (user 2026-11-21: no spotlight on a rain-mist pagoda - mostly the edges and foreground recede)."""
+    key light (user 2026-11-21: no spotlight on a rain-mist pagoda - mostly the edges and foreground recede).
+    v1.4.0 (2026-11-22, the arcade/corridor run: clear sunlight from the left with sun patches on the floor was read as
+    diffuse, its key light lifted only 1.58 L*): the land's overall spread is no longer the only sign. Also measured:
+      sun_patches   share of the land in bright patches that stand clearly above their surroundings (direct sun on a
+                    floor or wall; an overcast day has none);
+      gradient_L    how much brighter the land is on the side the light comes from (frm) than on the opposite side.
+    B: the original's b* (warmth); with it, a patch must also be warmer than its surroundings to count.
+    Directional when the spread is large, OR there are sun patches, OR the land clearly brightens towards frm. A grey
+    sky still means diffuse unless there are sun patches (sun through a break in the cloud)."""
     h, w = L.shape
     k = max(1, int(round(max(h, w) / 640)))
     sm = lambda z: z[:h // k * k, :w // k * k].reshape(h // k, k, w // k, k).mean((1, 3)) if k > 1 else z
     Ls = sm(L)
     sky = sky_mask(Ls, gaps=True); land = ~sky
-    if land.mean() < 0.05: return {'light': 'diffuse', 'land_spread': 0.0, 'grey_sky': True, 'sky_fraction': round(float(sky.mean()), 3)}
+    if land.mean() < 0.05: return {'light': 'diffuse', 'land_spread': 0.0, 'grey_sky': True, 'sky_fraction': round(float(sky.mean()), 3),
+                                    'sun_patches': 0.0, 'gradient_L': 0.0}
     Lb = blur(Ls, max(8, min(Ls.shape) // 12))
     spread = float(np.percentile(Lb[land], 90) - np.percentile(Lb[land], 10))
     # a grey or white sky (overcast, rain, mist); a blue or sunset sky is daylight with a direction
     grey_sky = bool(sky.mean() > 0.10 and (C is None or float(sm(C)[sky].mean()) < 6.0))
-    light = 'diffuse' if (grey_sky or spread < 18) else 'directional'
-    return {'light': light, 'land_spread': round(spread, 1), 'grey_sky': grey_sky, 'sky_fraction': round(float(sky.mean()), 3)}
+    # sun patches: bright (L* > 60) areas at least 12 L* above their own neighbourhood, a few pixels across (not a speck)
+    #   and warmer than it (sunlight against skylit shade; a white shirt or a white stone on an overcast day is not)
+    loc = blur(Ls, 2) - blur(Ls, max(6, min(Ls.shape) // 25))
+    patch = (loc > 12) & (blur(Ls, 2) > 60) & land
+    if B is not None:
+        Bs = sm(B); patch &= (blur(Bs, 2) - blur(Bs, max(6, min(Ls.shape) // 25))) > 1.5
+    patch = blur(patch.astype(np.float32), 2) > 0.5
+    patches = float(patch[land].mean())
+    grad = 0.0
+    if frm in RAMP:
+        hs, ws = Ls.shape
+        yy, xx = np.mgrid[0:hs, 0:ws].astype(np.float32); yy /= max(hs - 1, 1); xx /= max(ws - 1, 1)
+        rmp = RAMP[frm](xx, yy)
+        near, far = (rmp > 0.67) & land, (rmp < 0.33) & land
+        if near.mean() > 0.03 and far.mean() > 0.03:
+            grad = float(np.median(Lb[near]) - np.median(Lb[far]))
+    direct_signs = patches >= PATCH_DIRECT or grad >= GRAD_DIRECT
+    if grey_sky: light = 'directional' if patches >= PATCH_DIRECT else 'diffuse'
+    else: light = 'directional' if (spread >= 18 or direct_signs) else 'diffuse'
+    return {'light': light, 'land_spread': round(spread, 1), 'grey_sky': grey_sky, 'sky_fraction': round(float(sky.mean()), 3),
+            'sun_patches': round(patches, 4), 'gradient_L': round(grad, 1)}
+
+
+# ---- v1.4.0: shared measures, so the grade, the final guard (harmonize.py) and the gates (improve_check.py) agree ----
+DARK_SHARE = 0.15        # the darkest 15 % of the ORIGINAL (smoothed) is the black anchor region
+
+
+def unexposed(L):
+    """v1.4.0: a frame where nothing is properly exposed (median L* < 12 and even the brightest 5 % under 45). Night
+    itself is declared (--genre=night): statistics cannot tell a night scene from a dim interior lit by sun patches."""
+    return float(np.median(L)) < 12 and float(np.percentile(L, 95)) < 45
+
+
+def global_sep(L):
+    """Large-scale light/shade separation: p85 - p15 of L* smoothed at 12 px (the same as harmonize.py has used since
+    v1.2.5). The gates compare it between the final and the original of the same framing."""
+    s = blur(L, 12)
+    return float(np.percentile(s, 85) - np.percentile(s, 15))
+
+
+def dark_anchor_mask(Lo, share=DARK_SHARE):
+    """Fixed region = the darkest `share` of the ORIGINAL, judged on its smoothed light (a whole shaded area, not single
+    dark pixels). The same pixels are measured in every later image ("fixed_dark_L")."""
+    s = blur(Lo, max(2, min(Lo.shape) // 300))
+    return s <= np.percentile(s, share * 100)
+
+
+def fixed_dark_delta(Lo, L, mask=None):
+    """Mean L* change on the original's darkest 15 % (negative = pressed down)."""
+    m = dark_anchor_mask(Lo) if mask is None else mask
+    return float(L[m].mean() - Lo[m].mean()) if m.any() else 0.0
+
+
+def structure_mask(Lo, sky=None):
+    """v1.4.0 texture: 1 on things with structure in the ORIGINAL (stone, wood, leaves, carving), 0 on a plain sky, a
+    smooth wall, water haze and flat shadow. Smooth (edge-aware), so its border never draws a line."""
+    h, w = Lo.shape
+    g = blur(np.abs(Lo - blur(Lo, 2)), max(2, min(h, w) // 250))
+    m = np.clip((g - 0.8) / 1.6, 0, 1)
+    m = m * np.clip((Lo - 8.0) / 10.0, 0, 1)                 # deep flat shadow: no texture to bring out
+    if sky is None: sky = sky_mask(Lo, gaps=True)
+    m = m * (~sky)
+    m = np.clip(guided(np.clip(Lo / 100, 0, 1), m.astype(np.float32), max(3, min(h, w) // 150), 1e-3), 0, 1)
+    return m.astype(np.float32)
+
+
+def midfreq(L, h=None, w=None):
+    """Mid-frequency detail at the texture scale (about 1.4 % of the short edge)."""
+    h, w = L.shape
+    r = max(4, int(round(0.014 * min(h, w))))
+    return L - blur(L, r)
+
+
+def zoned_chroma(a, b, strength, knee_pct=None):
+    """v1.4.0 (settle.py, harmonize.py): bring colour down where it overflows, not everywhere. Only the chroma above a
+    knee (this image's own upper chroma: the top ~15 %, never below 1.5x its median) is compressed - excess / (1 + 1.5 * strength) - so the mid and low
+    saturations, and the colour of lit surfaces, stay as they are. The knee moves down a little with the strength.
+    Returns a, b, info."""
+    C = np.hypot(a, b)
+    s = max(0.0, float(strength))
+    if s <= 0: return a, b, {'strength': 0.0}
+    pct = knee_pct if knee_pct is not None else 85.0 - 10.0 * min(s, 3.0)
+    knee = max(float(np.percentile(C, pct)), 1.5 * float(np.median(C)), 12.0)   # mid saturations are never touched
+    ex = np.maximum(C - knee, 0)
+    Cn = np.where(C > knee, knee + ex / (1 + 1.5 * s), C)
+    f = (Cn / np.maximum(C, 1e-6)).astype(np.float32)
+    return a * f, b * f, {'strength': round(s, 3), 'knee_C': round(knee, 1), 'area_compressed': round(float((C > knee).mean()), 3)}
 
 
 def tone_needs(L):

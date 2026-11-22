@@ -1,4 +1,4 @@
-# G 路线调用规范与提示模板（v0.2.1）
+# G 路线调用规范与提示模板（v0.2.1；v1.4.0 加反 HDR 句）
 
 > 来源与边界：本模板按 WO-1/2/3 实测过的提示结构**重建**，不是任何一次调用的逐字原文。宿主会改写提示词，实际可见调用文本通常与此不同。除庭院测试外，A（天空/穹顶）、B（石墙）、C（室内拱廊）三张新照片首轮被用户接受；样本很少，不构成稳定性保证。
 
@@ -24,8 +24,12 @@ Edit the provided photo into a finished, professional-grade photograph with stro
 Image A is the direct source photo. Keep the same framing, viewpoint and layout of everything in the scene.
 Make the light and colour work: <本张的 2–3 项摄影意图，例如 shape the light on the facade and give the sky depth / warm sunlit stone against cool shade / separate the subject from the background with light and tone>.
 Natural photographic rendering: rich but believable colour, real depth and local contrast, clean highlights, shadows with detail.
+<physics.md 第 2 节的两句>
+No HDR look: do not lift the shadows evenly; keep the foreground and the deepest shadows as dark as in the source, or darker, as the black anchor of the frame; put the light only on the lit subject and the real light patches, so the contrast between light and shade stays the same or grows.
 Do not create a poster, collage or graphic design. Do not add text.
 ```
+
+（v1.4.0：模板里补上物理两句的位置和反 HDR 一句。“shadows with detail” 指暗部保留原有细节，**不是**把暗部提亮。）
 
 写“摄影意图”一行的要求：
 - v0.2.2：把 `story_style.md` 定下的风格方向翻译成具体的光色手段，并点出主角。例：`Warm late-afternoon documentary mood: keep the low sun and long shadows, keep the warm light on the old shopfronts, the street as the subject`。
@@ -33,6 +37,7 @@ Do not create a poster, collage or graphic design. Do not add text.
 - **v0.3.8：保留真实的反光和高光**：在“摄影意图”里写 `keep the real glaze, glass and metal highlights and the existing light patches in the scene`；不写 “controlled specular highlights”，那会让 G 压掉釉光。
 - 来自 A 阶段对原片的观察：主体、光线方向、冷暖关系、空间层次。写具体的光和色，不写“subtle / slightly / only tonal”这类压低强度的词。
 - **v1.3.0：主光**：在“摄影意图”里写一句光往哪里聚，例如 `let the existing side light gather on the vase, the flowers and the table, the screens and corners falling into shade`；阴天、雨雾写 `no spotlight: the frame edges and the foreground fall a little darker so the pagoda stands out in the soft light`。G 不一定照做，成片的主光由 `key_light` 保证。
+- **v1.4.0：反 HDR，必写**（2026-11-22 庭院／回廊回执：G 习惯性把暗部均匀抬亮 +11.6～+14.5 L*，成片的全局明暗分离反而比原片低 10.5%）。在物理那两句之后**再加一句，必须照写**：`No HDR look: do not lift the shadows evenly; keep the foreground and the deepest shadows as dark as in the source, or darker, as the black anchor of the frame; put the light only on the lit subject and the real light patches, so the contrast between light and shade stays the same or grows.` 意思是：不均匀提亮阴影；前景和最深的暗部保持原片的暗（或更暗）作黑场锚点；光感只集中在受光的主体和真实的光斑上；明暗反差保持或拉大。G 不一定照做，`look_transfer.py` 的暗部抬升软上限和 `grade.py` 的黑场锚定兜底。
 - **v1.2.8：平的阴天或灰白天空**（原片天空亮而平、没有云的纹理）：在“摄影意图”里写 `keep the overcast sky smooth and soft - only a gentle gradient, darker at the top - do not add clouds; put the light, depth and contrast into the trees, buildings, water and foreground`。G 画的云块不会进入成片（`look_transfer.py` 在平的亮天空上只取 G 的平滑渐变），只会把 G 的力气从景物上分走。
 - 不再默认加文字、石材、人物保护行：这些由贴回负责。只有当某个物体**无法贴回**（例如大面积招牌超过画面三分之一）时，才加一行 `Keep <对象> exactly as in the source.`
 

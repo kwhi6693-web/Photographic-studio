@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v2.3.0 - settle: step 6 safety trim in one call.
+"""Photographic Studio v2.4.0 (package v1.4.0) - settle: step 6 safety trim in one call.
 Usage: python3 -I settle.py ORIGINAL FINISHED OUT_PNG [RECEIPT_JSON] [--genre=museum] [--g-chroma=X]
   ORIGINAL   the original photo;  FINISHED  the image finish.py delivered (or any later version)
   --g-chroma=X  v1.2.2: the finish.py receipt's "g_chroma" on the G route: the colour limit becomes G's own colour (max x1.65)
@@ -9,6 +9,11 @@ says DO_NOT_DELIVER), only as much as keeps it, and the rest stays as a flag. Ea
 FINISHED with one scaled parameter set (bisection, about 6 tries). It never touches what is in range and never stops to ask.
 v2.3.0 (v1.2.7, user 2026-11-20): the unused floor lift and band anchoring (--bands, --n-direct, from v1.0.6) are
 removed; the default behaviour is unchanged. --bands and --n-direct are accepted and ignored.
+v1.4.0 (2026-11-22 arcade: a global saturation 0.75 took 40.2 % of the colour off the sunlit surfaces): colour over
+its limit is brought down by grade.py "chroma_compress" - only the over-saturated top of the chroma (above this image's
+own upper chroma) is compressed, so the mid and low saturations and the lit surfaces keep their colour. The 1.65x
+ceiling is unchanged. The same for warmth over its limit: a b* shift on the lit tones only (grade.py tone_split
+highlights), not a global white-balance shift - on b1_01 a global temp -0.7 drained the lanterns' colour.
 Deterministic. Needs numpy, Pillow (and what grade.py, intensity_check.py, physics_check.py need).
 """
 import json, shutil, sys, tempfile
@@ -21,8 +26,9 @@ SEARCH_EDGE = 640   # v2.1.0: long edge of the copies the parameter search runs 
 PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep', 'ghost_edges', 'sky_glow')
 # full step for each measure; the tool uses the smallest fraction of it that is enough
 DOWN = {'L_mean_change': {'exposure_ev': -0.3}, 'subject_L_change': {'exposure_ev': -0.3}, 'background_L_change': {'shadows': -6},
-        'chroma_ratio': {'saturation': -0.25}, 'subject_chroma_ratio': {'saturation': -0.25},
-        'lit_warmth_change': {'white_balance.temp': -0.35}, 'highlight_p99_change': {'highlights': -10},
+        'chroma_ratio': {'chroma_compress': 1.0}, 'subject_chroma_ratio': {'chroma_compress': 1.0},   # v1.4.0: zoned, not global
+        'lit_warmth_change': {'tone_split.highlights_b': -4.0},   # v1.4.0: only the lit tones, not a global white balance
+        'highlight_p99_change': {'highlights': -10},
         'sky_L_change': {'sky_lift': -8}}
 
 
@@ -37,6 +43,7 @@ def params_for(step, t):
     for k, v in step.items():
         if k == 'saturation': p['saturation'] = round(1 + v * t, 4)
         elif k == 'white_balance.temp': p['white_balance'] = {'temp': round(v * t, 4)}
+        elif k == 'tone_split.highlights_b': p['tone_split'] = {'highlights': [0.0, round(max(-8.0, v * t), 3)]}
         elif k == 'sky_lift': p['regions'] = [{'shape': 'gradient', 'from': 'top', 'end': 0.55, 'feather': 0.2, 'only_hue': 'blue', 'lift': round(v * t, 3)}]
         else: p[k] = round(v * t, 4)
     return p
@@ -58,7 +65,7 @@ def main():
     if len(a) < 3: sys.exit(__doc__)
     src, fin, out = a[:3]; rec_p = a[3] if len(a) > 3 else None
     gopt = ([f"--genre={opt['genre']}"] if opt.get('genre') else []) + ([f"--g-chroma={opt['g-chroma']}"] if opt.get('g-chroma') else [])
-    rec = {'tool': 'settle.py v2.3.0', 'steps': [], 'mode': 'trim_only'}
+    rec = {'tool': 'settle.py v2.4.0', 'steps': [], 'mode': 'trim_only'}
     with tempfile.TemporaryDirectory() as td:
         td = Path(td); n = [0]
 
@@ -98,7 +105,8 @@ def main():
         if over:
             step = {}
             for k in over:
-                for pk, pv in DOWN[k].items(): step[pk] = min(step.get(pk, 0), pv)
+                for pk, pv in DOWN[k].items():   # the larger step of the two, whatever its sign (chroma_compress is positive)
+                    step[pk] = pv if pk not in step else (max(step[pk], pv) if pv > 0 else min(step[pk], pv))
             weak_before = set(failing(it1, 'too weak'))
             ok = lambda it: not any(k in failing(it, 'too strong') for k in over) and set(failing(it, 'too weak')) <= weak_before   # never trim a measure under its floor
             kept = lambda it: not str(it.get('verdict', '')).startswith('DO_NOT_DELIVER')

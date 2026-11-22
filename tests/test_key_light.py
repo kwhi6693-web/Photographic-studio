@@ -53,7 +53,7 @@ def test_directional_light_gets_the_full_separation(tmp_path):
     sp, out, kl = grade(tmp_path, img, {'key_light': {'box': [0.45, 0.35, 0.75, 0.75], 'from': 'right'}})
     assert kl['mode'] == 'directional'
     gained = kl['subject_minus_surroundings_L']['after'] - kl['subject_minus_surroundings_L']['before']
-    assert 5.5 <= gained <= 9.0, kl
+    assert 5.5 <= gained <= 10.5, kl          # v1.4.0: directional target 9 (was 7)
     D = L(load(out)) - L(load(sp))
     assert D[(np.abs(X - 0.6) < 0.08) & (np.abs(Y - 0.55) < 0.08)].mean() > 1.5      # the subject comes up
     assert D[(X < 0.12) & (Y < 0.2)].mean() < -2.0                                   # a far corner falls off

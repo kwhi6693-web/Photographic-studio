@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.2.5 - harmonize: the last step, run on the file that is actually delivered.
+"""Photographic Studio v1.4.0 - harmonize: the last step, run on the file that is actually delivered.
 
 Usage: python3 -I harmonize.py ORIGINAL CANDIDATE OUT.png [RECEIPT.json] [--genre=museum|night] [--params=PARAMS.json]
                                 [--check-only] [--light-only]
@@ -31,6 +31,18 @@ reads first is light, then colour, then depth; this step repairs those locally i
           stays within 1.65x the original (the user's ceiling for G's own colour, 2026-11-19).
 4 Check   physics_check.py and intensity_check.py on the result; their verdicts go into the receipt.
 
+v1.4.0 (2026-11-22 courtyard: the final's light/shade separation was held only at 0.90x the original's, so G's
+grey HDR shadows were delivered 10.5 % flatter than the photo):
+  - light/shade separation at least 1.02x the original's (1.05x when the original's light is directional, as
+    grade.py's key light judges it from the brief's key_light). With a key light the added light goes into the subject;
+    lit faces are lifted only in the mid-tones (fading out from L* 60 to 85) and at most 6 L*, the shade pressed at most
+    3 L* and never below L* 10 - when that is not enough the floor is left short and reported
+    (light_shade_floor_not_reached): crushed shadows or washed-out sunlit colour are worse than a missed ratio
+    (b1_03, 2026-11-22). Colour follows the lifts; out-of-gamut colours go towards their own grey;
+  - black guard: the original's darkest 15 % (fixed_dark_L) may end at most +1.5 L* above the original and at most
+    3.5 below; outside that band the dark anchor is set again on the large-scale light (grade.black_anchor);
+  - the 1.65x colour ceiling is reached by compressing only the over-saturated top of the chroma, not by scaling
+    all colour down.
 --check-only writes nothing but the receipt: steps 1-3 report what they would change.
 --light-only runs step 1 only (finish.py uses it to repair a G attempt instead of dropping G).
 Deterministic. Needs numpy, Pillow, OpenCV (via ps_common).
@@ -42,9 +54,12 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ps_common import load_rgb, save_png, srgb_to_lab, lab_to_lin, to_srgb, blur, guided, sha256, run_tool, sky_mask
 
-VERSION = 'harmonize.py v1.2.5'
+VERSION = 'harmonize.py v1.4.0'
 FUSE_AREA = 0.20
-SEP_FLOOR = 0.90   # light/shade separation vs the original (03 and 05 of the 2026-11-19 batch kept 0.95)
+SEP_FLOOR = 1.02   # v1.4.0: light/shade separation vs the original (was 0.90)
+SEP_FLOOR_V125 = 0.90
+SEP_FLOOR_DIRECTIONAL = 1.05
+DARK_UP, DARK_DOWN = 1.5, -3.5   # v1.4.0 black guard on fixed_dark_L
 HI_DROP = 3.0      # the brightest 1% may fall at most this much in L*
 
 
@@ -148,10 +163,25 @@ def darken_mask(params_path, shape):
 
 def has_key_light(params_path):
     """v1.3.0: does the brief set a key light (grade.py key_light)?"""
-    if not params_path or not Path(params_path).exists(): return False
+    return key_light_of(params_path) is not None
+
+
+def key_light_of(params_path):
+    if not params_path or not Path(params_path).exists(): return None
     try: P = json.loads(Path(params_path).read_text(encoding='utf-8') or '{}')
-    except Exception: return False
-    return bool((P.get('key_light') or {}).get('box'))
+    except Exception: return None
+    kl = P.get('key_light') or {}
+    return kl if kl.get('box') else None
+
+
+def directional(Lo, ao, bo, params_path):
+    """v1.4.0: is the original's light directional, the way grade.py's key light judges it (brief 'diffuse' wins)?"""
+    from ps_common import light_character
+    kl = key_light_of(params_path) or {}
+    if kl.get('light') == 'diffuse': return False
+    ch = light_character(Lo, np.hypot(ao, bo), kl.get('from'), bo)
+    if ch['light'] == 'directional': return True
+    return kl.get('light') == 'directional' and (ch.get('sun_patches', 0) >= 0.005 or ch.get('gradient_L', 0) >= 3.0)
 
 
 def colour_mask(params_path, shape):
@@ -184,8 +214,18 @@ def lc(L):
     return float(np.abs(L - blur(L, 8)).mean())
 
 
-def step_depth(Lo, L, genre, protect=None, key_light=False):
-    info = {}
+def subject_weight(kl, shape):
+    """v1.4.0: the key light's subject area (the same ellipse grade.py and the gates use), soft, 0..1."""
+    h, w = shape
+    x0, y0, x1, y1 = [float(v) for v in kl['box']]
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32); yy /= max(h - 1, 1); xx /= max(w - 1, 1)
+    d = np.sqrt(((xx - (x0 + x1) / 2) / max((x1 - x0) / 2, 0.05)) ** 2 + ((yy - (y0 + y1) / 2) / max((y1 - y0) / 2, 0.05)) ** 2)
+    return (1 - smooth(d, 0.7, 1.8)).astype(np.float32)
+
+
+def step_depth(Lo, L, genre, protect=None, key_light=False, floor=SEP_FLOOR, kl=None):
+    info = {'light_shade_floor': floor}
+    Sw = subject_weight(kl, L.shape) if kl else None
     # v1.2.8: the plain, bright sky of the original (2026-11-21, photo 03: after G's smooth sky deepening the
     #   light/shade floor lifted the whole sky back +9 L* and clipped its blue channel)
     sm = sky_mask(Lo, gaps=True) if genre not in ('night', 'museum') else None
@@ -200,20 +240,46 @@ def step_depth(Lo, L, genre, protect=None, key_light=False):
         L = np.clip(L, 0, 100)
         info['black_point'] = f'{q5:.1f} -> {float(np.percentile(L, 5)):.1f} (limit {lim:.1f})'
     ratio = sep(L) / max(sep(Lo), 1e-6)
-    if ratio < SEP_FLOOR:   # v1.2.5b: lit and shade must stay apart (0.75 let two of five garden photos go flat)
-        r0 = ratio
-        for _ in range(3):
-            base = blur(L, 12); m = float(np.median(base)); g = min(SEP_FLOOR / ratio, 1.3)
+    if ratio < floor:   # v1.2.5b: lit and shade must stay apart; v1.4.0: at least 1.02x (directional 1.05x)
+        r0 = ratio; L_start = L.copy()
+        for _ in range(8):
+            base = blur(L, 12); m = float(np.median(base)); g = min(floor / ratio, 1.3)
             d = (base - m) * (g - 1)
+            if floor > SEP_FLOOR_V125:
+                # v1.4.0: the lit side comes up only in the mid-tones (fading out from L* 60 to 85: a sunlit orange
+                #   lifted towards white turns pale - b1_03 sun patches +14 L*, colour x0.75) and at most 6 L* in all;
+                #   the shade carries more of it (the black guard below bounds it)
+                hi_fade = 1 - smooth(L, 60.0, 85.0)
+                if Sw is not None:
+                    d = np.where(d > 0, d * 1.2 * (0.25 + 0.75 * Sw) * hi_fade, d * 0.8 * (1 - 0.5 * Sw))
+                else:
+                    d = np.where(d > 0, d * 1.2 * hi_fade, d * 0.8)
+                if sky_w is not None: d = d * (1 - sky_w)
+                if protect is not None: d = np.where(protect & (d > 0), 0.0, d)
+                # a shade pressed at most 3 L* and never below L* 10 (unless it already was): the floor is not worth
+                #   dead black, muddy shadows (b1_03 cabinet: -4.5 and its wood colour gone) - then it is reported
+                low = np.minimum(L_start, np.maximum(L_start - 3.0, 10.0))
+                L = np.clip(np.clip(L + d, low, L_start + 6.0), 0, 100)
+                ratio = sep(L) / max(sep(Lo), 1e-6)
+                if ratio >= floor - 0.002: break
+                continue
             # mostly the sunlit side comes up (what reads as sunlight); the shade only a little, so darks are not crushed
             # v1.3.0: with a key light the brief already set where the shade falls - pushing the shade down again on
             #   top of it made a dark patch (2026-11-21 vase); only the lit side comes up
-            d = np.where(d > 0, d * 1.6, d * (0.0 if key_light else 0.4)) * (1 - smooth(L, 92.0, 99.0))
+            if Sw is not None:
+                # v1.4.0: with a key light the extra light goes into the subject, and outside it the lit side only a
+                #   little (lifting a bright window or sky beyond the subject undid the key light: b1_03); the
+                #   surroundings may recede a little, the black guard below keeps them from going dead
+                d = np.where(d > 0, d * 1.6 * (0.25 + 0.75 * Sw), d * 0.3 * (1 - Sw)) * (1 - smooth(L, 92.0, 99.0))
+            else:
+                d = np.where(d > 0, d * 1.6, d * (0.0 if key_light else 0.4)) * (1 - smooth(L, 92.0, 99.0))
             if sky_w is not None: d = d * (1 - sky_w)   # v1.2.8: a plain sky is not the sunlit side; it keeps G's gradient
+            if protect is not None: d = np.where(protect & (d > 0), 0.0, d)   # v1.4.0: the brief's own darkening stays
             L = np.clip(L + d, 0, 100)
             ratio = sep(L) / max(sep(Lo), 1e-6)
-            if ratio >= SEP_FLOOR - 0.005: break
+            if ratio >= floor - 0.002: break
         info['light_shade_sep'] = f'{r0:.3f} -> {ratio:.3f}'
+        if ratio < floor - 0.01: info['light_shade_floor_not_reached'] = 'stopped short: more would crush the shadows or wash out the lit colour'
     # highlights: the brightest 1% may not end up much darker than in the original, except where the brief
     #   darkens on purpose (a light- move: a sky graded darker at the top)
     keep_dark = protect if protect is not None else np.zeros_like(L, bool)
@@ -242,6 +308,18 @@ def step_depth(Lo, L, genre, protect=None, key_light=False):
         r = lc(L) / max(lc(Lo), 1e-6)
     if r0 < 1.0:
         info['local_contrast'] = f'{r0:.3f} -> {r:.3f}'
+    # v1.4.0 black guard: the original's darkest 15 % - no grey lift (> +1.5) and no dead black (< -3.5)
+    from ps_common import fixed_dark_delta
+    fd = fixed_dark_delta(Lo, L)
+    info['fixed_dark_L'] = round(fd, 2)
+    if fd > DARK_UP or fd < DARK_DOWN:
+        from grade import black_anchor
+        h, w = L.shape
+        L, an = black_anchor({'target': -2.0 if fd > DARK_UP else -2.5}, L.astype(np.float32), Lo, h, w)
+        L = np.clip(L, 0, 100)
+        info['black_guard'] = f'fixed_dark_L {fd:+.2f} -> {fixed_dark_delta(Lo, L):+.2f} (band {DARK_DOWN}..+{DARK_UP})'
+        r2 = sep(L) / max(sep(Lo), 1e-6)
+        if r2 < floor - 0.01: info['black_guard'] += f'; separation {r2:.3f}'
     return L, info
 
 
@@ -255,11 +333,16 @@ def step_colour(Lo, ao, bo, L, a, b, colour_moves=None):
     N = ((Co < 6) & (Lo > 35) & (Lo < 92) & ~sky).astype(np.float32)
     if N.mean() > 0.02:
         da, db = float((a - ao)[N > 0].mean()), float((b - bo)[N > 0].mean())
-        sa = np.sign(da) * max(abs(da) - 3.0, 0); sb = np.sign(db) * max(abs(db) - 3.0, 0)
-        if sa or sb:
-            w = blur(N, 6) * np.clip(1 - np.hypot(a, b) / 25.0, 0, 1)
-            a = a - sa * w; b = b - sb * w
-            info['neutral_drift'] = f'a {da:+.1f}, b {db:+.1f} -> pulled back {(-sa):+.1f}, {(-sb):+.1f}'
+        w = blur(N, 6) * np.clip(1 - np.hypot(a, b) / 25.0, 0, 1)
+        wm = max(float(w[N > 0].mean()), 0.3)
+        for _ in range(2):   # v1.4.0: two passes, aiming just under 3 (one pass left 3.0-3.6 because w < 1 on the area)
+            da_, db_ = float((a - ao)[N > 0].mean()), float((b - bo)[N > 0].mean())
+            sa = np.sign(da_) * max(abs(da_) - 2.8, 0); sb = np.sign(db_) * max(abs(db_) - 2.8, 0)
+            if not (sa or sb): break
+            a = a - sa * w / wm; b = b - sb * w / wm
+        da2, db2 = float((a - ao)[N > 0].mean()), float((b - bo)[N > 0].mean())
+        if abs(da2 - da) > 0.05 or abs(db2 - db) > 0.05:
+            info['neutral_drift'] = f'a {da:+.1f}, b {db:+.1f} -> {da2:+.1f}, {db2:+.1f}'
     # warm light / cool shade (daylight only)
     if Lo.mean() >= 22:
         lit, shade, wl, ws = lit_shade(Lo, bo)
@@ -286,7 +369,9 @@ def step_colour(Lo, ao, bo, L, a, b, colour_moves=None):
     if colour_moves is not None and colour_moves.shape == jump.shape:
         lim = np.where(blur(colour_moves.astype(np.float32), 6) > 0.5, 1.55, 1.35).astype(np.float32)
         info['colour_moves_limit'] = f'{float((lim > 1.4).mean()):.1%} of the frame (colour+ moves) allowed up to 1.55x'
-    over = jump > lim
+    # v1.4.0: only a patch that is really saturated is calmed - a lit face that the split toning warmed from near-grey
+    #   is 'more saturated than its surroundings' in ratio but not a garish patch (b1_03: 8.6 % of the frame calmed)
+    over = (jump > lim) & (blur(C, r) > max(18.0, 1.3 * float(np.median(C))))
     if over.mean() > 0.01:
         f = np.where(over, lim / np.maximum(jump, 1e-6), 1.0).astype(np.float32)
         f = np.minimum(blur(f, r // 2), 1.0)
@@ -295,8 +380,19 @@ def step_colour(Lo, ao, bo, L, a, b, colour_moves=None):
     # whole-frame ceiling (the user's 1.65x, 2026-11-19)
     ratio = float(np.hypot(a, b).mean()) / max(float(Co.mean()), 1e-6)
     if ratio > 1.65:
-        s = 1.65 / ratio; a, b = a * s, b * s
-        info['chroma_ceiling'] = f'{ratio:.2f}x -> 1.65x'
+        # v1.4.0: only the over-saturated top of the chroma comes down (the lit surfaces keep their colour)
+        from ps_common import zoned_chroma
+        lo_, hi_ = 0.0, 3.0
+        cm = max(float(Co.mean()), 1e-6)
+        if float(np.hypot(*zoned_chroma(a, b, hi_)[:2]).mean()) / cm > 1.65:
+            s = 1.65 / ratio; a, b = a * s, b * s; how = 'global (zoned compression was not enough)'
+        else:
+            for _ in range(12):
+                mid = (lo_ + hi_) / 2
+                if float(np.hypot(*zoned_chroma(a, b, mid)[:2]).mean()) / cm > 1.65: lo_ = mid
+                else: hi_ = mid
+            a, b, zi = zoned_chroma(a, b, hi_); how = f"zoned above C* {zi['knee_C']}"
+        info['chroma_ceiling'] = f'{ratio:.2f}x -> {float(np.hypot(a, b).mean()) / cm:.2f}x, {how}'
     return a, b, info
 
 
@@ -331,9 +427,40 @@ def main():
     if light_only:   # finish.py v1.2.5: repair a G attempt's wrong light before deciding whether to keep G
         rec['depth'], rec['colour'] = 'skipped (--light-only)', 'skipped (--light-only)'
     else:
-        L, rec['depth'] = step_depth(Lo, L, genre, darken_mask(opt.get('--params'), L.shape), has_key_light(opt.get('--params')))
+        dirl = genre not in ('night', 'museum') and directional(Lo, ao, bo, opt.get('--params'))
+        floor0 = SEP_FLOOR_DIRECTIONAL if dirl else SEP_FLOOR
+        L_in, a_in, b_in = L, a, b
+        # v1.4.0: the depth floor must not create a physics problem the candidate did not have (c1_04: lifting the
+        #   mid-tones made them outshine highlights G had dimmed - highlight_order). Then the floor steps back.
+        import tempfile
+        for fl in (floor0, 1.0, SEP_FLOOR_V125):
+            L, dinfo = step_depth(Lo, L_in, genre, darken_mask(opt.get('--params'), L_in.shape), has_key_light(opt.get('--params')),
+                                  fl, key_light_of(opt.get('--params')))
+            kd = np.clip((L + 8.0) / (L_in + 8.0), 1.0, 1.15) ** 0.5   # colour follows the lifts (+15 % at most)
+            a, b = a_in * kd, b_in * kd
+            if fl == SEP_FLOOR_V125: break
+            with tempfile.TemporaryDirectory() as td_:
+                tp = str(Path(td_) / 'd.png'); save_png(np.clip(to_srgb(lab_to_lin(np.stack([L, a, b], -1))), 0, 1), tp)
+                ph_ = run_tool('physics_check.py', o_p, tp)
+            new = [k for k, v in (ph_.get('checks') or {}).items() if isinstance(v, dict) and v.get('ok') is False and k not in pre_fail]
+            # an already failing highlight order must not get worse either (c1_04: 0.699 -> 0.624)
+            ho0 = ((pre.get('checks') or {}).get('highlight_order') or {}).get('top_lights_still_brightest')
+            ho1 = ((ph_.get('checks') or {}).get('highlight_order') or {}).get('top_lights_still_brightest')
+            if 'highlight_order' in pre_fail and ho0 is not None and ho1 is not None and ho1 < ho0 - 0.02: new.append('highlight_order (worse)')
+            if not new: break
+            dinfo['stepped_back'] = f'floor {fl} made {", ".join(new)}'
+            rec.setdefault('depth_backoff', []).append(dinfo['stepped_back'])
+        rec['depth'] = dinfo
         a, b, rec['colour'] = step_colour(Lo, ao, bo, L, a, b, colour_mask(opt.get('--params'), L.shape))
-    out = np.clip(to_srgb(lab_to_lin(np.stack([L, a, b], -1))), 0, 1)
+    lin2 = lab_to_lin(np.stack([L, a, b], -1))
+    # v1.4.0: out-of-gamut colours go towards their own grey (as grade.py does), not clipped channel by channel - a
+    #   clipped bright orange turns pale and pink
+    grey = np.clip(lin2 @ np.array([0.2126729, 0.7151522, 0.072175], np.float32), 0, 1)[..., None]
+    mx, mn = lin2.max(-1, keepdims=True), lin2.min(-1, keepdims=True)
+    tt = np.ones_like(mx)
+    tt = np.where(mx > 1, np.minimum(tt, (1 - grey) / np.maximum(mx - grey, 1e-6)), tt)
+    tt = np.where(mn < 0, np.minimum(tt, grey / np.maximum(grey - mn, 1e-6)), tt)
+    out = np.clip(to_srgb(grey + (lin2 - grey) * np.clip(tt, 0, 1)), 0, 1)
     changed = float(np.abs(out - c).mean() * 255)
     rec['mean_change_8bit'] = round(changed, 2)
     if check_only:
