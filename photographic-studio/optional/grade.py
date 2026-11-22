@@ -48,7 +48,7 @@ import json, sys
 from pathlib import Path
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, blur, guided, structure_corr, sha256, HUES, hue_weight, tone_needs, sky_mask
+from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, blur, guided, structure_corr, sha256, HUES, hue_weight, tone_needs, sky_mask, sky_surfaces
 
 clamps = []
 
@@ -296,10 +296,15 @@ def key_light(kl, L, L_in, lab0, ref, h, w):
     L01 = np.clip(L_in / 100, 0, 1); r = max(6, min(h, w) // 30)
     S = np.clip(guided(L01, S.astype(np.float32), r, 1e-3), 0, 1)       # the light stops at object edges, not in mid-air
     So = np.clip(blur(So.astype(np.float32), max(8, min(h, w) // 12)), 0, 1)   # wide feather: no edge to the falloff
-    sky = sky_mask(L_in, gaps=True)
+    sky = sky_surfaces(ref_lab)
     surf = (~sky).astype(np.float32)
     if sky.any():
-        surf = np.clip(guided(L01, surf, max(3, min(h, w) // 200), 1e-4), 0, 1) * (~sky)   # never any change on the plain sky
+        r_sky = max(3, min(h, w) // 200)
+        # Feather on the foreground side only. Hard-zero the original sky
+        # last so that filtering cannot leak falloff into fine sky gaps.
+        surf = np.clip(guided(L01, surf, r_sky, 1e-4), 0, 1)
+        surf *= np.clip(1 - 2 * blur(sky.astype(np.float32), r_sky), 0, 1)
+        surf[sky] = 0
     tot = KEY_TARGET[mode] * st; lift = tot * KEY_SPLIT[mode]; fall = tot - lift
     Lr = ref_lab[..., 0]                                                   # masks from the ORIGINAL's light
     Lrs = guided(np.clip(Lr / 100, 0, 1), Lr, max(3, min(h, w) // 200), 4e-3)
@@ -311,6 +316,7 @@ def key_light(kl, L, L_in, lab0, ref, h, w):
         edge = np.clip(np.maximum(np.abs(xx - 0.5), np.abs(yy - 0.5)) * 2, 0, 1)
         out_w = out_w * (0.45 + 0.55 * smoothstep(np.maximum(edge, yy * 1.2 - 0.3)))
     out_w = out_w * (1 - smoothstep((Lrs - 76.0) / 8.0))                    # v1.4.0: bright sky, lamps, white reflections: no falloff
+    falloff_scale = cl('key_light.falloff_scale', kl.get('falloff_scale', 1.0), 0, 1)
     # on the G route the input already carries G's light: where G already let the surroundings fall off (or already
     #   lifted the subject) that counts towards the key light (2026-11-21 vase: G had darkened the left screens by up to
     #   20 L*; another 6 on top read as a dark patch)
@@ -320,7 +326,7 @@ def key_light(kl, L, L_in, lab0, ref, h, w):
     sep = lambda X: float(X[sub_m].mean() - X[sur_m].mean()) if sub_m.any() and sur_m.any() else 0.0
     # the masks follow the surfaces and their brightness, so the separation actually gained is less than lift + fall:
     #   measure it once and scale to the target (at most 2.2x; the lift never over 6 L*, the falloff never over 8)
-    shape = lambda li, fa: L + np.clip(li - g_lift, 0, None) * sub - np.clip(fa - g_dark, 0, None) * out_w
+    shape = lambda li, fa: L + np.clip(li - g_lift, 0, None) * sub - falloff_scale * np.clip(fa - g_dark, 0, None) * out_w
     gain = sep(shape(lift, fall)) - sep(L)
     lmax, fmax = KEY_LIFT_MAX[mode] * max(st, 1.0), KEY_FALL_MAX[mode] * max(st, 1.0)
     if gain > 0.3:

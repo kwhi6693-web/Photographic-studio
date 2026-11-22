@@ -19,7 +19,7 @@ def daylight_sky(L):
     return bool((L[: h // 2] > 75).mean() >= 0.08)
 
 
-def sky_mask(L, gaps=False):
+def sky_mask(L, gaps=False, blue=None):
     """v1.2.7: the bright, smooth sky connected to the top edge (overcast or pale sky; from L* alone; rough). Found on a
     small copy by flooding from the top row through bright, untextured pixels, so overhanging branches at the top and
     trees in front do not stop it, and a white wall lower down that does not touch the sky is not taken for it."""
@@ -29,6 +29,9 @@ def sky_mask(L, gaps=False):
     Ls = L[:hs * k, :ws * k].reshape(hs, k, ws, k).mean((1, 3))
     tex = np.abs(Ls - blur(Ls, 2))
     ok = (Ls > 68) & (tex < 3.0)
+    if blue is not None:
+        blue_small = blue[:hs * k, :ws * k].reshape(hs, k, ws, k).mean((1, 3))
+        ok |= (blue_small > 0.5) & (tex < 5.0)
     ok[int(hs * 0.75):] = False                      # the sky is not in the bottom quarter
     m = np.zeros_like(ok); m[0] = ok[0]
     for _ in range(4 * max(hs, ws)):
@@ -42,13 +45,32 @@ def sky_mask(L, gaps=False):
     out = np.zeros((h, w), bool); out[:big.shape[0], :big.shape[1]] = big
     if big.shape[0] < h: out[big.shape[0]:, :big.shape[1]] = big[-1:]
     if big.shape[1] < w: out[:, big.shape[1]:] = out[:, big.shape[1] - 1:big.shape[1]]
-    out = out & (L > 60)
+    out &= (L > 60) if blue is None else ((L > 60) | blue)
     if gaps and out.any():
         # bits of the same sky seen between leaves and branches, in the rows the sky reaches, are sky too
         low = int(np.nonzero(out.any(1))[0].max()) + 1
         g = np.zeros_like(out); g[:low] = L[:low] > max(78.0, float(np.percentile(L[out], 5)) - 4)
         out = out | g
+        if blue is not None and (out & blue).any():
+            # The original sky can be split into many disconnected holes by
+            # branches or silhouettes. Reconnect only sky-coloured pixels in
+            # the rows reached by the open sky, including mixed edge pixels.
+            out[:low] |= blue[:low]
+        if blue is not None:
+            # The coarsened flood excludes high-gradient mixed cells. Bring
+            # the full-resolution sky side of those cells back before using
+            # the mask for edge protection.
+            sky_like = (L > max(68, float(np.percentile(L[out], 5)) - 4)) | blue
+            adjacent = blur(out.astype(np.float32), 3 * k) > 0.03
+            out |= sky_like & adjacent
     return out
+
+
+def sky_surfaces(lab):
+    """Bright neutral and blue sky, measured on the original rather than the grade."""
+    L, a, b = np.moveaxis(lab, -1, 0)
+    blue = (b < -8) & (b < -0.8 * np.abs(a)) & (L > 42)
+    return sky_mask(L, gaps=True, blue=blue)
 
 
 RAMP = {'left': lambda xx, yy: 1 - xx, 'right': lambda xx, yy: xx, 'top': lambda xx, yy: 1 - yy, 'bottom': lambda xx, yy: yy}

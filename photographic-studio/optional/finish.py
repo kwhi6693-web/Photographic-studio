@@ -54,6 +54,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PHYS_SERIOUS = ('spotlight_glow', 'darkening_patch', 'tone_order', 'halo', 'light_shade_sep', 'lamps_kept', 'ghost_edges', 'sky_glow')
 LIGHT_REPAIRABLE = {'spotlight_glow', 'darkening_patch', 'halo', 'lamps_kept'}   # v1.2.5: harmonize.py --light-only can fix these locally
+GRADE_RECHECK = {'sky_glow', 'darkening_patch'}
 
 
 def run(tool, *args):
@@ -219,9 +220,70 @@ def remedy(params, gate):
     return q, did
 
 
-def problems(src, out, genre, g_chroma=None):
+def physical_problems(src, out):
     ph = run('physics_check.py', src, out)
-    bad = [k for k, v in ph.get('checks', {}).items() if k in PHYS_SERIOUS and v.get('ok') is False]
+    checks = ph.get('checks')
+    if checks is None:
+        return ['physics_check_unavailable'], ph.get('verdict', '?')
+    bad = [k for k, v in checks.items() if k in PHYS_SERIOUS and v.get('ok') is False]
+    return bad, ph.get('verdict', '?')
+
+
+def grade_rechecks(params, bad):
+    """Ablate likely contributors individually before trying joint ablation."""
+    moves = params.get('moves', [])
+    changed_light = [i for i, mv in enumerate(moves) if mv.get('lift') or mv.get('clarity')]
+    sky_first = sorted(changed_light, key=lambda i: moves[i].get('shape') != 'gradient')
+    edits = []
+    for i in sky_first if 'sky_glow' in bad else changed_light:
+        edits.append((f'moves[{i}]', lambda p, i=i: p['moves'].pop(i)))
+    if params.get('key_light'):
+        edits.append(('key_light.falloff', lambda p: p['key_light'].update(falloff_scale=0)))
+    for key in ('anchor', 'vignette', 'regions', 'auto', 'contrast', 'clarity', 'texture'):
+        if params.get(key):
+            edits.append((key, lambda p, key=key: p.pop(key)))
+    for label, edit in edits:
+        trial = json.loads(json.dumps(params))
+        edit(trial)
+        yield [label], trial
+    if len(edits) > 1:
+        trial = json.loads(json.dumps(params))
+        for key in ('key_light', 'anchor', 'vignette', 'regions', 'auto', 'contrast', 'clarity', 'texture'):
+            trial.pop(key, None)
+        trial['moves'] = [m for i, m in enumerate(moves) if i not in changed_light]
+        yield [label for label, _ in edits], trial
+
+
+def rescue_grade(src, transferred, params, kj, problems, folder, index):
+    transfer_bad, _ = physical_problems(src, transferred)
+    receipt = {'initial': problems, 'transfer': transfer_bad, 'trials': []}
+    if transfer_bad:
+        return None, receipt
+    for n, (removed, trial) in enumerate(grade_rechecks(params, problems)):
+        prefix = folder / f'grade-recheck-{index}-{n}'
+        pj, out = prefix.with_suffix('.json'), prefix.with_suffix('.png')
+        pj.write_text(json.dumps(trial), encoding='utf-8')
+        render(transferred, trial, pj, out, src, kj)
+        bad, _ = physical_problems(src, out)
+        receipt['trials'].append({'removed': removed, 'left': bad})
+        if not bad:
+            return (trial, pj, out), receipt
+    # A clean transfer remains usable if the requested grade could not be
+    # salvaged. Apply content protection before checking it for delivery.
+    pj = folder / f'grade-recheck-{index}-transfer.json'
+    out = pj.with_suffix('.png')
+    trial = {'keep': params['keep']} if params.get('keep') else {}
+    pj.write_text(json.dumps(trial), encoding='utf-8')
+    shutil.copyfile(transferred, out)
+    if trial:
+        run('keep_regions.py', src, out, out, kj)
+    bad, _ = physical_problems(src, out)
+    receipt['trials'].append({'removed': ['all_grade_steps'], 'left': bad})
+    return ((trial, pj, out) if not bad else None), receipt
+
+
+def problems(src, out, genre, g_chroma=None):
+    bad, pv = physical_problems(src, out)
     it = run('intensity_check.py', src, out, *([f'--genre={genre}'] if genre else []), *([f'--g-chroma={g_chroma}'] if g_chroma else []))
     # v1.0.9: only an excess counts against an attempt; a light edit the brief chose for this photo is not 'too weak'
     weak = [k for k, v in it.get('checks', {}).items() if isinstance(v, dict) and v.get('ok') is False and v.get('direction') == 'too strong']
@@ -230,7 +292,7 @@ def problems(src, out, genre, g_chroma=None):
     from PIL import Image
     a = np.asarray(Image.open(src).convert('RGB'), np.float32); b = np.asarray(Image.open(out).convert('RGB').resize((a.shape[1], a.shape[0])), np.float32)
     if float(np.abs(a - b).mean()) < 1.5: weak.append('no_visible_change')
-    return bad, weak, it.get('verdict', '?'), ph.get('verdict', '?')
+    return bad, weak, it.get('verdict', '?'), pv
 
 
 def main():
@@ -285,7 +347,7 @@ def main():
     if genre == 'museum': tries.append(('n_direct_museum_strength', boost(safer(params)), [], None))
     if lowres:   # the museum-strength step raises clarity again: cap every attempt
         tries = [(nm, lowres_cap(pp, short_edge)[0], lo, gs) for nm, pp, lo, gs in tries]
-    rec = {'tool': 'finish.py v1.4.0', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
+    rec = {'tool': 'finish.py v1.4.1', 'genre': genre, 'route': 'no_g' if no_g else 'g', 'attempts': []}
     if lowres: rec['low_resolution'] = lowres
     if not params.get('moves'): rec['brief'] = 'NO_MOVES: v1.2.0 needs at least one improvement move per photo'
     elif not (params.get('key_light') or {}).get('box'):
@@ -328,20 +390,12 @@ def main():
             if p.get('keep'): kj.write_text(json.dumps({'keep': p['keep']}), encoding='utf-8')   # v1.1.0, before anything is judged
             kept = render(lt, p, pj, fin, src, kj)
             bad, weak, iv, pv = problems(src, fin, genre, gc)
-            if gsrc is not None and ((r1.get('measurements') or {}).get('sky_kept_to_smooth_gradient')):
-                # v1.2.8: smoothing G's sky must not be what lets a G through. Whether G is usable is judged as in
-                #   v1.2.7, on the same attempt without the sky smoothing (2026-11-21, photo 03: with the sky smoothed,
-                #   a G that v1.2.7 rightly refused passed and left a white patch on the water)
-                lt_n, fin_n = td / f'lt{i}n.png', td / f'fin{i}n.png'
-                run('look_transfer.py', src, gsrc, lt_n, *ltopt, '--no-sky-trend', *(['--night'] if genre == 'night' else []))
-                if lt_n.exists():
-                    render(lt_n, p, pj, fin_n, src, kj)
-                    if fin_n.exists():
-                        b_n = problems(src, fin_n, genre, gc)[0]
-                        # v1.3.0: not sky_glow - the unsmoothed run carries G's raw sky on purpose, and the smoothing is
-                        #   exactly what keeps G's sky light out of the photo (real_g b2_08 / b2_10)
-                        extra = [k for k in b_n if k not in bad and k != 'sky_glow']
-                        if extra: bad = bad + extra; r1.setdefault('flags', []).append('judged without sky smoothing: ' + ', '.join(extra))
+            grade_recheck = None
+            if gsrc is not None and bad and set(bad) <= GRADE_RECHECK:
+                rescued, grade_recheck = rescue_grade(src, lt, p, kj, bad, td, i)
+                if rescued:
+                    p, pj, fin = rescued
+                    bad, weak, iv, pv = problems(src, fin, genre, gc)
             light_fix = None
             if gsrc is not None and bad and set(bad) <= LIGHT_REPAIRABLE:
                 # v1.2.5: wrong light in one place (a lamp put out, a glow invented) is repaired there, on the
@@ -355,24 +409,7 @@ def main():
                     light_fix = {'was': bad, 'action': (hz.get('light') or {}).get('action'), 'left': b2}
                     if not b2:
                         fin, bad, weak, iv, pv = fin_r, b2, w2, _iv, _pv
-            sky_fix = None
-            if bad == ['sky_glow'] and p.get('moves'):
-                # v1.3.0: light spilled onto a plain sky comes from a move whose area covers the sky (the key light never
-                #   touches it): a local lift goes on structure, a band gets a softer edge - the same repair as a halo
-                p2 = json.loads(json.dumps(p)); idx = []
-                for k, mv in enumerate(p2['moves']):
-                    if float(mv.get('lift', 0) or 0) > 0 or mv.get('look') == 'light+':   # a glow is added light
-                        if full_span(mv): mv['feather'] = max(0.3, float(mv.get('feather', 0.08)))
-                        else: mv['on_structure'] = True
-                        idx.append(k)
-                if idx:
-                    pj2 = td / f'p{i}g.json'; fin2 = td / f'fin{i}g.png'; pj2.write_text(json.dumps(p2), encoding='utf-8')
-                    render(lt, p2, pj2, fin2, src, kj)
-                    b2, w2, _iv, _pv = problems(src, fin2, genre, gc) if fin2.exists() else (['sky_glow'], [], None, None)
-                    sky_fix = {'moves_on_structure': idx, **({'left': b2} if b2 else {})}
-                    if not b2:
-                        p, pj, fin, bad, weak, iv, pv = p2, pj2, fin2, b2, w2, _iv, _pv
-            if any(f.startswith('G_GLOW_LEFT') for f in r1.get('flags', [])): bad.append('invented_glow_left')   # v1.0.2
+            glow_review = (r1.get('measurements') or {}).get('glow_review_region')
             settled = None
 
             def judge(f_in, tag):
@@ -463,7 +500,8 @@ def main():
             gfail = ['gate:' + x for x in (gate or {}).get('failed', [])]
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak,
                                     **({'light_repair': light_fix} if light_fix else {}),
-                                    **({'sky_glow_fix': sky_fix} if sky_fix else {}),
+                                    **({'grade_recheck': grade_recheck, 'effective_params': p} if grade_recheck else {}),
+                                    **({'glow_review': glow_review} if glow_review else {}),
                                     **({'clarity_unstacked': unstacked} if unstacked else {}),
                                     **({'keep': kept.get('verdict')} if kept else {}),
                                     **({'settled_before_check': settled} if settled else {}),

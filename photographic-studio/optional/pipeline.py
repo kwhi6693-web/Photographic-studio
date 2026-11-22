@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.4.0 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
+"""Photographic Studio v1.4.1 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
 Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
                               [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (or SOURCE / --no-g when there is no G)
@@ -52,7 +52,7 @@ def main():
     src, g, pj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
-    rec = {'tool': 'pipeline.py v1.4.0', 'steps': {}, 'next': []}
+    rec = {'tool': 'pipeline.py v1.4.1', 'steps': {}, 'next': []}
     settled = Path(str(out) + '.settled.png')
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
@@ -99,11 +99,18 @@ def main():
         n = tool('n_trim.py', cur, tr_out, td / 'trim.json')
         if str(n.get('verdict', '')).startswith('PASS') and tr_out.exists(): cur = tr_out
         rec['steps']['n_trim'] = n.get('verdict')
-        h = tool('harmonize.py', src_framed, cur, out, td / 'harmonize.json', f'--params={pj}',
+        finish_step = rec['steps']['finish']
+        finish_params = pj
+        if isinstance(finish_step, dict):
+            selected = next((a for a in finish_step['attempts'] if a['name'] == finish_step['delivered']), {})
+            if selected.get('effective_params') is not None:
+                finish_params = td / 'effective-params.json'
+                finish_params.write_text(json.dumps(selected['effective_params']), encoding='utf-8')
+        h = tool('harmonize.py', src_framed, cur, out, td / 'harmonize.json', f'--params={finish_params}',
                  *([f'--genre={genre}'] if genre in ('museum', 'night') else []))
         if not Path(out).exists(): shutil.copy(cur, out)
         rec['steps']['harmonize'] = {'verdict': h.get('verdict'), **{k: h.get(k) for k in ('light', 'depth', 'colour') if h.get(k)}}
-        gt = tool('improve_check.py', src_framed, out, pj, '--gates', *(['--no-subject'] if rf else []),
+        gt = tool('improve_check.py', src_framed, out, finish_params, '--gates', *(['--no-subject'] if rf else []),
                   *([f'--genre={genre}'] if genre in ('museum', 'night') else []))
         rec['gates'] = gt.get('gates') or gt.get('verdict')
         if str(h.get('verdict', '')).startswith('REGEN_G'):
