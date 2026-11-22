@@ -57,6 +57,14 @@ LIGHT_REPAIRABLE = {'spotlight_glow', 'darkening_patch', 'halo', 'lamps_kept'}  
 GRADE_RECHECK = {'sky_glow', 'darkening_patch'}
 
 
+def transfer_light_problems(report):
+    """An isolated residual is reviewable; competing invented and deleted light is not."""
+    flags = report.get('flags', [])
+    has_glow = any(f.startswith('G_GLOW_LEFT ') for f in flags)
+    lost_light = any(f.startswith('G_LIGHT_REMOVAL_NOT_CARRIED ') for f in flags)
+    return ['conflicting_light_artifacts'] if has_glow and lost_light else []
+
+
 def run(tool, *args):
     if str(HERE) not in sys.path: sys.path.insert(0, str(HERE))
     from ps_common import run_tool
@@ -410,6 +418,7 @@ def main():
                     if not b2:
                         fin, bad, weak, iv, pv = fin_r, b2, w2, _iv, _pv
             glow_review = (r1.get('measurements') or {}).get('glow_review_region')
+            bad += transfer_light_problems(r1)
             settled = None
 
             def judge(f_in, tag):

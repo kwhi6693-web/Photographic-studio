@@ -99,3 +99,11 @@ def test_light_support_comes_from_original_pixels_without_genre():
     residual[52, 144] = 4
     assert glow_region(residual, support < .1) == {
         'box_xyxy': [140, 50, 147, 55], 'peak_xy': [144, 52], 'peak_L': 4.0}
+
+
+def test_residual_glow_is_a_warning_unless_g_also_deleted_light():
+    glow = 'G_GLOW_LEFT 3.03: visual review'
+    assert finish.transfer_light_problems({'flags': [glow]}) == []
+    assert finish.transfer_light_problems({'flags': [
+        glow, 'G_LIGHT_REMOVAL_NOT_CARRIED 0.02: restored original light',
+    ]}) == ['conflicting_light_artifacts']
