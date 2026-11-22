@@ -384,7 +384,11 @@ def main():
             if gsrc is None:
                 shutil.copy(src, lt); r1 = {'flags': ['N direct: G not used']}
             else:
-                r1 = run('look_transfer.py', src, gsrc, lt, *ltopt, *(['--night'] if genre == 'night' else []))
+                scene_opts = {
+                    'night': ['--night'],
+                    'museum': ['--pale-sky-mask'],
+                }.get(genre, [])
+                r1 = run('look_transfer.py', src, gsrc, lt, *ltopt, *scene_opts)
                 gcm = ((r1.get('measurements') or {}).get('chroma_ratio') or {}).get('G')
                 if gcm and 'g_chroma' not in rec: rec['g_chroma'] = gcm   # v1.2.2: pass to settle.py as --g-chroma
                 gc = rec.get('g_chroma')
@@ -398,6 +402,27 @@ def main():
             if p.get('keep'): kj.write_text(json.dumps({'keep': p['keep']}), encoding='utf-8')   # v1.1.0, before anything is judged
             kept = render(lt, p, pj, fin, src, kj)
             bad, weak, iv, pv = problems(src, fin, genre, gc)
+            sky_fix = None
+            if gsrc is None and bad == ['sky_glow'] and p.get('moves'):
+                # Preserve intentional light on the foreground while removing
+                # a positive lift from the adjacent smooth sky.
+                restricted = json.loads(json.dumps(p))
+                indices = []
+                for index, move in enumerate(restricted['moves']):
+                    if float(move.get('lift', 0) or 0) > 0 or move.get('look') == 'light+':
+                        if full_span(move):
+                            move['feather'] = max(0.3, float(move.get('feather', 0.08)))
+                        else:
+                            move['on_structure'] = True
+                        indices.append(index)
+                if indices:
+                    sky_params, sky_out = td / f'p{i}g.json', td / f'fin{i}g.png'
+                    sky_params.write_text(json.dumps(restricted), encoding='utf-8')
+                    render(lt, restricted, sky_params, sky_out, src, kj)
+                    b2, w2, iv2, pv2 = problems(src, sky_out, genre, gc)
+                    sky_fix = {'moves_on_structure': indices, 'left': b2}
+                    if not b2:
+                        p, pj, fin, bad, weak, iv, pv = restricted, sky_params, sky_out, b2, w2, iv2, pv2
             grade_recheck = None
             if gsrc is not None and bad and set(bad) <= GRADE_RECHECK:
                 rescued, grade_recheck = rescue_grade(src, lt, p, kj, bad, td, i)
@@ -509,7 +534,9 @@ def main():
             gfail = ['gate:' + x for x in (gate or {}).get('failed', [])]
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak,
                                     **({'light_repair': light_fix} if light_fix else {}),
-                                    **({'grade_recheck': grade_recheck, 'effective_params': p} if grade_recheck else {}),
+                                    **({'sky_glow_fix': sky_fix} if sky_fix else {}),
+                                    **({'grade_recheck': grade_recheck} if grade_recheck else {}),
+                                    **({'effective_params': p} if grade_recheck or sky_fix else {}),
                                     **({'glow_review': glow_review} if glow_review else {}),
                                     **({'clarity_unstacked': unstacked} if unstacked else {}),
                                     **({'keep': kept.get('verdict')} if kept else {}),

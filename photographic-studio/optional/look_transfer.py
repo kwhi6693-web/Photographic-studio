@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Photographic Studio v1.4.1 - look transfer: every output pixel is the ORIGINAL photo's pixel,
 re-toned with the light and colour of the generative result G. Nothing G drew is kept, so no AI texture.
-Usage: python3 look_transfer.py SOURCE G_OUTPUT OUT_PNG [RECEIPT_JSON] [--strength 0..1] [--local 0..1] [--no-sky-trend] [--no-shadow-clamp] [--night]
+Usage: python3 look_transfer.py SOURCE G_OUTPUT OUT_PNG [RECEIPT_JSON] [--strength 0..1] [--local 0..1] [--no-sky-trend] [--no-shadow-clamp] [--night] [--pale-sky-mask]
 Output has the SOURCE's size and framing. Deterministic. Needs numpy, Pillow, OpenCV.
 
 How G's look is taken over (three smooth layers, all functions of the source pixel and its neighbourhood):
@@ -33,7 +33,7 @@ try:
 except ImportError:   # v1.2.9: no OpenCV on the host - numpy + Pillow stand-in
     sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__))); import cvlite as cv2
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, box, blur, structure_corr, sha256, sky_surfaces
+from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, box, blur, structure_corr, sha256, sky_mask, sky_surfaces
 
 NL, NA, NB = 21, 17, 17
 AB = 90.0
@@ -299,7 +299,8 @@ def main():
             if k == 0: glow_area = float(((np.abs(delta[..., 0] - cl) > 2.0) & (wgt > 0.5)).mean())
             delta[..., k] = delta[..., k] * (1 - wgt) + cl * wgt
     sky_trend = {}
-    sky = sky_surfaces(lab0)
+    # Museum screens and diffuse windows retain conservative pale-surface segmentation.
+    sky = sky_mask(lab0[..., 0], gaps=True) if '--pale-sky-mask' in sys.argv else sky_surfaces(lab0)
     if sky.any() and '--no-sky-trend' not in sys.argv:
         sky_trend = sky_delta(lab0, delta, sky)
     # v0.3.8 no deleted light: G sometimes "cleans up" a scene by blacking out a real light patch (a lit haze in a
