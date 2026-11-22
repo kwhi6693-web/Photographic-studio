@@ -296,7 +296,7 @@ def key_light(kl, L, L_in, lab0, ref, h, w):
     L01 = np.clip(L_in / 100, 0, 1); r = max(6, min(h, w) // 30)
     S = np.clip(guided(L01, S.astype(np.float32), r, 1e-3), 0, 1)       # the light stops at object edges, not in mid-air
     So = np.clip(blur(So.astype(np.float32), max(8, min(h, w) // 12)), 0, 1)   # wide feather: no edge to the falloff
-    sky = sky_surfaces(ref_lab)
+    sky = sky_surfaces(ref_lab, gaps=True)
     surf = (~sky).astype(np.float32)
     if sky.any():
         r_sky = max(3, min(h, w) // 200)

@@ -57,7 +57,7 @@ def test_key_light_does_not_grade_sky_between_silhouettes(b):
     lab[sky, 0] = (62 if b else 84) + y[sky] / 120
     lab[sky, 2] = b
     original = lab[..., 0]
-    mask = sky_surfaces(lab)
+    mask = sky_surfaces(lab, gaps=True)
     assert mask[sky].all()
     result, _ = key_light({'box': [.3, .6, .7, .9], 'from': 'top'},
                           original, original, lab, None, *original.shape)
@@ -83,6 +83,31 @@ def test_sky_trend_controls_clouds_and_overexposure_separately_from_blue(source_
     assert delta[sky, 0].max() < 4
     sky_colour = float(delta[sky, 2].mean())
     assert sky_colour < -9 if expected == 'blue' else -4.6 < sky_colour < -3.4
+
+
+def test_bright_sky_trend_excludes_water_below_the_horizon():
+    y, x = np.mgrid[:300, :400]
+    lab = np.empty((300, 400, 3), dtype=np.float32)
+    lab[..., 0] = 70 + 0.09 * y
+    lab[..., 1] = -y / 25
+    lab[..., 2] = -39 + y / 7
+    water = y >= 148
+    lab[water] = [54, -11, -16]
+    mask = sky_surfaces(lab)
+    assert mask[~water].mean() > 0.99
+    assert not mask[water].any()
+
+
+def test_dark_blue_sky_is_not_split_at_an_absolute_brightness():
+    y, x = np.mgrid[:300, :400]
+    lab = np.empty((300, 400, 3), dtype=np.float32)
+    lab[..., 0] = 35 + x / 23 + y / 45
+    lab[..., 1:] = [-1, -19]
+    skyline = y >= 115 + 15 * np.sin(x / 24)
+    lab[skyline] = [18, 0, -2]
+    mask = sky_surfaces(lab)
+    assert mask[~skyline].mean() > 0.99
+    assert not mask[skyline].any()
 
 
 def test_light_support_comes_from_original_pixels_without_genre():
