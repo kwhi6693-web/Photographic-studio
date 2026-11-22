@@ -19,7 +19,7 @@ def daylight_sky(L):
     return bool((L[: h // 2] > 75).mean() >= 0.08)
 
 
-def sky_mask(L, gaps=False):
+def sky_mask(L, gaps=False, candidate=None):
     """v1.2.7: the bright, smooth sky connected to the top edge (overcast or pale sky; from L* alone; rough). Found on a
     small copy by flooding from the top row through bright, untextured pixels, so overhanging branches at the top and
     trees in front do not stop it, and a white wall lower down that does not touch the sky is not taken for it."""
@@ -29,6 +29,9 @@ def sky_mask(L, gaps=False):
     Ls = L[:hs * k, :ws * k].reshape(hs, k, ws, k).mean((1, 3))
     tex = np.abs(Ls - blur(Ls, 2))
     ok = (Ls > 68) & (tex < 3.0)
+    if candidate is not None:
+        candidate_small = candidate[:hs * k, :ws * k].reshape(hs, k, ws, k).mean((1, 3))
+        ok = (candidate_small > 0.5) & (tex < 5.0)
     ok[int(hs * 0.75):] = False                      # the sky is not in the bottom quarter
     m = np.zeros_like(ok); m[0] = ok[0]
     for _ in range(4 * max(hs, ws)):
@@ -42,13 +45,46 @@ def sky_mask(L, gaps=False):
     out = np.zeros((h, w), bool); out[:big.shape[0], :big.shape[1]] = big
     if big.shape[0] < h: out[big.shape[0]:, :big.shape[1]] = big[-1:]
     if big.shape[1] < w: out[:, big.shape[1]:] = out[:, big.shape[1] - 1:big.shape[1]]
-    out = out & (L > 60)
+    out &= (L > 60) if candidate is None else candidate
+    if candidate is not None:
+        # Revisit the sky side of mixed cells that were discarded by the
+        # coarsened flood, without extending the mask to a fixed row.
+        adjacent = blur(out.astype(np.float32), 3 * k) > 0.03
+        out |= candidate & adjacent
+        if gaps and out.any():
+            # Reconnect guarded pockets in rows known to contain sky;
+            # this is for per-pixel grade protection, not for transferring
+            # a continuous sky adjustment across foreground objects.
+            out |= candidate & (out.any(axis=1)[:, None])
+        return out
     if gaps and out.any():
         # bits of the same sky seen between leaves and branches, in the rows the sky reaches, are sky too
         low = int(np.nonzero(out.any(1))[0].max()) + 1
         g = np.zeros_like(out); g[:low] = L[:low] > max(78.0, float(np.percentile(L[out], 5)) - 4)
         out = out | g
     return out
+
+
+def sky_surfaces(lab, gaps=False):
+    """Bright neutral and blue sky, measured on the original rather than the grade."""
+    L, a, b = np.moveaxis(lab, -1, 0)
+    top = max(2, L.shape[0] // 6)
+    seed = sky_mask(L)[:top]
+    if not seed.any():
+        # Blue-hour skies are too dark for the pale-sky flood. Start with
+        # smooth blue pixels near a frame edge, using their measured range.
+        Lt, at, bt = L[:top], a[:top], b[:top]
+        seed = (bt < -8) & (bt < -np.abs(at)) & (Lt > 25) & (np.abs(Lt - blur(Lt, 2)) < 2)
+    if seed.mean() < 0.03:
+        return np.zeros_like(L, dtype=bool)
+    low_l, median_l = np.percentile(L[:top][seed], [10, 50])
+    amin, amax = np.percentile(a[:top][seed], [5, 95])
+    # Strong daylight blue becomes less saturated and more cyan near the
+    # horizon. Allow that natural hue drift while using the source sky's
+    # luminance range to keep lower-chroma foreground water out.
+    slack = max(4, -float(np.median(b[:top][seed])) / 4) if median_l > 68 else 4
+    candidate = (L >= low_l - 8) & (a >= amin - slack) & (a <= amax + slack) & (b <= 6)
+    return sky_mask(L, gaps=gaps, candidate=candidate)
 
 
 RAMP = {'left': lambda xx, yy: 1 - xx, 'right': lambda xx, yy: xx, 'top': lambda xx, yy: 1 - yy, 'bottom': lambda xx, yy: yy}

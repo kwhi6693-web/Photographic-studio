@@ -11,10 +11,20 @@ concurrency:   # a new push to the same branch or PR cancels the run still going
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [opencv, no-opencv]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: pip install -r tests/requirements.txt
+      - if: matrix.backend == 'opencv'
+        run: pip install -r tests/requirements.txt
+      - if: matrix.backend == 'no-opencv'
+        run: |
+          sed '/^opencv-python-headless==/d' tests/requirements.txt > "$RUNNER_TEMP/requirements-no-opencv.txt"
+          pip install -r "$RUNNER_TEMP/requirements-no-opencv.txt"
+          python -c 'import importlib.util; assert importlib.util.find_spec("cv2") is None'
       - run: python -m pytest tests -q -rx -n auto

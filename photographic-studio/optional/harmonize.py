@@ -53,7 +53,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, save_png, srgb_to_lab, lab_to_lin, to_srgb, blur, guided, sha256, run_tool, sky_mask
+from ps_common import load_rgb, save_png, srgb_to_lab, lab_to_lin, to_srgb, blur, guided, sha256, run_tool, sky_surfaces
 
 VERSION = 'harmonize.py v1.4.0'
 FUSE_AREA = 0.20
@@ -224,13 +224,15 @@ def subject_weight(kl, shape):
     return (1 - smooth(d, 0.7, 1.8)).astype(np.float32)
 
 
-def step_depth(Lo, L, genre, protect=None, key_light=False, floor=SEP_FLOOR, kl=None):
+def step_depth(Lo, L, genre, protect=None, key_light=False, floor=SEP_FLOOR, kl=None, sky=None):
     info = {'light_shade_floor': floor}
     Sw = subject_weight(kl, L.shape) if kl else None
     # v1.2.8: the plain, bright sky of the original (2026-11-21, photo 03: after G's smooth sky deepening the
     #   light/shade floor lifted the whole sky back +9 L* and clipped its blue channel)
-    sm = sky_mask(Lo, gaps=True) if genre not in ('night', 'museum') else None
-    sky_w = np.clip(blur(sm.astype(np.float32), 6) * 1.5, 0, 1) if sm is not None and sm.mean() > 0.03 else None
+    sky_w = None
+    if sky is not None and sky.any():
+        sky_w = np.clip(blur(sky.astype(np.float32), 6) * 1.5, 0, 1)
+        sky_w[sky] = 1
     q5o, q5 = float(np.percentile(Lo, 5)), float(np.percentile(L, 5))
     lowkey = float(np.median(Lo)) < 35 or genre in ('museum', 'night')
     lim = q5o + (3.0 if lowkey else 6.0)
@@ -293,7 +295,7 @@ def step_depth(Lo, L, genre, protect=None, key_light=False, floor=SEP_FLOOR, kl=
             w = smooth(L, float(np.percentile(L[free], 85)), t99) * free
             L = np.clip(L + lift * w, 0, 100)
             info['highlights'] = f'top 1% {t99:.1f} -> {float(np.percentile(L[free], 99)):.1f} (original {t99o:.1f})'
-    if sky_w is not None:
+    if sky_w is not None and genre != 'night':
         # v1.2.8: the plain sky may sit up to 7 L* lower (intensity_check's grey-sky floor), not more
         sk = (sky_w > 0.5) & ~(protect if protect is not None else np.zeros_like(L, bool))
         if sk.mean() > 0.02:
@@ -434,12 +436,12 @@ def main():
         # v1.4.0: the depth floor must not create a physics problem the candidate did not have (c1_04: lifting the
         #   mid-tones made them outshine highlights G had dimmed - highlight_order). Then the floor steps back.
         import tempfile
-        for fl in (floor0, 1.0, SEP_FLOOR_V125):
+        sky = sky_surfaces(lo) if genre != 'museum' else None
+        for fl in dict.fromkeys((floor0, 1.0, SEP_FLOOR_V125)):
             L, dinfo = step_depth(Lo, L_in, genre, darken_mask(opt.get('--params'), L_in.shape), has_key_light(opt.get('--params')),
-                                  fl, key_light_of(opt.get('--params')))
+                                  fl, key_light_of(opt.get('--params')), sky=sky)
             kd = np.clip((L + 8.0) / (L_in + 8.0), 1.0, 1.15) ** 0.5   # colour follows the lifts (+15 % at most)
             a, b = a_in * kd, b_in * kd
-            if fl == SEP_FLOOR_V125: break
             with tempfile.TemporaryDirectory() as td_:
                 tp = str(Path(td_) / 'd.png'); save_png(np.clip(to_srgb(lab_to_lin(np.stack([L, a, b], -1))), 0, 1), tp)
                 ph_ = run_tool('physics_check.py', o_p, tp)
@@ -451,6 +453,9 @@ def main():
             if not new: break
             dinfo['stepped_back'] = f'floor {fl} made {", ".join(new)}'
             rec.setdefault('depth_backoff', []).append(dinfo['stepped_back'])
+        else:
+            L, a, b = L_in, a_in, b_in
+            dinfo = {'action': 'kept input depth after every trial introduced a physics warning'}
         rec['depth'] = dinfo
         a, b, rec['colour'] = step_colour(Lo, ao, bo, L, a, b, colour_mask(opt.get('--params'), L.shape))
     lin2 = lab_to_lin(np.stack([L, a, b], -1))

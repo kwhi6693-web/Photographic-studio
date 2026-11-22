@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.4.0 - look transfer: every output pixel is the ORIGINAL photo's pixel,
+"""Photographic Studio v1.4.1 - look transfer: every output pixel is the ORIGINAL photo's pixel,
 re-toned with the light and colour of the generative result G. Nothing G drew is kept, so no AI texture.
-Usage: python3 look_transfer.py SOURCE G_OUTPUT OUT_PNG [RECEIPT_JSON] [--strength 0..1] [--local 0..1] [--no-sky-trend] [--no-shadow-clamp] [--night]
+Usage: python3 look_transfer.py SOURCE G_OUTPUT OUT_PNG [RECEIPT_JSON] [--strength 0..1] [--local 0..1] [--no-sky-trend] [--no-shadow-clamp] [--night] [--pale-sky-mask]
 Output has the SOURCE's size and framing. Deterministic. Needs numpy, Pillow, OpenCV.
 
 How G's look is taken over (three smooth layers, all functions of the source pixel and its neighbourhood):
@@ -33,7 +33,7 @@ try:
 except ImportError:   # v1.2.9: no OpenCV on the host - numpy + Pillow stand-in
     sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__))); import cvlite as cv2
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, box, blur, structure_corr, sha256, sky_mask
+from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, box, blur, structure_corr, sha256, sky_mask, sky_surfaces
 
 NL, NA, NB = 21, 17, 17
 AB = 90.0
@@ -43,6 +43,78 @@ GLOW_RAISE = 15.0   # v1.0.2: L* above the dark background's trend that only an 
 SHADOW_T, SHADOW_CAP = 38.0, 1.75   # v1.4.0: the darkest ~20 % (L* < 38) may rise at most ~1.75 L*
 CHROMA_PRESCALE = 1.65              # v1.4.0: output mean chroma at most 1.65x the original (user 2026-11-22: 1.40 dulled G's greens)
 NEUTRAL_C = 8.0                     # v1.4.0: near-neutral in the original - G's colour change halved there
+GLOW_REVIEW_L = 2.5
+
+
+def source_light_support(L, texture):
+    """Support for existing lights and adjacent structured surfaces, on the source grid."""
+    radius = max(4, min(L.shape) // 45)
+    background = blur(L, radius)
+    lights = (L > max(60, np.percentile(L, 90))) & (L - background > 12)
+    near = np.clip(blur(lights.astype(np.float32), radius) * 12, 0, 1)
+    surface = np.clip(blur(texture, 3) / 4, 0, 1)
+    return np.maximum(lights, near * surface)
+
+
+def glow_region(residual, valid):
+    """Source pixel coordinates for the residual selected for visual review."""
+    ys, xs = np.nonzero(valid & (residual > GLOW_REVIEW_L))
+    if not xs.size:
+        return None
+    i = int(np.argmax(residual[ys, xs]))
+    return {'box_xyxy': [int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1],
+            'peak_xy': [int(xs[i]), int(ys[i])], 'peak_L': round(float(residual[ys[i], xs[i]]), 2)}
+
+
+def sky_delta(lab, delta, sky):
+    """Project G's sky change onto a broad trend, independently for L*, a*, b*."""
+    hh, ww = sky.shape
+    yy, xx = np.mgrid[0:hh, 0:ww].astype(np.float32)
+    basis = np.stack([np.ones_like(xx), xx / ww, yy / hh, (yy / hh) ** 2], -1)
+    sample = sky.copy()
+    sample &= ((np.arange(ww) % 3) == 0)[None, :]
+    sample &= ((np.arange(hh) % 3) == 0)[:, None]
+    if sample.sum() < basis.shape[-1]:
+        sample = sky
+    core = blur(sky.astype(np.float32), max(3, min(hh, ww) // 150)) > 0.2
+    weight = np.clip(blur(core.astype(np.float32), max(3, min(hh, ww) // 200)) * 2, 0, 1)
+    # Sky colour is judged on the source's median, independent of G's colour.
+    blue = float(np.median(lab[..., 2][sky])) < -NEUTRAL_C
+    info = {'sky_area': round(float(sky.mean()), 3), 'source_sky': 'blue' if blue else 'pale'}
+    info['g_sky_mottle_L'] = round(float(np.std(
+        (delta[..., 0] - blur(delta[..., 0], max(8, min(hh, ww) // 6)))[sky])), 2)
+    restrained = []
+    for k in range(3):
+        values = delta[..., k][sample]
+        design = basis[sample]
+        fit = np.linalg.lstsq(design, values, rcond=None)[0]
+        residual = values - design @ fit
+        center = np.median(residual)
+        spread = np.median(np.abs(residual - center))
+        clean = np.abs(residual - center) <= max(2, 3 * spread)
+        if clean.sum() >= len(fit):
+            fit = np.linalg.lstsq(design[clean], values[clean], rcond=None)[0]
+        trend = basis @ fit
+        mean = float(trend[sky].mean())
+        if k == 0:
+            shift = float(np.clip(mean, -6.5, 3.0) - mean)
+            trend += shift
+            # Preserve the broad gradient while capping a sky-only bright
+            # patch, even if some of that patch influenced the fit.
+            trend = np.minimum(trend, 3.0)
+            info['deepening_held_back_L'] = round(max(shift, 0), 2)
+            info['brightening_held_back_L'] = round(max(-shift, 0), 2)
+        elif not blue and abs(mean) > 4:
+            trend += np.clip(mean, -4, 4) - mean
+            restrained.append(round(mean, 1))
+        tolerance = 0.75 if k == 0 else 0.5
+        clipped = np.clip(delta[..., k], trend - tolerance, trend + tolerance)
+        if k == 0:
+            info['blotch_area_of_sky'] = round(float((np.abs(delta[..., k] - clipped)[sky] > 2).mean()), 3)
+        delta[..., k] += weight * (clipped - delta[..., k])
+    if restrained:
+        info['g_colour_shift_held_to_4'] = restrained
+    return info
 
 
 def register(src, g):
@@ -193,7 +265,8 @@ def main():
     lcorr = blur(hs_ * hg_, 6) / np.sqrt(blur(hs_ * hs_, 6) * blur(hg_ * hg_, 6) + 1e-6)
     surf_g = np.clip((hpf(labG[..., 0]) - 2.5 * hpf(labS[..., 0]) - 0.6) / 1.0, 0, 1) * np.clip((lcorr - 0.3) / 0.3, 0, 1) * valid
     surf = np.clip(blur(back(surf_g.astype(np.float32)), 4) * 1.5, 0, 1)
-    dk = dk * (1 - surf)
+    light_support = source_light_support(lab0[..., 0], tex)
+    dk *= (1 - surf) * (1 - light_support)
     flat = (dk * tx > 0.5).astype(np.float32)
     glow_area = 0.0; trend_L = None
     if flat.mean() > 0.03:
@@ -225,41 +298,11 @@ def main():
             cl = np.minimum(delta[..., k], trend + tol) if k == 0 else np.clip(delta[..., k], trend - tol, trend + tol)  # deepening a dark background is allowed; adding light is not
             if k == 0: glow_area = float(((np.abs(delta[..., 0] - cl) > 2.0) & (wgt > 0.5)).mean())
             delta[..., k] = delta[..., k] * (1 - wgt) + cl * wgt
-    # v1.2.8 no invented clouds (user 2026-11-21): on a plain, bright sky (overcast or pale; the same sky seen through
-    # branch gaps included) G may only lay a broad, smooth gradient - deeper at the top, the overall warmth - not cloud
-    # blotches it drew on a sky that had none (2026-11-21, photo 01: an even overcast sky came out mottled grey). The
-    # same broad trend as for a dark background (1, x, y, y^2), but held on both sides: no blotch lighter or darker than
-    # the trend is carried over. The sky's average deepening is also held to 6.5 L* (intensity_check.py now checks a
-    # grey sky against -7: before v1.2.8 a grey sky was not checked at all and photo 01's went -13.4).
     sky_trend = {}
-    sky_s = sky_mask(lab0[..., 0], gaps=True)
-    if sky_s.mean() > 0.03 and '--no-sky-trend' not in sys.argv:
-        hh, ww = delta.shape[:2]; yy, xx = np.mgrid[0:hh, 0:ww].astype(np.float32); xx /= ww; yy /= hh
-        basis_s = np.stack([np.ones_like(xx), xx, yy, yy * yy], -1)
-        sel_s = sky_s.copy(); sel_s &= ((np.arange(ww) % 3) == 0)[None, :]; sel_s &= ((np.arange(hh) % 3) == 0)[:, None]
-        # the sky and the fine twigs inside it get the same smooth light (a sky seen through branches has many edges, and
-        # a soft weight there left most of G's blotches in: 2026-11-21 photo 01); it fades out over the trees around it
-        core_s = blur(sky_s.astype(np.float32), max(3, min(hh, ww) // 150)) > 0.2
-        w_s = np.clip(blur(core_s.astype(np.float32), max(3, min(hh, ww) // 200)) * 2.0, 0, 1)
-        before = float(np.std((delta[..., 0] - blur(delta[..., 0], max(8, min(hh, ww) // 6)))[sky_s]))
-        shift = 0.0; sky_trend_c = []
-        for k in range(3):
-            coef = np.linalg.lstsq(basis_s[sel_s], delta[..., k][sel_s], rcond=None)[0]
-            trend = basis_s @ coef; tol = 1.5 if k == 0 else 1.0
-            if k == 0:
-                mean_dL = float(trend[sky_s].mean())
-                if mean_dL < -6.5: shift = -6.5 - mean_dL; trend = trend + shift
-            else:
-                # the sky's overall coolness or warmth may follow G, but a grey sky does not become a blue one
-                #   (2026-11-21, photo 03: G took an overcast sky from b -8 to -17); at most 4 units either way
-                mc = float(trend[sky_s].mean())
-                if abs(mc) > 4.0: trend = trend - (mc - np.sign(mc) * 4.0); sky_trend_c = sky_trend_c + [round(mc, 1)]
-            cl = np.clip(delta[..., k], trend - tol * 0.5, trend + tol * 0.5)
-            if k == 0: blotch = float((np.abs(delta[..., 0] - cl)[sky_s] > 2.0).mean())
-            delta[..., k] = delta[..., k] * (1 - w_s) + cl * w_s
-        sky_trend = {'sky_area': round(float(sky_s.mean()), 3), 'blotch_area_of_sky': round(blotch, 3),
-                     'g_sky_mottle_L': round(before, 2), 'deepening_held_back_L': round(shift, 2),
-                     **({'g_colour_shift_held_to_4': sky_trend_c} if sky_trend_c else {})}
+    # Museum screens and diffuse windows retain conservative pale-surface segmentation.
+    sky = sky_mask(lab0[..., 0], gaps=True) if '--pale-sky-mask' in sys.argv else sky_surfaces(lab0)
+    if sky.any() and '--no-sky-trend' not in sys.argv:
+        sky_trend = sky_delta(lab0, delta, sky)
     # v0.3.8 no deleted light: G sometimes "cleans up" a scene by blacking out a real light patch (a lit haze in a
     # showcase, a warm-lit cabinet, a glaze sheen). Broad darkening over the whole frame is allowed; a local darkening
     # of more than 8 L* below that broad trend, where the source has light, is not carried over.
@@ -381,6 +424,7 @@ def main():
     # v1.0.2: check the result, not the intention - how much light above the background's smooth trend is left on the
     # flat dark background of the OUTPUT (a glow G invented that the clamp did not fully remove)
     glow_left = 0.0
+    hit = None
     if trend_L is not None:
         # measured only inside the background, away from its edges: averaging only background pixels, so the real lift
         # of a lit subject next to the background is not smeared into it and mistaken for a glow
@@ -389,8 +433,13 @@ def main():
         if inner.mean() > 0.01:
             bump = blur((lab1[..., 0] - lab0[..., 0] - trend_L) * wmask, rr) / np.maximum(den, 1e-6)
             glow_left = float(np.percentile(bump[inner], 99.5))
+            if glow_left > GLOW_REVIEW_L:
+                hit = glow_region(bump, inner)
     m['glow_left_L'] = round(glow_left, 2)
-    if glow_left > 2.5: rec['flags'].append(f'G_GLOW_LEFT {round(glow_left, 2)}: a glow G invented on the dark background is still {round(glow_left, 1)} L* above it in the output (v1.0.2)')
+    m['source_light_support_area'] = round(float((light_support > 0.5).mean()), 4)
+    if hit:
+        m['glow_review_region'] = hit
+        rec['flags'].append(f'G_GLOW_LEFT {glow_left:.2f}: residual brightness on unsupported dark background; review source coordinates')
     if removed_area > 0.01: rec['flags'].append(f'G_LIGHT_REMOVAL_NOT_CARRIED {round(removed_area, 3)}: G blacked out a real light patch; kept the original light there (v0.3.8)')
     if sky_trend.get('blotch_area_of_sky', 0) > 0.05: rec['flags'].append(f"G_SKY_BLOTCHES_NOT_CARRIED {sky_trend['blotch_area_of_sky']}: G drew cloud-like blotches on a plain sky; only its smooth gradient was carried over (v1.2.8)")
     if glow_area > 0.01: rec['flags'].append(f'G_GLOW_NOT_CARRIED {round(glow_area, 3)}: G lit part of a flat dark background with no light source (glow, spotlight oval); not carried over (v0.3.7)')
