@@ -40,7 +40,7 @@ spotlight glow) is first repaired in place by harmonize.py --light-only; G is dr
 v1.4.0 (2026-11-22 courtyard/arcade receipts): an over-coloured G no longer skips the improvement check. An attempt
 that is over a strength limit is first settled (settle.py, which only trims the excess - colour by zoned compression)
 and improve_check.py then ALWAYS runs on the settled attempt: the moves, then four hard gates (subject separation
->= +3.5 L*, global light/shade separation >= 1.05x directional / 1.02x diffuse, black anchor -3.5..+1.5 L*, colour
+>= +3.5 L*, global light/shade separation >= 1.05x directional / 1.0x diffuse, black anchor -3.5..+1.5 L*, colour
 order) and a texture check. When a light gate fails the remedy raises the key light (strength up to 1.2) and the
 black anchor / a gentle S-curve - never clarity - and each step reruns the physics checks (tone order, halo, darkening
 patch, ghost edges, sky glow) and the keep regions; any red line stops it and the step is undone.

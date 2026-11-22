@@ -15,7 +15,9 @@ v1.4.0 (2026-11-22 courtyard/arcade receipts: G lifted the darks +11.6..+14.5 L*
                      properly exposed (median L* < 12 and p95 < 45).
   colour pre-scale   G's colour change is first halved on bright near-neutral areas (white walls, grey stone: C* < 8,
                      L* > ~45), then
-                     the whole colour change is scaled so the output's mean chroma stays within 1.40x the original.
+                     the whole colour change is scaled so the output's mean chroma stays within 1.65x the original
+                     (G's own colour is kept up to the user's 1.65x ceiling: 2026-11-19, reconfirmed 2026-11-22 after a
+                     1.40x cap dulled the greens of three rainy garden photos).
   high frequency     every pixel's fine detail is the original's: the transferred change is built only from smooth
                      maps applied to the original's own pixels. The receipt measures what is left of G's own fine detail
                      in the output (g_high_freq_leak: correlation of the fine-scale change with G's after removing the
@@ -39,7 +41,7 @@ AB = 90.0
 
 GLOW_RAISE = 15.0   # v1.0.2: L* above the dark background's trend that only an invented glow reaches
 SHADOW_T, SHADOW_CAP = 38.0, 1.75   # v1.4.0: the darkest ~20 % (L* < 38) may rise at most ~1.75 L*
-CHROMA_PRESCALE = 1.40              # v1.4.0: output mean chroma at most 1.40x the original (settle.py keeps the 1.65x ceiling)
+CHROMA_PRESCALE = 1.65              # v1.4.0: output mean chroma at most 1.65x the original (user 2026-11-22: 1.40 dulled G's greens)
 NEUTRAL_C = 8.0                     # v1.4.0: near-neutral in the original - G's colour change halved there
 
 
@@ -294,7 +296,7 @@ def main():
                         'g_lift_in_darks_L': round(before_dk, 2), 'kept_L': round(float(delta[..., 0][dark].mean()) if dark.any() else 0.0, 2)}
     else:
         shadow_clamp = {'skipped': 'night or badly under-exposed original: lifting the darks is the edit' if night_like else '--no-shadow-clamp'}
-    # v1.4.0 colour pre-scale: G's colour change halved on near-neutral areas, then the output's mean chroma held to 1.40x
+    # v1.4.0 colour pre-scale: G's colour change halved on near-neutral areas, then the output's mean chroma held to 1.65x
     C0 = np.hypot(lab0[..., 1], lab0[..., 2]); Cn = blur(C0, 3)
     # near-neutral AND reasonably bright (white walls, stone pillars, grey stone): a dark, low-chroma shadow is not a
     #   white wall, and G's warmth there is the scene's light (b1_03: 69 % of the frame was 'near-neutral' shadow)

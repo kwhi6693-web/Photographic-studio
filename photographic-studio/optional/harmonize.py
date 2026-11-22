@@ -33,7 +33,8 @@ reads first is light, then colour, then depth; this step repairs those locally i
 
 v1.4.0 (2026-11-22 courtyard: the final's light/shade separation was held only at 0.90x the original's, so G's
 grey HDR shadows were delivered 10.5 % flatter than the photo):
-  - light/shade separation at least 1.02x the original's (1.05x when the original's light is directional, as
+  - light/shade separation at least 1.0x the original's - not flatter - for flat/overcast/rain light (user
+    2026-11-22: 1.02 made rainy photos ask for contrast their light does not have), 1.05x when the original's light is directional, as
     grade.py's key light judges it from the brief's key_light). With a key light the added light goes into the subject;
     lit faces are lifted only in the mid-tones (fading out from L* 60 to 85) and at most 6 L*, the shade pressed at most
     3 L* and never below L* 10 - when that is not enough the floor is left short and reported
@@ -56,7 +57,7 @@ from ps_common import load_rgb, save_png, srgb_to_lab, lab_to_lin, to_srgb, blur
 
 VERSION = 'harmonize.py v1.4.0'
 FUSE_AREA = 0.20
-SEP_FLOOR = 1.02   # v1.4.0: light/shade separation vs the original (was 0.90)
+SEP_FLOOR = 1.00   # v1.4.0: light/shade separation vs the original, flat light (was 0.90; 1.02 until 2026-11-22)
 SEP_FLOOR_V125 = 0.90
 SEP_FLOOR_DIRECTIONAL = 1.05
 DARK_UP, DARK_DOWN = 1.5, -3.5   # v1.4.0 black guard on fixed_dark_L
@@ -240,7 +241,7 @@ def step_depth(Lo, L, genre, protect=None, key_light=False, floor=SEP_FLOOR, kl=
         L = np.clip(L, 0, 100)
         info['black_point'] = f'{q5:.1f} -> {float(np.percentile(L, 5)):.1f} (limit {lim:.1f})'
     ratio = sep(L) / max(sep(Lo), 1e-6)
-    if ratio < floor:   # v1.2.5b: lit and shade must stay apart; v1.4.0: at least 1.02x (directional 1.05x)
+    if ratio < floor:   # v1.2.5b: lit and shade must stay apart; v1.4.0: at least 1.0x (directional 1.05x)
         r0 = ratio; L_start = L.copy()
         for _ in range(8):
             base = blur(L, 12); m = float(np.median(base)); g = min(floor / ratio, 1.3)

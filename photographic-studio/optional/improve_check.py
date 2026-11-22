@@ -35,7 +35,8 @@ v1.4.0 - gates (--gates; finish.py always runs them, after the attempt is settle
 one texture check, all in CIELAB against the original of the same framing. A local micro-contrast measure alone let
 flat, grey-shadowed finals through (2026-11-22 courtyard/arcade):
   subject_separation  (L_subject - L_surround) rises by >= 3.5 L* (key_light box; skipped without one)
-  global_separation   global_sep(final) / global_sep(original) >= 1.05 (directional light) or 1.02 (diffuse)
+  global_separation   global_sep(final) / global_sep(original) >= 1.05 (directional light) or 1.0 (diffuse: flat,
+                      overcast, rain - not flatter than the original; user 2026-11-22)
   black_anchor        fixed_dark_L (the original's darkest 15 %) changes by -3.5 .. +1.5 L*: no grey lift, no dead black
   colour_order        chroma ratio <= 1.65; near-neutral areas drift <= 3 in a*/b*; in daylight the lit-minus-shade
                       warmth (b*) is kept (~90 % of the original's) and clear (>= 1.0)
@@ -234,7 +235,7 @@ def check(src, fin, params, base=None):
     return out
 
 
-SUBJECT_MIN, SEP_DIRECTIONAL, SEP_DIFFUSE = 3.5, 1.05, 1.02
+SUBJECT_MIN, SEP_DIRECTIONAL, SEP_DIFFUSE = 3.5, 1.05, 1.0
 DARK_BAND = (-3.5, 1.5)
 CHROMA_MAX, NEUTRAL_DRIFT, TEXTURE_BAND = 1.65, 3.0, (1.15, 1.35)
 
