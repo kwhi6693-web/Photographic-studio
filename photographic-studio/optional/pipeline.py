@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.4.1 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
+"""Photographic Studio v1.4.2 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
 Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
                               [--g-drift] [--lt-opts=FLAGS] [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (or SOURCE / --no-g when there is no G)
@@ -14,13 +14,14 @@ Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
 It is a thin wrapper (user 2026-11-20): it calls the existing tools in the order SKILL.md gives and changes none of
 them. Order: finish.py -> settle.py -> [texture_blend.py] -> reframe.py on the result AND, with the same arguments, on
 the original (so harmonize.py always compares like with like - this was a manual step that could be missed) ->
-n_trim.py (only acts when highlights clip) -> harmonize.py (the last step; nothing changes the photo after it).
+n_trim.py (only acts when highlights clip) -> harmonize.py -> final exposure recovery.
 It does not call G and does not judge by eye: the receipt's "next" says when SKILL.md asks for G to be called once
 more (finish.py fell back to N direct with G used once, or harmonize.py says REGEN_G). Deterministic; never asks.
 v1.4.0: after harmonize.py the four expressiveness gates (improve_check.py --gates) are measured once more on the file
 that is delivered, against the original framed the same way, and written to the receipt ("gates"); after a crop the
 subject gate is skipped (the brief's box no longer applies).
 v1.4.1 audit: optional per-stage G measurements and look_transfer option forwarding.
+v1.4.2: recover midtone lightness last, then report physics and gates without another remedy.
 """
 import json, shutil, subprocess, sys, tempfile
 from pathlib import Path
@@ -71,6 +72,52 @@ def measure_drift(folder, src, g, stages, framed, src_framed, geometry):
     return {**report, **after}
 
 
+def recover_delivery(src, g, src_framed, before, out, geometry, folder):
+    from exposure_recovery import recover
+    from ps_common import load_rgb, save_png, sky_surfaces, srgb_to_lab
+    import numpy as np
+    from PIL import Image
+
+    original = load_rgb(src)
+    sky = sky_surfaces(srgb_to_lab(original), gaps=True)
+    valid = np.ones(sky.shape, dtype=bool)
+    g_ref = None
+    if g is not None:
+        from g_drift import align
+        try:
+            aligned, valid, _ = align(original, load_rgb(g))
+        except (ValueError, OSError) as exc:
+            shutil.copyfile(before, out)
+            return {'triggered': False, 'applied': False, 'lift_L': 0.0,
+                    'reference': 'G', 'reason': str(exc)}
+        g_ref = folder / 'aligned-g.png'
+        save_png(aligned, g_ref)
+
+    if geometry:
+        def framed_file(path):
+            dst = folder / ('framed-' + path.name)
+            if 'output_size' not in tool('reframe.py', path, dst, *geometry):
+                raise ValueError('exposure recovery could not reframe its reference')
+            return dst
+
+        masks = folder / 'exposure-masks.png'
+        # Keep the original non-sky classification on the same final geometry.
+        mask_rgb = np.stack((valid, ~sky, sky), -1).astype(np.uint8) * 255
+        Image.fromarray(mask_rgb).save(masks)
+        try:
+            mask_frame = load_rgb(framed_file(masks))
+            valid, land, sky = np.moveaxis(mask_frame == 1, -1, 0)
+            if g_ref is not None:
+                g_ref = framed_file(g_ref)
+        except ValueError as exc:
+            shutil.copyfile(before, out)
+            return {'triggered': False, 'applied': False, 'lift_L': 0.0,
+                    'reference': 'G' if g is not None else 'original', 'reason': str(exc)}
+    else:
+        land = ~sky
+    return recover(src_framed, before, out, valid & land, valid & sky, g_ref)
+
+
 def main():
     a = [x for x in sys.argv[1:] if not x.startswith('--')]
     opt = dict(x[2:].split('=', 1) for x in sys.argv[1:] if x.startswith('--') and '=' in x)
@@ -78,7 +125,7 @@ def main():
     src, g, pj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
-    rec = {'tool': 'pipeline.py v1.4.1', 'steps': {}, 'next': []}
+    rec = {'tool': 'pipeline.py v1.4.2', 'steps': {}, 'next': []}
     settled = Path(str(out) + '.settled.png')
     drift_folder = None
     if '--g-drift' in sys.argv:
@@ -87,6 +134,7 @@ def main():
         else:
             drift_folder = Path(str(out) + '.g-drift').resolve()
     stages, framed_stages, geometry = {}, {}, None
+    recovery_g = None if '--no-g' in sys.argv or Path(src).resolve() == Path(g).resolve() else g
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
         if opt.get('settled'):
@@ -103,6 +151,8 @@ def main():
             rec['steps']['finish'] = {'delivered': r.get('delivered'), 'verdict': r.get('verdict'), 'g_chroma': r.get('g_chroma'),
                                       'attempts': r.get('attempts')}
             used_g = r.get('route') == 'g'
+            if not used_g or str(r.get('delivered', '')).startswith('n_direct'):
+                recovery_g = None
             if drift_folder is not None and not used_g:
                 rec['g_drift'] = {'skipped': 'no G'}
                 drift_folder = None
@@ -153,24 +203,42 @@ def main():
             if selected.get('effective_params') is not None:
                 finish_params = td / 'effective-params.json'
                 finish_params.write_text(json.dumps(selected['effective_params']), encoding='utf-8')
-        h = tool('harmonize.py', src_framed, cur, out, td / 'harmonize.json', f'--params={finish_params}',
+        harmonized = td / 'harmonized.png'
+        h = tool('harmonize.py', src_framed, cur, harmonized, td / 'harmonize.json', f'--params={finish_params}',
                  *([f'--genre={genre}'] if genre in ('museum', 'night') else []))
-        if not Path(out).exists(): shutil.copy(cur, out)
-        rec['steps']['harmonize'] = {'verdict': h.get('verdict'), **{k: h.get(k) for k in ('light', 'depth', 'colour') if h.get(k)}}
-        gt = tool('improve_check.py', src_framed, out, finish_params, '--gates', *(['--no-subject'] if rf else []),
-                  *([f'--genre={genre}'] if genre in ('museum', 'night') else []))
-        rec['gates'] = gt.get('gates') or gt.get('verdict')
+        if not harmonized.exists(): shutil.copy(cur, harmonized)
+        rec['steps']['harmonize'] = {'verdict': h.get('verdict'), **{k: h.get(k) for k in ('light', 'depth', 'colour', 'check') if h.get(k)}}
+        gate_flags = [*(['--no-subject'] if rf else []),
+                      *([f'--genre={genre}'] if genre in ('museum', 'night') else [])]
+
+        def gates(image):
+            report = tool('improve_check.py', src_framed, image, finish_params, '--gates', *gate_flags)
+            return report.get('gates') or report.get('verdict')
+
+        before_gates = gates(harmonized)
+        exposure = recover_delivery(src, recovery_g, src_framed, harmonized, out, geometry, td)
+        after_gates = gates(out) if exposure['applied'] else before_gates
+        after_physics = h.get('check')
+        if exposure['applied']:
+            physics = tool('physics_check.py', src_framed, out)
+            checks = physics.get('checks')
+            after_physics = {'physics': physics.get('verdict'),
+                             'failed_physics': [key for key, value in checks.items() if value.get('ok') is False]
+                             if checks is not None else None}
+        exposure.update(gates_before=before_gates, gates_after=after_gates,
+                        physics_before=h.get('check'), physics_after=after_physics)
+        rec['steps']['exposure_recovery'] = exposure
+        rec['gates'] = after_gates
         if drift_folder is not None:
             drift_folder.mkdir(parents=True, exist_ok=True)
-            after_settle['7_harmonize'] = Path(out)
+            after_settle['7_harmonize'] = harmonized
+            after_settle['8_exposure_recovery'] = Path(out)
             for snapshots in (stages, framed_stages):
                 for name, path in snapshots.items():
                     if name[0] >= '4':
                         saved = drift_folder / f'{name}.png'
                         shutil.copyfile(path, saved)
                         snapshots[name] = saved
-            if h.get('check'):
-                rec['steps']['harmonize']['check'] = h['check']
             rec['g_drift'] = measure_drift(drift_folder, src, g, stages, framed_stages, src_framed, geometry)
         if str(h.get('verdict', '')).startswith('REGEN_G'):
             rec['next'].append('harmonize.py says REGEN_G: if G has not been re-called yet, call G once more and rerun this command')
