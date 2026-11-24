@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.4.2 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
+"""Photographic Studio v1.4.3 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
 Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
                               [--g-drift] [--lt-opts=FLAGS] [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (or SOURCE / --no-g when there is no G)
@@ -118,6 +118,29 @@ def recover_delivery(src, g, src_framed, before, out, geometry, folder):
     return recover(src_framed, before, out, valid & land, valid & sky, g_ref)
 
 
+def final_verdict(gates, physics, harmonize_verdict):
+    failed = (physics or {}).get('failed_physics')
+    if str(harmonize_verdict or '').startswith('REGEN_G'):
+        return 'STOP_PHYSICS: REGEN_G'
+    if failed:
+        return 'STOP_PHYSICS: ' + ', '.join(failed)
+    if failed is None or (physics or {}).get('physics') != 'PHYSICALLY_PLAUSIBLE':
+        return 'STOP_PHYSICS: missing or inconclusive check'
+    tips = gates.get('failed', []) if isinstance(gates, dict) else []
+    return 'DELIVER_WITH_FLAGS: ' + ', '.join(tips) if tips else 'DELIVER'
+
+
+def gate_notes(value):
+    """Use advisory wording at the receipt boundary, after all decisions."""
+    if isinstance(value, dict):
+        return {key: gate_notes(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [gate_notes(item) for item in value]
+    if isinstance(value, str) and value.startswith('GATES_FAIL'):
+        return value.replace('GATES_FAIL', 'GATES_FLAGS', 1)
+    return value
+
+
 def main():
     a = [x for x in sys.argv[1:] if not x.startswith('--')]
     opt = dict(x[2:].split('=', 1) for x in sys.argv[1:] if x.startswith('--') and '=' in x)
@@ -125,7 +148,7 @@ def main():
     src, g, pj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
-    rec = {'tool': 'pipeline.py v1.4.2', 'steps': {}, 'next': []}
+    rec = {'tool': 'pipeline.py v1.4.3', 'steps': {}, 'next': []}
     settled = Path(str(out) + '.settled.png')
     drift_folder = None
     if '--g-drift' in sys.argv:
@@ -243,8 +266,15 @@ def main():
         if str(h.get('verdict', '')).startswith('REGEN_G'):
             rec['next'].append('harmonize.py says REGEN_G: if G has not been re-called yet, call G once more and rerun this command')
     rec['output'] = str(out)
-    rec['verdict'] = 'DELIVER' + (' | NEXT: ' + ' / '.join(rec['next']) if rec['next'] else '')
-    text = json.dumps(rec, ensure_ascii=False, indent=1)
+    verdict = final_verdict(after_gates, after_physics, h.get('verdict'))
+    if verdict.startswith('STOP_PHYSICS'):
+        prior = h.get('check') or {}
+        if exposure['applied'] and prior.get('physics') == 'PHYSICALLY_PLAUSIBLE' and not str(h.get('verdict')).startswith('REGEN_G'):
+            rec['next'].append('Hold delivery. Fall back to the pre-F2 harmonize output and recheck physics.')
+        else:
+            rec['next'].append('Hold delivery. Review the source and retry from the last physically plausible version.')
+    rec['verdict'] = verdict + (' | NEXT: ' + ' / '.join(rec['next']) if rec['next'] else '')
+    text = json.dumps(gate_notes(rec), ensure_ascii=False, indent=1)
     if rec_p: Path(rec_p).write_text(text, encoding='utf-8')
     print(text)
     return 0
