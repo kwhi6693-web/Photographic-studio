@@ -122,7 +122,7 @@ def test_brief_can_lock_directional_only_where_there_is_sun(tmp_path):
     assert r['mode'] == 'diffuse' and 'lock_refused' in r['light_in_original']
 
 
-def test_black_anchor_presses_the_darks_within_bounds(tmp_path):
+def test_grade_anchor_leaves_raised_shadows_and_recovers_over_dark_shadows(tmp_path):
     img, Y, X, _, _ = courtyard()
     lb = srgb_to_lab(img); lb[..., 0] += 4.0 * np.clip((45 - lb[..., 0]) / 30, 0, 1)   # what is left after the shadow clamp
     s, c = save(img, tmp_path / 's.png'), from_lab(lb, tmp_path / 'c.png')
@@ -130,7 +130,7 @@ def test_black_anchor_presses_the_darks_within_bounds(tmp_path):
     pj.write_text(json.dumps({'anchor': True, 'auto_ref': str(s)}))
     r = json.loads(run_tool('grade.py', c, out, pj).stdout)['params_used']['anchor']
     fd = fixed_dark_delta(L(load(s)), L(load(out)))
-    assert -3.3 <= fd <= -1.8, (fd, r)
+    assert abs(fd - fixed_dark_delta(L(load(s)), L(load(c)))) < 0.1, (fd, r)
     # already far too dark: brought back up to -3.0, never left under -3.5
     dark = srgb_to_lab(img); dark[..., 0] = np.where(dark[..., 0] < 40, dark[..., 0] * 0.6, dark[..., 0])
     d = from_lab(dark, tmp_path / 'd.png'); out2 = tmp_path / 'o2.png'

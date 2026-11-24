@@ -346,14 +346,15 @@ def _ref_lab(ref, lab0, h, w):
     return lab0
 
 
-def black_anchor(an, L, Lref, h, w):
+def black_anchor(an, L, Lref, h, w, allow_down=True):
     """v1.4.0: the black anchor. The darkest 15 % of the ORIGINAL (a fixed region, "fixed_dark_L") is pressed about
     2.5 L* below the original - as a tone curve of the original's own brightness, so no patch can appear - which
     gives the frame its depth instead of the lifted, grey HDR shadows G tends to make (2026-11-22 courtyard: darks
     +11.6..+14.5 from G, the final's light/shade separation 10.5 % under the original's). Bounds: never more than
     3.5 under the original (no dead black screen); a night photo (finish.py: target 0) or a frame where nothing is
     properly exposed is only kept from rising.
-      anchor: true | {target: -3..0 (L*, default -2.5)}"""
+      anchor: true | {target: -3..0 (L*, default -2.5)}
+      allow_down=False only restores shadows that are below the lower bound."""
     from ps_common import dark_anchor_mask, unexposed
     tgt = -2.5 if an is True else cl('anchor.target', (an or {}).get('target', -2.5), -3.0, 0.0)
     night = unexposed(Lref) or tgt >= 0      # finish.py passes target 0 for a declared night photo
@@ -365,7 +366,7 @@ def black_anchor(an, L, Lref, h, w):
     #   eased back to just under the target - the later steps (texture, toe) take a little more, and -3.5 is the floor
     lower = -3.0 if night else tgt - 0.6
     want = cur
-    if cur > tgt: want = tgt
+    if allow_down and cur > tgt: want = tgt
     elif cur < lower: want = lower + 0.35
     info = {'fixed_dark_L_before': round(cur, 2), 'target': tgt}
     if abs(want - cur) < 0.1:
@@ -600,7 +601,7 @@ def main(inp, out, params_path, receipt=None):
     if any(P.get(k) for k in ('anchor', 'split_tone', 'texture', 'chroma_compress')):
         lab_r = _ref_lab(P.get('auto_ref'), lab0, h, w)
         if P.get('anchor'):
-            L, used['anchor'] = black_anchor(P['anchor'], L, lab_r[..., 0], h, w)
+            L, used['anchor'] = black_anchor(P['anchor'], L, lab_r[..., 0], h, w, allow_down=False)
         if P.get('split_tone'):
             a, b, used['split_tone'] = split_tone(P['split_tone'], L, a, b, lab_r, h, w)
         if P.get('texture'):

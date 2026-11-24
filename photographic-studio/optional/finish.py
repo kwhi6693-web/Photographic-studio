@@ -46,9 +46,11 @@ black anchor / a gentle S-curve - never clarity - and each step reruns the physi
 patch, ghost edges, sky glow) and the keep regions; any red line stops it and the step is undone.
 Defaults added unless the brief sets them: "anchor": true, "split_tone": true (not museum), "texture": 0.24 minus
 the brief's clarity (0.2 on a small photo).
+v1.4.1 audit: --snapshots=DIR saves PNG stages per attempt without changing selection.
+--lt-opts=FLAGS forwards shell-quoted options to look_transfer.py on G attempts.
 Deterministic. Needs numpy, Pillow (OpenCV optional: cvlite).
 """
-import json, sys, tempfile, shutil
+import json, shlex, sys, tempfile, shutil
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -305,7 +307,11 @@ def problems(src, out, genre, g_chroma=None):
 
 def main():
     a = [x for x in sys.argv[1:] if not x.startswith('--')]
-    opt = {x.split('=')[0]: x.split('=')[1] for x in sys.argv[1:] if x.startswith('--') and '=' in x}
+    opt = dict(x.split('=', 1) for x in sys.argv[1:] if x.startswith('--') and '=' in x)
+    lt_extra = shlex.split(opt.get('--lt-opts', ''))
+    snapshots = Path(opt['--snapshots']).resolve() if opt.get('--snapshots') else None
+    if snapshots is not None:
+        snapshots.mkdir(parents=True, exist_ok=True)
     genre = opt.get('--genre')
     if genre == 'still_life': genre = 'museum'
     if len(a) < 4: sys.exit(__doc__)
@@ -388,7 +394,7 @@ def main():
                     'night': ['--night'],
                     'museum': ['--pale-sky-mask'],
                 }.get(genre, [])
-                r1 = run('look_transfer.py', src, gsrc, lt, *ltopt, *scene_opts)
+                r1 = run('look_transfer.py', src, gsrc, lt, *ltopt, *scene_opts, *lt_extra)
                 gcm = ((r1.get('measurements') or {}).get('chroma_ratio') or {}).get('G')
                 if gcm and 'g_chroma' not in rec: rec['g_chroma'] = gcm   # v1.2.2: pass to settle.py as --g-chroma
                 gc = rec.get('g_chroma')
@@ -401,6 +407,18 @@ def main():
             kj = td / f'k{i}.json'
             if p.get('keep'): kj.write_text(json.dumps({'keep': p['keep']}), encoding='utf-8')   # v1.1.0, before anything is judged
             kept = render(lt, p, pj, fin, src, kj)
+            saved = {}
+            if snapshots is not None:
+                transfer = snapshots / f'{name}.1_look_transfer.png'
+                grade = snapshots / f'{name}.2_grade.png'
+                if gsrc is None:
+                    # N direct uses the source as input, which may be a JPEG.
+                    from ps_common import save_png
+                    save_png(_lr(lt), transfer)
+                else:
+                    shutil.copyfile(lt, transfer)
+                shutil.copyfile(fin, grade)
+                saved = {'1_look_transfer': str(transfer), '2_grade': str(grade)}
             bad, weak, iv, pv = problems(src, fin, genre, gc)
             sky_fix = None
             if gsrc is None and bad == ['sky_glow'] and p.get('moves'):
@@ -532,7 +550,12 @@ def main():
                     if not better: break
                     p, pj, fin, iv, pv, weak, gate = p2, pj2, fin2, _iv, _pv, w2 + [x for x in weak if x == 'move_not_visible'], g2
             gfail = ['gate:' + x for x in (gate or {}).get('failed', [])]
+            if snapshots is not None:
+                finished = snapshots / f'{name}.3_finish.png'
+                shutil.copyfile(fin, finished)
+                saved['3_finish'] = str(finished)
             rec['attempts'].append({'name': name, 'look_transfer_flags': r1.get('flags', []), 'physics': pv, 'intensity': iv, 'problems': bad, 'strength_problems': weak,
+                                    **({'snapshots': saved, 'look_transfer_measurements': r1.get('measurements')} if saved else {}),
                                     **({'light_repair': light_fix} if light_fix else {}),
                                     **({'sky_glow_fix': sky_fix} if sky_fix else {}),
                                     **({'grade_recheck': grade_recheck} if grade_recheck else {}),

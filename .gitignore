@@ -7,3 +7,6 @@ Thumbs.db
 
 # engine secrets
 engine/config.toml
+
+# Private photographic audit inputs and working evidence
+/audit_local/
