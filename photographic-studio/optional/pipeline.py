@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Photographic Studio v1.4.3 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
 Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
-                              [--g-drift] [--lt-opts=FLAGS] [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
+                              [--g-first] [--g-drift] [--lt-opts=FLAGS] [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (or SOURCE / --no-g when there is no G)
   PARAMS_JSON the director brief's parameters (grade.py, "moves", "keep", "auto"), plus optionally
               "reframe": {"rotate": deg, "persp": [8 numbers], "box": [l, t, r, b], "zoom": z, "center": [x, y],
                           "allow_aspect_change": true}   - the chosen crop (reframe_rules.md)
+  --g-first   try the experimental light route, then run the default route on fallback
   --g-drift   save diagnostic snapshots in OUT_PNG.g-drift and measure appearance against aligned G
   --lt-opts   forward look_transfer options, e.g. --lt-opts=--no-sky-trend
   --texture   naturalness fix (naturalness.md section 2) after the agent's acceptance: auto, or boxes in fractions
@@ -149,6 +150,26 @@ def main():
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
     rec = {'tool': 'pipeline.py v1.4.3', 'steps': {}, 'next': []}
+    if '--g-first' in sys.argv:
+        from g_first import run
+
+        skip_reason = None
+        if '--no-g' in sys.argv or Path(src).resolve() == Path(g).resolve():
+            skip_reason = 'no G'
+        elif opt.get('settled'):
+            skip_reason = 'resuming the legacy settled image'
+        trial = run(src, g, params, out, genre, skip_reason=skip_reason)
+        rec['steps'].update(trial['steps'])
+        rec['next'].extend(trial['next'])
+        if trial['verdict'] == 'DELIVER_G_FIRST':
+            rec['output'] = str(out)
+            degraded = trial['steps']['g_first']['degraded']
+            rec['verdict'] = ('DELIVER | G_FIRST_DEGRADED: ' + ', '.join(degraded)
+                              if degraded else trial['verdict'])
+            text = json.dumps(rec, ensure_ascii=False, indent=1)
+            if rec_p: Path(rec_p).write_text(text, encoding='utf-8')
+            print(text)
+            return 0
     settled = Path(str(out) + '.settled.png')
     drift_folder = None
     if '--g-drift' in sys.argv:
