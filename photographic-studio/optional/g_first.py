@@ -15,11 +15,22 @@ from pipeline import reframe_args, tool
 from ps_common import blur, box, load_rgb, save_png, sky_mask, srgb_to_lab, structure_mask
 
 SERIOUS_PHYSICS = frozenset(('halo', 'ghost_edges', 'sky_glow', 'tone_order', 'spotlight_glow'))
-RETRY_G = '重抽一次 G 后再用 --g-first 重跑；第二次仍失败就交付旧链路结果。'
+RETRY_G = '重抽一次 G 后再运行 g_first.py；第二次仍失败就走默认路线。'   # standalone light route (pipeline --g-first removed in v1.4.6)
 # v1.4.4 --g-direct: G's own pixels are the photo; only hard failures fall back. A serious optical problem in
 # the first draw asks for a second G (at most two draws) instead of falling back.
 REDRAW_DIRECT = ('补抽第 2 张 G（提示词写明不要凭空加光、光晕、天空发亮），再用 --g-direct --g-draw=2 重跑；'
-                 '第 2 张仍有严重光学问题就交付旧链路。没有额度补抽时，用同一张 G 加 --g-draw=2 重跑即交付旧链路。')
+                 '第 2 张仍不合格时命令停下（FALLBACK_DEFAULT_ROUTE），按回执另起一条默认路线命令。')
+# v1.4.6: what the second draw's prompt must add, per first-draw failure that a new G draw can fix.
+REDRAW_HINTS = {
+    'non-sky chroma ratio': '补抽第 2 张 G（提示词写明：颜色不要比原片浓，逆光和阴影里的树叶保持原片的暗和颜色，不要变得更绿更艳），'
+                            '再用 --g-direct --g-draw=2 重跑。',
+    'scene correspondence': '补抽第 2 张 G（只给这一张原片；提示词写明：只输出一张照片，构图与原片完全相同，不要拼图、多格、并排），'
+                            '再用 --g-direct --g-draw=2 重跑。',
+    'cannot align': '补抽第 2 张 G（只给这一张原片；提示词写明：只输出一张照片，构图与原片完全相同，不要拼图、多格、并排），'
+                    '再用 --g-direct --g-draw=2 重跑。',
+}
+DEFAULT_ROUTE = ('g-direct 不交付这张：写完整导演单（运行 measure.py，补 key_light 和 moves），'
+                 '另起一条命令去掉 --g-direct 走默认路线（同一张 G 照用）。')
 GHOST_RESIDUAL_LIMIT = 0.02
 GHOST_LIMITATION = (
     'G 稿局部鬼影（平移复制、重影）无法自动检测，尤其是暗部重复纹理和密集枝叶；'
@@ -249,6 +260,9 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
     optical problem in draw 1 returns REDRAW_G (no output, no fallback) and in draw 2 falls back. Hard
     fallbacks stay: unreadable input, no alignment, scene mismatch, non-sky chroma over 1.65x, museum
     without keep, failed restore or reframe.
+    v1.4.6: in direct mode a scene mismatch, failed alignment or non-sky chroma over 1.65x in draw 1 asks for
+    one more G (REDRAW_G with the prompt fix) instead of falling back; an aspect change after successful
+    alignment is no longer flagged.
     v1.4.5: in direct mode keep restore always uses keep_regions content mode (same result with or without
     OpenCV; never stops on a per-box match score), and optical problems are judged only by the final check,
     after keep restore has replaced what G broke; the pre-restore physics result is reported only."""
@@ -281,8 +295,19 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
     }
 
     def finish(reason=None):
+        hint = next((text for key, text in REDRAW_HINTS.items() if reason and key in reason), None)
+        if direct and hint and draw < 2:
+            # v1.4.6: a failure a new draw can fix asks for one more G instead of falling back
+            Path(output).unlink(missing_ok=True)
+            verdict = f'REDRAW_G: {reason}'
+            steps['verdict'] = verdict
+            steps['next'].append(hint)
+            return {'tool': 'g_first.py', 'steps': {'g_first': steps}, 'verdict': verdict,
+                    'next': steps['next'], 'output': None}
         verdict = f'FALLBACK: {reason}' if reason else ('DELIVER_G_DIRECT' if direct else 'DELIVER_G_FIRST')
         steps['verdict'] = verdict
+        if reason and direct:
+            steps['next'].append(DEFAULT_ROUTE)
         if reason and not direct:
             steps['next'].append(RETRY_G)
         return {'tool': 'g_first.py', 'steps': {'g_first': steps}, 'verdict': verdict,
@@ -317,6 +342,14 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
                                       if field in scene})
     if aligned is None:
         return finish('cannot align')
+    report = precheck['check_g_output']
+    if direct and report.get('aspect_ok') is False and isinstance(report.get('verdict'), str):
+        # v1.4.6: hosts draw G at fixed sizes (2:3 for a 3:4 photo); the draft is registered onto the original, so
+        # an aspect change is handled, not a warning - 2026-11-26: agents read the flag as a failure and threw
+        # away finals the tool had accepted
+        report['verdict'] = report['verdict'].replace(
+            ' | FLAGS: ASPECT_CHANGED: check by eye that nothing important was cut or stretched', '')
+        report['aspect_note'] = 'G drawn at another aspect; registered onto the original - not a problem'
 
     with tempfile.TemporaryDirectory() as folder_name:
         folder = Path(folder_name)

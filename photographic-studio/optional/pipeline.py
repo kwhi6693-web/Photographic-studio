@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.4.5 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
+"""Photographic Studio v1.4.6 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
 Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
-                              [--g-first | --g-direct [--g-draw=2]] [--g-drift] [--lt-opts=FLAGS] [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
+                              [--g-direct [--g-draw=2]] [--g-drift] [--lt-opts=FLAGS] [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (or SOURCE / --no-g when there is no G)
   PARAMS_JSON the director brief's parameters (grade.py, "moves", "keep", "auto"), plus optionally
               "reframe": {"rotate": deg, "persp": [8 numbers], "box": [l, t, r, b], "zoom": z, "center": [x, y],
                           "allow_aspect_change": true}   - the chosen crop (reframe_rules.md)
-  --g-first   try the experimental light route, then run the default route on fallback
-              (--ghost-residual-limit=F loosens/tightens its ghost gate; user or work order only)
   --g-direct  v1.4.4 opt-in: deliver G's own pixels with keep restore, reframe and highlight trim only (no texture
-              blend, no legacy grading). A serious optical problem in draw 1 stops with REDRAW_G (call G once more,
-              rerun with --g-draw=2); hard failures, or draw 2 still failing, run the default route
+              blend, no legacy grading). A problem a new draw can fix (serious optical problem, scene mismatch,
+              no alignment, non-sky chroma over 1.65x) in draw 1 stops with REDRAW_G (call G once more, rerun with
+              --g-draw=2). v1.4.6: any other failure, or draw 2 still failing, stops with FALLBACK_DEFAULT_ROUTE and
+              does NOT run the default route in the same command (2026-11-26: the default route after a fallback
+              pushed the phone host past its time limit); the agent writes the full brief and runs it separately.
+              (--ghost-residual-limit=F loosens/tightens the ghost gate; user or work order only)
+  v1.4.6: --g-first (the experimental light route) is removed; g-direct is the only G-pixel route.
   --g-drift   save diagnostic snapshots in OUT_PNG.g-drift and measure appearance against aligned G
   --lt-opts   forward look_transfer options, e.g. --lt-opts=--no-sky-trend
   --texture   naturalness fix (naturalness.md section 2) after the agent's acceptance: auto, or boxes in fractions
@@ -162,9 +165,11 @@ def main():
     src, g, pj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
-    rec = {'tool': 'pipeline.py v1.4.5', 'backend': backend(), 'steps': {}, 'next': []}
+    rec = {'tool': 'pipeline.py v1.4.6', 'backend': backend(), 'steps': {}, 'next': []}
     direct = '--g-direct' in sys.argv
-    if '--g-first' in sys.argv or direct:
+    if '--g-first' in sys.argv:
+        sys.exit('pipeline.py: --g-first was removed in v1.4.6; use --g-direct or the default route')
+    if direct:
         from g_first import run
 
         skip_reason = None
@@ -188,6 +193,16 @@ def main():
             Path(out).unlink(missing_ok=True)
             rec['output'] = None
             rec['verdict'] = trial['verdict'] + ' | NEXT: ' + ' / '.join(rec['next'])
+            text = json.dumps(rec, ensure_ascii=False, indent=1)
+            if rec_p: Path(rec_p).write_text(text, encoding='utf-8')
+            print(text)
+            return 0
+        if trial['verdict'].startswith('FALLBACK') and not skip_reason:
+            # v1.4.6: stop here; the default route is a separate command with the full brief
+            Path(out).unlink(missing_ok=True)
+            rec['output'] = None
+            rec['verdict'] = ('FALLBACK_DEFAULT_ROUTE: ' + trial['verdict'].removeprefix('FALLBACK: ')
+                              + ' | NEXT: ' + ' / '.join(rec['next']))
             text = json.dumps(rec, ensure_ascii=False, indent=1)
             if rec_p: Path(rec_p).write_text(text, encoding='utf-8')
             print(text)
