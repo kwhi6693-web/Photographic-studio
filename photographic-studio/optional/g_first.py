@@ -16,6 +16,10 @@ from ps_common import blur, box, load_rgb, save_png, sky_mask, srgb_to_lab, stru
 
 SERIOUS_PHYSICS = frozenset(('halo', 'ghost_edges', 'sky_glow', 'tone_order', 'spotlight_glow'))
 RETRY_G = '重抽一次 G 后再用 --g-first 重跑；第二次仍失败就交付旧链路结果。'
+# v1.4.4 --g-direct: G's own pixels are the photo; only hard failures fall back. A serious optical problem in
+# the first draw asks for a second G (at most two draws) instead of falling back.
+REDRAW_DIRECT = ('补抽第 2 张 G（提示词写明不要凭空加光、光晕、天空发亮），再用 --g-direct --g-draw=2 重跑；'
+                 '第 2 张仍有严重光学问题就交付旧链路。没有额度补抽时，用同一张 G 加 --g-draw=2 重跑即交付旧链路。')
 GHOST_RESIDUAL_LIMIT = 0.02
 GHOST_LIMITATION = (
     'G 稿局部鬼影（平移复制、重影）无法自动检测，尤其是暗部重复纹理和密集枝叶；'
@@ -237,15 +241,24 @@ def resolve_ghost_limit(params, cli_value=None):
 
 
 def run(source, generated, params, output, genre=None, *, confidence_fallback_area=None,
-        darkening_thresholds=(None, None), skip_reason=None, ghost_residual_limit_cli=None):
-    """Return the light-route receipt. dL gates stay unset pending fixture review."""
+        darkening_thresholds=(None, None), skip_reason=None, ghost_residual_limit_cli=None,
+        direct=False, draw=1):
+    """Return the light-route receipt. dL gates stay unset pending fixture review.
+
+    direct (v1.4.4, --g-direct): no texture blend; low-confidence and darkening stay report-only; a serious
+    optical problem in draw 1 returns REDRAW_G (no output, no fallback) and in draw 2 falls back. Hard
+    fallbacks stay: unreadable input, no alignment, scene mismatch, non-sky chroma over 1.65x, museum
+    without keep, failed restore or reframe."""
     lite = getattr(cv2, 'LITE', False)
     regions = regions_of(params)
     ghost_setting = resolve_ghost_limit(params, ghost_residual_limit_cli)
     ghost_residual_limit = ghost_setting['value']
     restore_tool = 'keep_regions_content' if lite else 'text_restore'
     steps = {
+        'mode': 'g-direct' if direct else 'g-first',
+        'g_draw': draw if direct else None,
         'backend': 'cvlite' if lite else 'opencv',
+        'keep': [{'what': region['what'], 'box': region['box'], 'mode': region['mode']} for region in regions],
         'ghost_residual_limit': ghost_setting,
         'museum_gate': 'fallback: museum without keep' if genre == 'museum' and not regions else 'pass',
         'align': {'method': None, 'inliers_or_ncc': None, 'ok': False},
@@ -265,12 +278,22 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
     }
 
     def finish(reason=None):
-        verdict = f'FALLBACK: {reason}' if reason else 'DELIVER_G_FIRST'
+        verdict = f'FALLBACK: {reason}' if reason else ('DELIVER_G_DIRECT' if direct else 'DELIVER_G_FIRST')
         steps['verdict'] = verdict
-        if reason:
+        if reason and not direct:
             steps['next'].append(RETRY_G)
         return {'tool': 'g_first.py', 'steps': {'g_first': steps}, 'verdict': verdict,
                 'next': steps['next'], 'output': None if reason else str(output)}
+
+    def optical(problems, stage):
+        """--g-direct: serious optical problems ask for a second draw; in draw 2 they fall back."""
+        if draw < 2:
+            verdict = f'REDRAW_G: {stage}: ' + ', '.join(problems)
+            steps['verdict'] = verdict
+            steps['next'].append(REDRAW_DIRECT)
+            return {'tool': 'g_first.py', 'steps': {'g_first': steps}, 'verdict': verdict,
+                    'next': steps['next'], 'output': None}
+        return finish(f'{stage} (draw 2): ' + ', '.join(problems))
 
     if steps['museum_gate'] != 'pass':
         return finish('museum without keep')
@@ -309,13 +332,16 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
             failures.append('scene correspondence')
         if precheck['physics_g'].get('error'):
             failures.append('G physics check unavailable')
-        failures.extend(precheck['physics_g']['serious'])
+        if not direct:
+            failures.extend(precheck['physics_g']['serious'])
         for name in ('drift', 'confidence'):
             verdict = precheck[name]['verdict']
             if verdict.startswith('FALLBACK: '):
                 failures.append(verdict.removeprefix('FALLBACK: '))
         if failures:
             return finish('precheck: ' + ', '.join(failures))
+        if direct and precheck['physics_g']['serious']:
+            return optical(precheck['physics_g']['serious'], 'G physics')
 
         restored = folder / 'restored.png'
         steps['restore'] = restore_details(source_grid, current, restored, folder, regions, boxes, lite)
@@ -323,7 +349,9 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
             if not restored.exists() or str(steps['restore']['verdict']).startswith('STOP'):
                 return finish('keep restore failed')
             current = restored
-        if lite:
+        if direct:
+            steps['texture'] = 'OFF_G_DIRECT'
+        elif lite:
             steps['texture'] = 'NOT_RUN_NO_OPENCV'
             steps['degraded'].append('texture_skipped_no_opencv')
         else:
@@ -369,6 +397,8 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
         if final.get('error'):
             return finish('final physics check unavailable')
         if final['serious']:
+            if direct:
+                return optical(final['serious'], 'final physics')
             return finish('final physics: ' + ', '.join(final['serious']))
         shutil.copyfile(candidate, output)
         return finish()
@@ -379,6 +409,8 @@ def main():
     for name in ('source', 'g_output', 'params_json', 'out_png', 'receipt_json'):
         parser.add_argument(name)
     parser.add_argument('--genre', choices=('museum', 'night'))
+    parser.add_argument('--g-direct', action='store_true', help='v1.4.4 G-direct mode (opt-in)')
+    parser.add_argument('--g-draw', type=int, choices=(1, 2), default=1, help='which G draw this is (--g-direct)')
     parser.add_argument('--ghost-residual-limit', type=float, default=None,
                         help='loosen or tighten the ghost residual limit (0-1); only the user or a work order '
                              'may loosen it, and it always wins over params g_first.ghost_residual_limit, '
@@ -387,7 +419,8 @@ def main():
     params = json.loads(Path(args.params_json).read_text(encoding='utf-8') or '{}')
     try:
         receipt = run(args.source, args.g_output, params, args.out_png, args.genre,
-                      ghost_residual_limit_cli=args.ghost_residual_limit)
+                      ghost_residual_limit_cli=args.ghost_residual_limit,
+                      direct=args.g_direct, draw=args.g_draw)
     except ValueError as exc:
         parser.error(str(exc))
     report = json.dumps(receipt, ensure_ascii=False, indent=1)

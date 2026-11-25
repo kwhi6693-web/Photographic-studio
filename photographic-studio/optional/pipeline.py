@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.4.3 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
+"""Photographic Studio v1.4.4 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
 Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
-                              [--g-first] [--g-drift] [--lt-opts=FLAGS] [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
+                              [--g-first | --g-direct [--g-draw=2]] [--g-drift] [--lt-opts=FLAGS] [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (or SOURCE / --no-g when there is no G)
   PARAMS_JSON the director brief's parameters (grade.py, "moves", "keep", "auto"), plus optionally
               "reframe": {"rotate": deg, "persp": [8 numbers], "box": [l, t, r, b], "zoom": z, "center": [x, y],
                           "allow_aspect_change": true}   - the chosen crop (reframe_rules.md)
   --g-first   try the experimental light route, then run the default route on fallback
               (--ghost-residual-limit=F loosens/tightens its ghost gate; user or work order only)
+  --g-direct  v1.4.4 opt-in: deliver G's own pixels with keep restore, reframe and highlight trim only (no texture
+              blend, no legacy grading). A serious optical problem in draw 1 stops with REDRAW_G (call G once more,
+              rerun with --g-draw=2); hard failures, or draw 2 still failing, run the default route
   --g-drift   save diagnostic snapshots in OUT_PNG.g-drift and measure appearance against aligned G
   --lt-opts   forward look_transfer options, e.g. --lt-opts=--no-sky-trend
   --texture   naturalness fix (naturalness.md section 2) after the agent's acceptance: auto, or boxes in fractions
@@ -120,6 +123,15 @@ def recover_delivery(src, g, src_framed, before, out, geometry, folder):
     return recover(src_framed, before, out, valid & land, valid & sky, g_ref)
 
 
+def backend():
+    """v1.4.4: which image backend this host ran (opencv, or the numpy cvlite stand-in)."""
+    try:
+        import cv2  # noqa: F401
+        return 'opencv'
+    except ImportError:
+        return 'cvlite'
+
+
 def final_verdict(gates, physics, harmonize_verdict):
     failed = (physics or {}).get('failed_physics')
     if str(harmonize_verdict or '').startswith('REGEN_G'):
@@ -150,8 +162,9 @@ def main():
     src, g, pj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
-    rec = {'tool': 'pipeline.py v1.4.3', 'steps': {}, 'next': []}
-    if '--g-first' in sys.argv:
+    rec = {'tool': 'pipeline.py v1.4.4', 'backend': backend(), 'steps': {}, 'next': []}
+    direct = '--g-direct' in sys.argv
+    if '--g-first' in sys.argv or direct:
         from g_first import run
 
         skip_reason = None
@@ -162,13 +175,23 @@ def main():
         cli_limit = opt.get('ghost-residual-limit')
         try:
             cli_limit = None if cli_limit is None else float(cli_limit)
+            draw = int(opt.get('g-draw', 1))
+            if draw not in (1, 2):
+                raise ValueError('--g-draw must be 1 or 2')
             trial = run(src, g, params, out, genre, skip_reason=skip_reason,
-                        ghost_residual_limit_cli=cli_limit)
+                        ghost_residual_limit_cli=cli_limit, direct=direct, draw=draw)
         except ValueError as exc:
             sys.exit(f'pipeline.py: {exc}')
         rec['steps'].update(trial['steps'])
         rec['next'].extend(trial['next'])
-        if trial['verdict'] == 'DELIVER_G_FIRST':
+        if trial['verdict'].startswith('REDRAW_G'):
+            rec['output'] = None
+            rec['verdict'] = trial['verdict'] + ' | NEXT: ' + ' / '.join(rec['next'])
+            text = json.dumps(rec, ensure_ascii=False, indent=1)
+            if rec_p: Path(rec_p).write_text(text, encoding='utf-8')
+            print(text)
+            return 0
+        if trial['verdict'] in ('DELIVER_G_FIRST', 'DELIVER_G_DIRECT'):
             rec['output'] = str(out)
             degraded = trial['steps']['g_first']['degraded']
             rec['verdict'] = ('DELIVER | G_FIRST_DEGRADED: ' + ', '.join(degraded)

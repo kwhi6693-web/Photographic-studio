@@ -296,3 +296,93 @@ def test_out_of_range_command_line_limit_exits_nonzero(tmp_path, tool_name):
                        *extra, '--ghost-residual-limit=1.5')
     assert process.returncode != 0
     assert 'ghost-residual-limit' in process.stderr
+
+
+# v1.4.4 --g-direct: G's own pixels, no texture blend, serious optical problems ask for a second draw.
+
+def test_direct_delivers_without_texture(tmp_path):
+    source, generated, params = real_g('b1_02')
+    output, receipt = tmp_path / 'direct.png', tmp_path / 'direct.json'
+    result = run_cli('pipeline.py', source, generated, params, output, receipt, '--g-direct')
+    steps = result['steps']['g_first']
+    assert set(result['steps']) == {'g_first'}
+    assert result['backend'] == ('cvlite' if LITE else 'opencv')
+    assert steps['mode'] == 'g-direct' and steps['g_draw'] == 1
+    assert steps['texture'] == 'OFF_G_DIRECT'
+    assert steps['verdict'] == 'DELIVER_G_DIRECT'
+    assert load(output).shape == load(source).shape
+
+
+def serious_physics(monkeypatch, scene_ok=True, chroma=1.0):
+    real_tool = g_first.tool
+
+    def tool(name, *args):
+        if name == 'physics_check.py':
+            return {'checks': {problem: {'ok': problem != 'halo'} for problem in g_first.SERIOUS_PHYSICS}}
+        if name == 'check_g_output.py':
+            return {'verdict': 'PASS', 'scene_correspondence_ok': scene_ok}
+        return real_tool(name, *args)
+
+    monkeypatch.setattr(g_first, 'tool', tool)
+
+
+def test_direct_draw_one_optical_problem_asks_for_redraw(tmp_path, monkeypatch):
+    source, generated, _ = real_g('b1_02')
+    serious_physics(monkeypatch)
+    target = tmp_path / 'out.png'
+    receipt = g_first.run(source, generated, {}, target, direct=True, draw=1)
+    assert receipt['verdict'] == 'REDRAW_G: G physics: halo'
+    assert receipt['output'] is None and not target.exists()
+    assert '--g-draw=2' in receipt['next'][0]
+
+
+def test_direct_draw_two_optical_problem_falls_back(tmp_path, monkeypatch):
+    source, generated, _ = real_g('b1_02')
+    serious_physics(monkeypatch)
+    receipt = g_first.run(source, generated, {}, tmp_path / 'out.png', direct=True, draw=2)
+    assert receipt['verdict'] == 'FALLBACK: G physics (draw 2): halo'
+    assert receipt['next'] == []
+
+
+def test_direct_keeps_hard_fallbacks(tmp_path, monkeypatch):
+    source, generated, _ = real_g('b1_02')
+    museum = g_first.run(source, generated, {}, tmp_path / 'm.png', 'museum', direct=True)
+    assert museum['verdict'] == 'FALLBACK: museum without keep'
+    serious_physics(monkeypatch, scene_ok=False)
+    scene = g_first.run(source, generated, {}, tmp_path / 's.png', direct=True)
+    assert scene['verdict'].startswith('FALLBACK: precheck: scene correspondence')
+    assert 'halo' not in scene['verdict']
+
+
+def test_direct_chroma_ceiling_still_falls_back(tmp_path):
+    source = synth.save(synth.day(), tmp_path / 'day.png')
+    photo = load(source)
+    grey = photo.mean(axis=-1, keepdims=True)
+    loud = np.clip(grey + (photo - grey) * 2.6, 0, 1)
+    generated = synth.save(loud, tmp_path / 'loud.png')
+    receipt = g_first.run(source, generated, {}, tmp_path / 'out.png', direct=True)
+    drift = receipt['steps']['g_first']['precheck']['drift']
+    assert drift['chroma_ratio_nonsky'] > 1.65
+    assert 'non-sky chroma ratio' in receipt['verdict']
+
+
+def test_pipeline_redraw_does_not_run_default_route(tmp_path, monkeypatch):
+    import pipeline
+    source, generated, params = real_g('b1_02')
+    monkeypatch.setattr(g_first, 'run', lambda *a, **k: {
+        'verdict': 'REDRAW_G: G physics: halo', 'next': [g_first.REDRAW_DIRECT],
+        'steps': {'g_first': {'mode': 'g-direct'}}, 'output': None})
+    receipt = tmp_path / 'r.json'
+    monkeypatch.setattr('sys.argv', ['pipeline.py', str(source), str(generated), str(params),
+                                     str(tmp_path / 'o.png'), str(receipt), '--g-direct'])
+    assert pipeline.main() == 0
+    result = json.loads(receipt.read_text())
+    assert set(result['steps']) == {'g_first'}
+    assert result['output'] is None and result['verdict'].startswith('REDRAW_G')
+    assert not (tmp_path / 'o.png').exists()
+
+
+def test_default_route_receipt_names_backend(tmp_path):
+    source, generated, params = real_g('b1_02')
+    result = run_cli('pipeline.py', source, generated, params, tmp_path / 'o.png', tmp_path / 'r.json')
+    assert result['backend'] == ('cvlite' if LITE else 'opencv')
