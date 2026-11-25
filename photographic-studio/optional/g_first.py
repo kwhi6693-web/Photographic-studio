@@ -213,17 +213,40 @@ def restore_details(source, aligned, destination, folder, regions, boxes, lite):
             'seam_flags': report.get('flags', [])}
 
 
+def fraction(value, name):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+        raise ValueError(f'{name} must be a fraction in [0, 1]')
+    return float(value)
+
+
+def resolve_ghost_limit(params, cli_value=None):
+    """The params file (written by the agent) may only tighten; loosening needs the command line."""
+    if cli_value is not None:
+        return {'value': fraction(cli_value, '--ghost-residual-limit'), 'source': 'command_line'}
+    settings = params.get('g_first') or {}
+    if 'ghost_residual_limit' not in settings:
+        return {'value': GHOST_RESIDUAL_LIMIT, 'source': 'default'}
+    value = settings['ghost_residual_limit']
+    if value is None:  # the strictest setting: any ghost_edges hit falls back
+        return {'value': None, 'source': 'params'}
+    value = fraction(value, 'g_first.ghost_residual_limit')
+    if value > GHOST_RESIDUAL_LIMIT:
+        return {'value': GHOST_RESIDUAL_LIMIT, 'source': 'default', 'ignored_params_value': value,
+                'note': f'参数放宽被忽略：参数文件只能收紧（≤ {GHOST_RESIDUAL_LIMIT}），放宽须用命令行 --ghost-residual-limit'}
+    return {'value': value, 'source': 'params'}
+
+
 def run(source, generated, params, output, genre=None, *, confidence_fallback_area=None,
-        darkening_thresholds=(None, None), skip_reason=None):
+        darkening_thresholds=(None, None), skip_reason=None, ghost_residual_limit_cli=None):
     """Return the light-route receipt. dL gates stay unset pending fixture review."""
     lite = getattr(cv2, 'LITE', False)
     regions = regions_of(params)
-    ghost_residual_limit = (params.get('g_first') or {}).get('ghost_residual_limit', GHOST_RESIDUAL_LIMIT)
-    if ghost_residual_limit is not None and not 0 <= ghost_residual_limit <= 1:
-        raise ValueError('g_first.ghost_residual_limit must be a fraction in [0, 1]')
+    ghost_setting = resolve_ghost_limit(params, ghost_residual_limit_cli)
+    ghost_residual_limit = ghost_setting['value']
     restore_tool = 'keep_regions_content' if lite else 'text_restore'
     steps = {
         'backend': 'cvlite' if lite else 'opencv',
+        'ghost_residual_limit': ghost_setting,
         'museum_gate': 'fallback: museum without keep' if genre == 'museum' and not regions else 'pass',
         'align': {'method': None, 'inliers_or_ncc': None, 'ok': False},
         'precheck': {
@@ -356,9 +379,17 @@ def main():
     for name in ('source', 'g_output', 'params_json', 'out_png', 'receipt_json'):
         parser.add_argument(name)
     parser.add_argument('--genre', choices=('museum', 'night'))
+    parser.add_argument('--ghost-residual-limit', type=float, default=None,
+                        help='loosen or tighten the ghost residual limit (0-1); only the user or a work order '
+                             'may loosen it, and it always wins over params g_first.ghost_residual_limit, '
+                             f'which may only tighten (<= {GHOST_RESIDUAL_LIMIT})')
     args = parser.parse_args()
     params = json.loads(Path(args.params_json).read_text(encoding='utf-8') or '{}')
-    receipt = run(args.source, args.g_output, params, args.out_png, args.genre)
+    try:
+        receipt = run(args.source, args.g_output, params, args.out_png, args.genre,
+                      ghost_residual_limit_cli=args.ghost_residual_limit)
+    except ValueError as exc:
+        parser.error(str(exc))
     report = json.dumps(receipt, ensure_ascii=False, indent=1)
     Path(args.receipt_json).write_text(report, encoding='utf-8')
     print(report)

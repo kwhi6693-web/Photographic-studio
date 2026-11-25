@@ -231,3 +231,68 @@ def test_explicit_ghost_residual_limit_overrides_default(tmp_path):
     assert ghost['ghost_residual_limit'] == 0
     assert ghost['ghost_decision'] == 'FALLBACK'
     assert ghost['ghost_raw'] == ghost['ghost_amplified'] + ghost['ghost_residual']
+
+
+@pytest.mark.parametrize('params, cli, expected, source', [
+    ({}, None, 0.02, 'default'),
+    ({'g_first': {'ghost_residual_limit': 0.5}}, None, 0.02, 'default'),
+    ({'g_first': {'ghost_residual_limit': 0.01}}, None, 0.01, 'params'),
+    ({'g_first': {'ghost_residual_limit': None}}, None, None, 'params'),
+    ({}, 0.05, 0.05, 'command_line'),
+    ({'g_first': {'ghost_residual_limit': 0.01}}, 0.05, 0.05, 'command_line'),
+    ({'g_first': {'ghost_residual_limit': 0.02}}, 0.01, 0.01, 'command_line'),
+    ({'g_first': {'ghost_residual_limit': 0.5}}, 0.3, 0.3, 'command_line'),
+])
+def test_params_only_tighten_and_command_line_wins(params, cli, expected, source):
+    setting = g_first.resolve_ghost_limit(params, cli)
+    assert setting['value'] == expected
+    assert setting['source'] == source
+    assert ('ignored_params_value' in setting) == (cli is None and expected == 0.02 and source == 'default'
+                                                  and 'g_first' in params)
+
+
+@pytest.mark.parametrize('params, cli', [
+    ({'g_first': {'ghost_residual_limit': 1.5}}, None),
+    ({'g_first': {'ghost_residual_limit': -0.1}}, None),
+    ({'g_first': {'ghost_residual_limit': 'loose'}}, None),
+    ({}, 1.5),
+    ({}, -0.01),
+])
+def test_out_of_range_ghost_limit_is_an_error(params, cli):
+    with pytest.raises(ValueError):
+        g_first.resolve_ghost_limit(params, cli)
+
+
+def test_loosening_in_params_is_ignored_and_recorded(tmp_path):
+    source, draft, _ = real_g('b1_01')
+    receipt = g_first.run(source, draft, {'g_first': {'ghost_residual_limit': 0.5}}, tmp_path / 'out.png')
+    steps = receipt['steps']['g_first']
+    setting = steps['ghost_residual_limit']
+    assert setting['value'] == 0.02 and setting['source'] == 'default'
+    assert setting['ignored_params_value'] == 0.5 and '参数放宽被忽略' in setting['note']
+    ghost = next(h for h in steps['precheck']['physics_g']['hints'] if isinstance(h, dict) and 'ghost_raw' in h)
+    assert ghost['ghost_residual_limit'] == 0.02
+
+
+def test_command_line_limit_beats_params_through_pipeline(tmp_path):
+    source, draft, _ = real_g('b1_01')
+    params = tmp_path / 'params.json'
+    params.write_text(json.dumps({'g_first': {'ghost_residual_limit': 0}}))
+    output, receipt = tmp_path / 'final.png', tmp_path / 'receipt.json'
+    result = run_cli('pipeline.py', source, draft, params, output, receipt, '--g-first',
+                     '--ghost-residual-limit=0.05')
+    setting = result['steps']['g_first']['ghost_residual_limit']
+    assert setting == {'value': 0.05, 'source': 'command_line'}
+    ghost = next(h for h in result['steps']['g_first']['precheck']['physics_g']['hints']
+                 if isinstance(h, dict) and 'ghost_raw' in h)
+    assert ghost['ghost_residual_limit'] == 0.05
+
+
+@pytest.mark.parametrize('tool_name', ['pipeline.py', 'g_first.py'])
+def test_out_of_range_command_line_limit_exits_nonzero(tmp_path, tool_name):
+    source, draft, params = real_g('b1_01')
+    extra = ('--g-first',) if tool_name == 'pipeline.py' else ()
+    process = run_tool(tool_name, source, draft, params, tmp_path / 'o.png', tmp_path / 'r.json',
+                       *extra, '--ghost-residual-limit=1.5')
+    assert process.returncode != 0
+    assert 'ghost-residual-limit' in process.stderr

@@ -7,6 +7,7 @@ Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
               "reframe": {"rotate": deg, "persp": [8 numbers], "box": [l, t, r, b], "zoom": z, "center": [x, y],
                           "allow_aspect_change": true}   - the chosen crop (reframe_rules.md)
   --g-first   try the experimental light route, then run the default route on fallback
+              (--ghost-residual-limit=F loosens/tightens its ghost gate; user or work order only)
   --g-drift   save diagnostic snapshots in OUT_PNG.g-drift and measure appearance against aligned G
   --lt-opts   forward look_transfer options, e.g. --lt-opts=--no-sky-trend
   --texture   naturalness fix (naturalness.md section 2) after the agent's acceptance: auto, or boxes in fractions
@@ -158,7 +159,13 @@ def main():
             skip_reason = 'no G'
         elif opt.get('settled'):
             skip_reason = 'resuming the legacy settled image'
-        trial = run(src, g, params, out, genre, skip_reason=skip_reason)
+        cli_limit = opt.get('ghost-residual-limit')
+        try:
+            cli_limit = None if cli_limit is None else float(cli_limit)
+            trial = run(src, g, params, out, genre, skip_reason=skip_reason,
+                        ghost_residual_limit_cli=cli_limit)
+        except ValueError as exc:
+            sys.exit(f'pipeline.py: {exc}')
         rec['steps'].update(trial['steps'])
         rec['next'].extend(trial['next'])
         if trial['verdict'] == 'DELIVER_G_FIRST':
