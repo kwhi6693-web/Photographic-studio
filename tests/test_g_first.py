@@ -330,18 +330,21 @@ def test_direct_draw_one_optical_problem_asks_for_redraw(tmp_path, monkeypatch):
     source, generated, _ = real_g('b1_02')
     serious_physics(monkeypatch)
     target = tmp_path / 'out.png'
+    target.write_bytes(b'stale final from an earlier run')
     receipt = g_first.run(source, generated, {}, target, direct=True, draw=1)
-    assert receipt['verdict'] == 'REDRAW_G: G physics: halo'
+    assert receipt['verdict'] == 'REDRAW_G: final physics: halo'
     assert receipt['output'] is None and not target.exists()
-    assert '--g-draw=2' in receipt['next'][0]
+    assert any('--g-draw=2' in line for line in receipt['next'])
+    # v1.4.5: the pre-restore result is reported, not acted on
+    assert receipt['steps']['g_first']['precheck']['physics_g']['serious'] == ['halo']
 
 
 def test_direct_draw_two_optical_problem_falls_back(tmp_path, monkeypatch):
     source, generated, _ = real_g('b1_02')
     serious_physics(monkeypatch)
     receipt = g_first.run(source, generated, {}, tmp_path / 'out.png', direct=True, draw=2)
-    assert receipt['verdict'] == 'FALLBACK: G physics (draw 2): halo'
-    assert receipt['next'] == []
+    assert receipt['verdict'] == 'FALLBACK: final physics (draw 2): halo'
+    assert not any('--g-draw=2' in line for line in receipt['next'])
 
 
 def test_direct_keeps_hard_fallbacks(tmp_path, monkeypatch):
@@ -386,3 +389,22 @@ def test_default_route_receipt_names_backend(tmp_path):
     source, generated, params = real_g('b1_02')
     result = run_cli('pipeline.py', source, generated, params, tmp_path / 'o.png', tmp_path / 'r.json')
     assert result['backend'] == ('cvlite' if LITE else 'opencv')
+
+
+def test_direct_restore_is_backend_independent(tmp_path, monkeypatch):
+    """v1.4.5: g-direct always restores keep boxes with keep_regions content mode, never text_restore."""
+    source, generated, _ = real_g('b1_02')
+    calls = []
+    real_tool = g_first.tool
+
+    def tool(name, *args):
+        calls.append(name)
+        return real_tool(name, *args)
+
+    monkeypatch.setattr(g_first, 'tool', tool)
+    params = {'keep': [{'what': 'sign', 'box': [0.40, 0.40, 0.45, 0.43], 'mode': 'content'}]}
+    receipt = g_first.run(source, generated, params, tmp_path / 'out.png', direct=True)
+    steps = receipt['steps']['g_first']
+    assert 'text_restore.py' not in calls and 'keep_regions.py' in calls
+    assert steps['restore']['tool'] == 'keep_regions_content'
+    assert receipt['verdict'] in ('DELIVER_G_DIRECT',) or receipt['verdict'].startswith('REDRAW_G')
