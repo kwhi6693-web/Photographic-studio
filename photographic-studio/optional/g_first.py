@@ -248,7 +248,10 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
     direct (v1.4.4, --g-direct): no texture blend; low-confidence and darkening stay report-only; a serious
     optical problem in draw 1 returns REDRAW_G (no output, no fallback) and in draw 2 falls back. Hard
     fallbacks stay: unreadable input, no alignment, scene mismatch, non-sky chroma over 1.65x, museum
-    without keep, failed restore or reframe."""
+    without keep, failed restore or reframe.
+    v1.4.5: in direct mode keep restore always uses keep_regions content mode (same result with or without
+    OpenCV; never stops on a per-box match score), and optical problems are judged only by the final check,
+    after keep restore has replaced what G broke; the pre-restore physics result is reported only."""
     lite = getattr(cv2, 'LITE', False)
     regions = regions_of(params)
     ghost_setting = resolve_ghost_limit(params, ghost_residual_limit_cli)
@@ -288,6 +291,7 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
     def optical(problems, stage):
         """--g-direct: serious optical problems ask for a second draw; in draw 2 they fall back."""
         if draw < 2:
+            Path(output).unlink(missing_ok=True)   # v1.4.5: never leave an older final at the output path
             verdict = f'REDRAW_G: {stage}: ' + ', '.join(problems)
             steps['verdict'] = verdict
             steps['next'].append(REDRAW_DIRECT)
@@ -341,10 +345,12 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
         if failures:
             return finish('precheck: ' + ', '.join(failures))
         if direct and precheck['physics_g']['serious']:
-            return optical(precheck['physics_g']['serious'], 'G physics')
+            steps['next'].append('前置体检在贴回前发现严重光学问题（' + ', '.join(precheck['physics_g']['serious'])
+                                 + '），以贴回后的终检为准；终检通过时请目测这些位置。')
 
         restored = folder / 'restored.png'
-        steps['restore'] = restore_details(source_grid, current, restored, folder, regions, boxes, lite)
+        steps['restore'] = restore_details(source_grid, current, restored, folder, regions, boxes,
+                                           lite or direct)
         if boxes:
             if not restored.exists() or str(steps['restore']['verdict']).startswith('STOP'):
                 return finish('keep restore failed')
