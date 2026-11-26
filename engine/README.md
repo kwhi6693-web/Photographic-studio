@@ -1,4 +1,4 @@
-# Photographic Studio engine (v2.3.1)
+# Photographic Studio engine (v2.4.0)
 
 The retouching pipeline as code. Same rules and the same deterministic tools as the skill (run in an LLM agent with image generation)
 (`photographic-studio/optional/*.py` stay the single source of truth), but the steps are run by code and the two
@@ -36,12 +36,25 @@ No code change. Use a project-only key with a spending limit, and revoke it when
 
 ```
 python -m studio_engine.cli run photo.jpg out/                       # one photo
+python -m studio_engine.cli batch photos/ out/ --workers=2           # batch: one isolated run per photo (v2.4.0)
 python -m studio_engine.eval eval_set/ results/ --runs=2             # the fixed evaluation set, each photo twice
 uvicorn service.app:app                                              # HTTP service for the app (prototype)
 ```
 
 `results/sheets/*.jpg` show original | run 1 | run 2 for scoring; `results/summary.md` has finish rate, seconds,
 cost and run-to-run difference.
+
+## Batch (v2.4.0)
+
+`batch` runs the single-photo pipeline once per photo, each in its own folder with its own G call that carries only
+that photo. It never sends several photos to a model in one call: in the 2026-11-26 chat-host batch the image model,
+shown six originals at once, returned a six-photo grid and an invented "all delivered" summary picture.
+
+Output: `OUT/<photo>/` (the normal run), `OUT/delivered/<photo>.jpg` (only photos whose status is `done`),
+`OUT/sheet.jpg` (original | final per photo, failures marked), `OUT/summary.md` / `summary.json` (one row per photo,
+taken from that photo's receipt). One failing photo does not stop the others. `--workers` runs photos in parallel;
+mind the provider's rate limits and the cost (each photo is 1 vision call + up to `g_max_calls` G calls).
+Exit code 0 only when every photo was delivered.
 
 ## Offline / tests
 

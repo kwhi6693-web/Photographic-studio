@@ -1,6 +1,7 @@
 """Command line.
 
     python -m studio_engine.cli run PHOTO OUT_DIR [--config=...]     one photo
+    python -m studio_engine.cli batch INPUT OUT_DIR [--workers=2]    a folder of photos, one isolated run per photo
     python -m studio_engine.cli selftest [--config=...]              is everything configured? (no paid call unless --live)
     python -m studio_engine.cli selftest --live                      one tiny real call to each configured model
 """
@@ -48,6 +49,13 @@ def main(argv=None):
         sys.exit(__doc__)
     if a[0] == 'selftest':
         print(json.dumps(selftest(o.get('config'), '--live' in argv), ensure_ascii=False, indent=1)); return
+    if a[0] == 'batch' and len(a) >= 3:
+        from .batch import run_batch
+        res = run_batch(a[1], a[2], int(o.get('workers', 2)), o.get('config'))
+        print(json.dumps({k: v for k, v in res.items() if k != 'rows'} |
+                         {'rows': [{k: r[k] for k in ('photo', 'status', 'route', 'reason', 'delivered')} for r in res['rows']]},
+                         ensure_ascii=False, indent=1))
+        sys.exit(0 if res['photos'] and res['delivered'] == res['photos'] else 1)
     if a[0] == 'run' and len(a) >= 3:
         r = Studio(load(o.get('config'))).run(a[1], a[2])
         print(json.dumps({'status': r.status, 'final': r.final, 'route': r.route, 'reason': r.reason,

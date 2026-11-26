@@ -2,6 +2,7 @@
 (tests/fixtures/real_g), so the engine must reproduce the routes those runs took. Network providers are only checked
 for 'not configured' behaviour: no key, no call."""
 import json
+from pathlib import Path
 import sys
 
 import pytest
@@ -119,3 +120,50 @@ def test_light_already_good_does_not_skip_g(tmp_path):
     rec = json.loads((tmp_path / 'out' / 'receipt.json').read_text())
     assert rec['g_calls'] >= 1 and not any(s.get('skipped') for s in rec['steps'])
 
+
+
+def test_batch_isolates_photos_and_reports_failures_honestly(tmp_path):
+    """v2.4.0 batch: one run per photo, failures stay failures, delivered/ holds only finished photos."""
+    from studio_engine.batch import run_batch
+    sdir = tmp_path / 'set'; sdir.mkdir()
+    for n in ('b1_01', 'b2_06'):
+        Image.open(original(n)).save(sdir / f'{n}.jpg', quality=95)
+    (sdir / 'broken.jpg').write_bytes(b'not an image')
+    seen = []
+
+    def factory(p):
+        seen.append(p.name)
+        if p.stem == 'broken':
+            return Studio(replay_cfg('b1_01'))          # the run itself must fail on the unreadable file
+        return Studio(replay_cfg(p.stem))                # each photo replays its own recorded G, nothing shared
+
+    res = run_batch(sdir, tmp_path / 'out', workers=2, studio_factory=factory)
+    rows = {r['photo']: r for r in res['rows']}
+    assert sorted(seen) == ['b1_01.jpg', 'b2_06.jpg', 'broken.jpg']
+    assert rows['b1_01.jpg']['status'] == 'done' and rows['b2_06.jpg']['status'] == 'done'
+    assert rows['broken.jpg']['status'] == 'failed' and rows['broken.jpg']['delivered'] is None
+    assert res['delivered'] == 2 and res['photos'] == 3
+    out = tmp_path / 'out'
+    assert sorted(p.name for p in (out / 'delivered').iterdir()) == ['b1_01.jpg', 'b2_06.jpg']
+    for n in ('b1_01', 'b2_06'):   # every photo has its own folder and receipt naming that photo
+        assert json.loads((out / n / 'receipt.json').read_text())['photo'] == f'{n}.jpg'
+    md = (out / 'summary.md').read_text()
+    assert md.startswith('# Batch: 2/3 delivered') and 'Not delivered (1): broken.jpg' in md
+    assert (out / 'sheet.jpg').exists()
+
+
+def test_batch_one_crash_does_not_stop_the_rest(tmp_path):
+    from studio_engine.batch import run_batch, _names
+    sdir = tmp_path / 'set'; sdir.mkdir()
+    Image.open(original('b1_01')).save(sdir / 'a.jpg', quality=95)
+    Image.open(original('b1_01')).save(sdir / 'a.png')
+
+    def factory(p):
+        if p.suffix == '.png':
+            raise RuntimeError('boom')
+        return Studio(replay_cfg('b1_01'))
+
+    res = run_batch(sdir, tmp_path / 'out', workers=1, studio_factory=factory)
+    st = {r['photo']: r for r in res['rows']}
+    assert st['a.jpg']['status'] == 'done' and st['a.png']['status'] == 'failed' and 'boom' in st['a.png']['reason']
+    assert _names([Path('x/a.jpg'), Path('x/a.png')]) == ['a', 'a_2']   # same stem never shares a folder

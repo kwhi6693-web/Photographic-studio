@@ -21,7 +21,7 @@ from .config import EngineConfig
 from .providers import ImageEditor, NotConfigured, ProviderError, VisionModel, make_editor, make_vision
 from .tools import ToolError, Tools
 
-VERSION = '2.3.1'
+VERSION = '2.4.0'
 
 
 @dataclass
