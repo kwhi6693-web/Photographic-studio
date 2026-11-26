@@ -19,7 +19,7 @@ geo = bool(base and (mods['cv2'] or lite))
 r = {'python': sys.version.split()[0], 'modules': mods,
      'tools': {'pipeline.py': geo, 'g_first.py': geo, 'quick_n.py': geo, 'grade.py': base, 'reframe.py': geo, 'n_trim.py': geo,
                'check_g_output.py': geo, 'look_transfer.py': geo, 'physics_check.py': base, 'keep_regions.py': base,
-               'keep_preview.py': bool(mods['PIL']), 'sentinel.py': base, 'to_jpeg.py': bool(mods['PIL'])},
+               'keep_preview.py': bool(mods['PIL']), 'sentinel.py': base, 'look_route.py': geo, 'to_jpeg.py': bool(mods['PIL'])},
      'opencv_stand_in': ('cvlite (numpy + Pillow): G alignment by scale search + phase correlation; same results otherwise' if lite else None),
      'suggested_tier_if_host_has_image_editing': 'T1' if (full or lite) else ('T1-degraded (no automatic scene check, no restore)' if base else 'T3'),
      'suggested_tier_if_host_has_no_image_editing': 'T2' if base else 'T4',

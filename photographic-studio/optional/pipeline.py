@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.6.2 - pipeline: everything after the G call, in one command.
-Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON] --g-direct [--g-draw=2] [--genre=museum|night]
+"""Photographic Studio v1.6.3 - pipeline: everything after the G call, in one command.
+Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON] --g-direct [--g-draw=2 --g-prev=G1] [--genre=museum|night]
        python3 pipeline.py SOURCE SOURCE PARAMS_JSON OUT_PNG [RECEIPT_JSON] --quick-n
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (SOURCE / --no-g when there is no G)
   PARAMS_JSON the reading's parameters: "keep", "moves", optionally "key_light" and
@@ -13,6 +13,12 @@ Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON] --
               without keep, failed restore or reframe), delivers quick N in the same command. Colour ratio and
               physics are report-only. (--ghost-residual-limit=F only changes the reported ghost check)
   --quick-n   non-generative / strictly faithful, or no G: quick_n.py, a few seconds.
+v1.6.3 look route (look_route.py: the original's pixels re-toned with G's light and colour, then crop and trim):
+  * draw 1 of a very dark original (median L* < 15, > 60 % below L* 20) or one whose keep boxes cover > 40 % of the
+    frame goes straight to it (no G direct, no second draw) - computed here, never judged by eye;
+  * when G direct fails for good (draw 2 or another hard failure) it is tried before quick N; with --g-prev=G1 on
+    draw 2 it uses whichever draft has the lower texture sentinel.
+  Verdict DELIVER_LOOK; label "原片像素 + G 光色". Only if it fails (G cannot be aligned at all) does quick N follow.
 v1.6.2: the v1.4 default route (no flag: finish.py -> settle.py -> harmonize.py ...) and its options (--g-drift,
 --lt-opts, --texture, --settled) were removed from the package; the scripts are archived in the repository's
 legacy/v1.4 folder. Results of --g-direct and --quick-n are unchanged (checked pixel by pixel on the regression set).
@@ -60,7 +66,7 @@ def main():
     src, g, pj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
-    rec = {'tool': 'pipeline.py v1.6.2', 'backend': backend(), 'steps': {}, 'next': []}
+    rec = {'tool': 'pipeline.py v1.6.3', 'backend': backend(), 'steps': {}, 'next': []}
     direct = '--g-direct' in sys.argv
 
     def emit():
@@ -80,6 +86,18 @@ def main():
 
     if '--quick-n' in sys.argv:
         return deliver_quick_n(None)
+    def deliver_look(drafts, reason):
+        # v1.6.3: the original's pixels with G's light and colour; None when it cannot be done
+        from look_route import run as look
+        steps = look(src, drafts, params, out, reason)
+        rec['steps']['look'] = steps
+        if steps.get('verdict') != 'DELIVER_LOOK':
+            Path(out).unlink(missing_ok=True)
+            return None
+        rec['output'] = str(out)
+        rec['verdict'] = f'DELIVER_LOOK ({reason})'
+        return emit()
+
     if not direct:
         sys.exit('pipeline.py: give --g-direct (main route) or --quick-n. The v1.4 default route (finish.py, '
                  'settle.py, harmonize.py ...) was removed from the package in v1.6.2; it is archived in the '
@@ -90,6 +108,15 @@ def main():
         skip_reason = None
         if '--no-g' in sys.argv or Path(src).resolve() == Path(g).resolve():
             skip_reason = 'no G'
+        if skip_reason is None and int(opt.get('g-draw', 1)) == 1:
+            from look_route import triggers
+            from keep_regions import regions_of
+            rule = rec['steps']['look_trigger'] = triggers(src, regions_of(params))
+            if rule['straight_to_look']:
+                why = 'very dark original' if rule['very_dark'] else 'keep boxes cover > 40 % of the frame'
+                done = deliver_look([g], why)
+                if done is not None:
+                    return done
         cli_limit = opt.get('ghost-residual-limit')
         try:
             cli_limit = None if cli_limit is None else float(cli_limit)
@@ -113,7 +140,13 @@ def main():
         if trial['verdict'].startswith('FALLBACK'):
             # v1.5.0: a hard G failure delivers quick N in the same command (a few seconds)
             Path(out).unlink(missing_ok=True)
-            return deliver_quick_n('G hard failure: ' + trial['verdict'].removeprefix('FALLBACK: '))
+            reason = 'G hard failure: ' + trial['verdict'].removeprefix('FALLBACK: ')
+            if skip_reason is None and not rec['steps'].get('look'):
+                drafts = ([opt['g-prev']] if opt.get('g-prev') and Path(opt['g-prev']).exists() else []) + [g]
+                done = deliver_look(drafts, reason)
+                if done is not None:
+                    return done
+            return deliver_quick_n(reason)
         if trial['verdict'] in ('DELIVER_G_FIRST', 'DELIVER_G_DIRECT'):
             rec['output'] = str(out)
             degraded = trial['steps']['g_first']['degraded']

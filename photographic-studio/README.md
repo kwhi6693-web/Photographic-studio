@@ -1,4 +1,4 @@
-# Photographic Studio v1.6.2
+# Photographic Studio v1.6.3
 
 **v1.0 规则文字已获用户批准（2026-11-12）；v1.0.1 是用户委托维护者做的一致性修订，不改变修图效果。** 独立的非人像摄影后期 Skill：用户从手机相册发一张照片、说一句“修”，就得到一张有明显摄影表现力、仍然高度像原片、符合自然光规律、看不出 AI 痕迹的成片。面向任何能看图的 agent；需要具备生图能力的大模型 agent；目前在 image2.6 上实测过（手机与网页版）。
 
@@ -18,6 +18,7 @@ v1.4 的旧默认路线（光色迁移 + 多轮调色）已移出安装包，归
 - `references/`：读片（`story_style.md`、`craft_reading.md`）、七类题材（`genres/`）、构图（`reframe_rules.md`）、自然光物理（`physics.md`）、宿主分级（`capability_tiers.md`）、交付（`delivery.md`）。
 - `optional/`：工具（需要 numpy、Pillow；没有 OpenCV 时由 `cvlite.py` 代替，结果相同）。
   - `pipeline.py --g-direct`：主线，内部调用 `g_first.py`（对齐、场景检查 `check_g_output.py`、哨兵 `sentinel.py`、贴回 `keep_regions.py`、构图 `reframe.py`、高光保护 `n_trim.py`、物理记录 `physics_check.py`；对齐用到 `look_transfer.py` 的配准函数）。
+  - `look_route.py`（v1.6.3）：“原片像素 + G 光色”，由 `pipeline.py --g-direct` 在极暗原片、大面积 keep 或 G 直出失败时自动调用（内部用 `look_transfer.py`）。
   - `pipeline.py --quick-n`（`quick_n.py`）：快速 N 直出，内部调用 `grade.py`、`reframe.py`、`n_trim.py`。
   - `keep_preview.py`：框位预览；`to_jpeg.py`：交付用 JPEG；`selfcheck.py`：自检；`ps_common.py`、`cvlite.py`：公用函数。
 - v1.4 旧默认路线的 11 个脚本和 12 份参考文件归档在仓库 `legacy/v1.4/`（v1.6.2），不随 Skill 安装。
@@ -49,6 +50,16 @@ v1.4 的旧默认路线（光色迁移 + 多轮调色）已移出安装包，归
 ## v1.0 相对 v0.3.8
 
 工具输出与 v0.3.8 相同（回归 49 项逐像素一致）。`finish.py` 有两处小改：参数文件为空时按“不加调色”处理（之前会报错）；成片与原片几乎没有差别（平均像素差 < 1.5）时记为力度问题 `no_visible_change`，防止“改了等于没改”被当作合格（用户采纳的成片最小也有 4.9）。规则重写：`SKILL.md` 和 `principles.md` 按现在的实际行为重写，去掉历代补丁之间的矛盾（例如“N 不得替代 G”“交付 G 并标为 G”等旧条目）；退役 5 个过时的参考文件（`original_workflow.md`、`aesthetic_standard.md`、`scene_playbooks.md`、`generative_guardrails.md`、`quality_review.md`，有用的内容并入总则）；删掉“改用文件方式上传”的提示，写明只支持相册上传；口味参照新增 3 组用户采纳的成片。
+
+## v1.6.3 相对 v1.6.2（暗图走“原片像素 + G 光色”）
+
+起因：2026-11-26 实测 4 张（v1.6.2），亮图 G 直出两张都一次过（哨兵 0.85），两张暗图（02 暗柜玻璃向日葵、03 逆光檐下灯笼）两次 G 都被拦（纹理 1.59/1.66、暗部 2.40/4.04），退回的快速 N 一张平淡、一张把逆光雾提灰。把被废掉的 4 张 G 稿交给包里的 `look_transfer.py`（成片像素全是原片，只借 G 的光和颜色），两张都明显胜过快速 N（用户与第二审阅者：02 选 G1 光色，03 两张都好、G2 光色略佳），输出哨兵 1.02–1.17。
+- 新增 `look_route.py`，由 `pipeline.py --g-direct` 自动调用，判断全由代码算并写进回执（`look_trigger`）：
+  - 第 1 张 G 回来时，原片极暗（中位亮度 < 15 且六成以上低于 20）或 keep 框并集超过画面 40%，直接走这条，不再补抽第 2 张；
+  - G 直出彻底失败（第 2 张或其他硬故障）时，先走这条，再考虑快速 N；第 2 张时加 `--g-prev=第1张G`，用两张里 G 稿纹理哨兵更低的一张；
+  - 暗部下限：结果中位亮度不低于原片的 55%（03：3.1 → 4.0，留住格窗轮廓）；之后照常构图裁切和高光保护。
+- 快速 N 的欠曝分支先去暗部的逆光雾再提亮（03：原来中位 13.6、雾带发灰 → 9.5、雾带明显变淡）。
+- 回归：16 组 × 有/无 OpenCV。没有触发新规则的 9 组（夜街、西湖、老墙、博物馆、黄墙、回廊、庭院快速 N 等）与 v1.6.2 逐像素相同；触发的（灯笼、02、03、大 keep 测试）改走新路线，有/无 OpenCV 平均像素差 0.2–1.1。
 
 ## v1.6.2 相对 v1.6.1（瘦身，结果不变）
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.6.0 - quick N: the fast, non-generative safety net.
+"""Photographic Studio v1.6.3 - quick N: the fast, non-generative safety net.
 Usage: python3 quick_n.py ORIGINAL PARAMS_JSON OUTPUT_PNG [RECEIPT_JSON]
 
 Used when the user asks for non-generative / strictly faithful editing, when there is no G, or when both G draws
@@ -16,6 +16,11 @@ added to L*: computed on a blurred L* (so noise is not amplified), zero on the d
 fading out above L* 35-75 (lit areas and light sources stay as they are), and weaker towards the frame edges or away
 from the brief's key_light box (the subject comes forward). In lifted shadows up to half of a blue or green cast
 is removed (warm colours are kept). About 1 s.
+v1.6.3: before the lift, a backlit veil in the dark areas is taken out (2026-11-26 lantern eaves: the lift had turned
+the lens-flare veil into a grey-violet band). The veil is the local minimum of L* (15 px window, blurred), above the
+frame's darkest 5 %; up to 12 L* of it x DEHAZE is subtracted, only where the area is dark (fading out between L* 25
+and 40) and less on brighter pixels, and the veil's own colour cast is halved there. Bright sky and lamps are not
+touched.
 """
 import json, sys, tempfile
 from pathlib import Path
@@ -31,6 +36,7 @@ UNDER_MEDIAN, UNDER_DARK_L, UNDER_DARK_SHARE = 15.0, 20.0, 0.60
 LIFT_TARGET = 17.0       # where the median goes (20 made the lens-flare veil and the blue cast milky)
 LIFT_FADE = (35.0, 75.0)  # the lift fades out between these L* values
 UNCAST = 0.5             # lifted shadows lose up to half of a blue/green cast (it turns milky once visible)
+DEHAZE = 0.8             # v1.6.3: share of the dark-area veil taken out before the lift
 
 
 def _smooth(x, a, b):
@@ -43,9 +49,30 @@ def underexposed(L):
     return med < UNDER_MEDIAN and share > UNDER_DARK_SHARE, round(med, 1), round(share, 2)
 
 
+def _local_min(L, radius):
+    from PIL import Image as _Image, ImageFilter
+    img = _Image.fromarray(np.uint8(np.clip(L * 2.55, 0, 255)))
+    return np.asarray(img.filter(ImageFilter.MinFilter(2 * radius + 1)), np.float32) / 2.55
+
+
+def dehaze_dark(lab):
+    """v1.6.3: take a backlit veil out of the dark areas (module notes). lab is changed in place; returns info."""
+    L = lab[..., 0]
+    veil = blur(_local_min(L, 7), 12)
+    p5 = float(np.percentile(L, 5))
+    dark = 1 - np.clip((blur(L, 8) - 25) / 15, 0, 1)
+    excess = np.clip(veil - p5, 0, 12) * DEHAZE * dark
+    lab[..., 0] = np.clip(L - excess * (1 - np.clip(L / 40, 0, 1)), 0, 100)
+    cast = np.clip(excess / 8, 0, 1) * dark * (1 - np.clip(L / 30, 0, 1))
+    lab[..., 1] *= 1 - 0.5 * cast
+    lab[..., 2] *= 1 - 0.5 * cast
+    return {'veil_removed_mean_L': round(float(excess.mean()), 2), 'veil_removed_max_L': round(float(excess.max()), 1)}
+
+
 def lift_underexposed(rgb, key_box=None):
-    """rgb: sRGB 0..1. Returns (rgb, info). See the module notes (v1.6.0)."""
+    """rgb: sRGB 0..1. Returns (rgb, info). See the module notes (v1.6.0, v1.6.3 dehaze first)."""
     lab = lin_to_lab(to_linear(rgb))
+    haze = dehaze_dark(lab)
     L = lab[..., 0]
     h, w = L.shape
     base = blur(L, max(2, min(h, w) // 300))
@@ -68,13 +95,13 @@ def lift_underexposed(rgb, key_box=None):
     lab[..., 2] = np.where(lab[..., 2] < 0, lab[..., 2] * (1 - lifted), lab[..., 2])
     lab[..., 1] = np.where(lab[..., 1] < 0, lab[..., 1] * (1 - lifted), lab[..., 1])
     out = np.clip(to_srgb(lab_to_lin(lab)), 0, 1)
-    return out, {'median_before': round(med, 1), 'gamma': round(gamma, 2),
+    return out, {**haze, 'median_before': round(med, 1), 'gamma': round(gamma, 2),
                  'median_after': round(float(np.median(blur(lab[..., 0], 2))), 1),
                  'black_anchor_L': round(p5, 1), 'max_lift_L': round(float(delta.max()), 1)}
 
 
 def run(source, params, output):
-    steps = {'tool': 'quick_n.py v1.6.0', 'grade': None, 'reframe': {'verdict': 'NO_REFRAME'},
+    steps = {'tool': 'quick_n.py v1.6.3', 'grade': None, 'reframe': {'verdict': 'NO_REFRAME'},
              'n_trim': {'verdict': 'NOT_RUN'}}
     with tempfile.TemporaryDirectory() as name:
         folder = Path(name)
