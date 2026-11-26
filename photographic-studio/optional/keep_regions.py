@@ -13,7 +13,9 @@ Usage: python3 -I keep_regions.py ORIGINAL EDITED OUT_PNG REGIONS_JSON [RECEIPT_
                not there): what G drew does not come through, the overall warmth of the scene does.
 Boxes from the brief are rough: each mask is pulled to the original's own edges (edge-aware, guided by the original)
 and feathered. A seam check compares the colour step across each region's border with the step in the original;
-a step the eye could see (> 3 dE) is retried once with a wider transition and then only flagged (KEEP_SEAM).
+a step above 3 dE is retried once with a wider transition; only a step above 6 dE is flagged (KEEP_SEAM, v1.6.0).
+v1.6.0: boxes smaller than 16 px on a side are widened around their centre (recorded as widened_to), not dropped;
+each region is computed in a padded window around its box (same result, much faster with many boxes).
 Deterministic, pure numpy + Pillow. No pixel is invented: inside a region every value comes from the original or is
 the edit's own brightness.
 """
@@ -24,7 +26,9 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ps_common import load_rgb, save_png, to_linear, to_srgb, lin_to_lab, lab_to_lin, blur, guided, sha256
 
-SEAM_MAX = 3.0
+SEAM_MAX = 3.0     # above this a wider transition is tried once
+SEAM_FLAG = 6.0    # v1.6.0: only a step above this is flagged (3-6 dE on a smooth border was not visible in accepted finals)
+MIN_BOX_PX = 16    # v1.6.0: boxes smaller than this (either side) are widened around their centre instead of dropped
 
 
 def regions_of(obj):
@@ -35,18 +39,22 @@ def regions_of(obj):
             x0, y0, x1, y1 = [min(1.0, max(0.0, float(v))) for v in r['box']]
         except (KeyError, TypeError, ValueError):
             continue
-        if x1 - x0 < 0.01 or y1 - y0 < 0.01:
-            continue
+        if x1 <= x0 or y1 <= y0:
+            continue                      # v1.6.0: only empty boxes are dropped; small ones are widened in apply()
         out.append({'what': str(r.get('what', ''))[:80], 'box': [x0, y0, x1, y1],
                     'mode': 'content' if r.get('mode') == 'content' else 'colour'})
     return out
 
 
-def mask_for(Lo, box, wide=False):
-    """Box -> soft mask that follows the original's edges."""
+def mask_for(Lo, box, wide=False, s=None, pixels=None):
+    """Box -> soft mask that follows the original's edges. v1.6.0: Lo may be a window of the frame; then s is the
+    full frame's short side and pixels the box in window pixels (so the edges land on exactly the same pixels)."""
     h, w = Lo.shape
-    s = min(h, w)
-    x0, y0, x1, y1 = int(box[0] * w), int(box[1] * h), int(np.ceil(box[2] * w)), int(np.ceil(box[3] * h))
+    s = s or min(h, w)
+    if pixels is not None:
+        x0, y0, x1, y1 = pixels
+    else:
+        x0, y0, x1, y1 = int(box[0] * w), int(box[1] * h), int(np.ceil(box[2] * w)), int(np.ceil(box[3] * h))
     m = np.zeros((h, w), np.float32); m[y0:y1, x0:x1] = 1.0
     r = max(2, int(s * (0.02 if wide else 0.012)))
     g = guided(Lo / 100.0, m, r, 1e-3)               # snaps the box edge to the object's own edges nearby
@@ -71,30 +79,59 @@ def seam_step(lab_a, lab_b, m):
     return float(np.linalg.norm(da - db))
 
 
+def _widen(box, h, w):
+    """v1.6.0: a box narrower or shorter than MIN_BOX_PX is widened around its centre (clipped to the frame)."""
+    x0, y0, x1, y1 = box
+    out = [x0, y0, x1, y1]; widened = False
+    for lo_i, hi_i, size in ((0, 2, w), (1, 3, h)):
+        need = MIN_BOX_PX / size
+        if out[hi_i] - out[lo_i] < need:
+            c = (out[lo_i] + out[hi_i]) / 2
+            a, b = max(0.0, c - need / 2), min(1.0, c + need / 2)
+            if a == 0.0:
+                b = need
+            elif b == 1.0:
+                a = 1.0 - need
+            out[lo_i], out[hi_i] = a, b; widened = True
+    return out, widened
+
+
 def apply(o, e, regs):
-    """o, e: sRGB 0..1 arrays of the same size. Returns (result, per-region records)."""
+    """o, e: sRGB 0..1 arrays of the same size. Returns (result, per-region records).
+    v1.6.0: each region is computed in a window around its box (padded wider than every filter it uses), not on the
+    whole frame - the same result, many times faster with many boxes (39 signs: about 14 s -> about 1 s)."""
     lo, le = lin_to_lab(to_linear(o)), lin_to_lab(to_linear(e))
     res = le.copy(); recs = []
-    s = min(o.shape[:2])
+    H, W = o.shape[:2]
+    s = min(H, W)
+    k = max(4, s // 15)
+    r_wide = max(2, int(s * 0.02))
+    pad = int(2 * k + 3 * r_wide + 40)
     for r in regs:
+        box, widened = _widen(r['box'], H, W)
+        bx0, by0 = int(box[0] * W), int(box[1] * H)
+        bx1, by1 = int(np.ceil(box[2] * W)), int(np.ceil(box[3] * H))
+        X0, Y0, X1, Y1 = max(0, bx0 - pad), max(0, by0 - pad), min(W, bx1 + pad), min(H, by1 + pad)
+        lo_w, le_w, res_w = lo[Y0:Y1, X0:X1], le[Y0:Y1, X0:X1], res[Y0:Y1, X0:X1]
+        pixels = (bx0 - X0, by0 - Y0, bx1 - X0, by1 - Y0)
         best = None
         for wide in (False, True):
-            m = mask_for(lo[..., 0], r['box'], wide)
-            tgt = le.copy()
-            tgt[..., 1:] = lo[..., 1:]                                    # the original's colour
+            m = mask_for(lo_w[..., 0], None, wide, s, pixels)
+            tgt = le_w.copy()
+            tgt[..., 1:] = lo_w[..., 1:]                                  # the original's colour
             if r['mode'] == 'content':   # the original's content plus only the edit's large-scale light and colour
-                k = max(4, s // 15)
-                tgt = lo + np.stack([blur(le[..., c] - lo[..., c], k) for c in range(3)], -1)
-            cand = res * (1 - m[..., None]) + tgt * m[..., None]
-            seam = seam_step(cand, lo, m)
+                tgt = lo_w + np.stack([blur(le_w[..., c] - lo_w[..., c], k) for c in range(3)], -1)
+            cand = res_w * (1 - m[..., None]) + tgt * m[..., None]
+            seam = seam_step(cand, lo_w, m)
             if best is None or seam < best[0]:
                 best = (seam, cand, m, wide)
             if seam <= SEAM_MAX:
                 break
         seam, cand, m, wide = best
-        res = cand
-        recs.append({**r, 'area': round(float(m.mean()), 4), 'seam_dE': round(seam, 2), 'wide_transition': wide,
-                     **({'flag': f'KEEP_SEAM {seam:.1f}'} if seam > SEAM_MAX else {})})
+        res[Y0:Y1, X0:X1] = cand
+        recs.append({**r, 'area': round(float(m.sum() / (H * W)), 4), 'seam_dE': round(seam, 2), 'wide_transition': wide,
+                     **({'widened_to': [round(v, 4) for v in box]} if widened else {}),
+                     **({'flag': f'KEEP_SEAM {seam:.1f}'} if seam > SEAM_FLAG else {})})
     out = np.clip(to_srgb(lab_to_lin(res)), 0, 1)
     return out, recs
 
@@ -112,7 +149,7 @@ def main():
     else:
         res, recs = apply(o, e, regs); save_png(res, out_p)
     flags = [r['flag'] for r in recs if 'flag' in r]
-    rec = {'tool': 'keep_regions.py v1.1.0', 'source_sha256': sha256(src), 'regions': recs, 'flags': flags,
+    rec = {'tool': 'keep_regions.py v1.6.0', 'source_sha256': sha256(src), 'regions': recs, 'flags': flags,
            'verdict': ('KEPT' if recs else 'NO_REGIONS') + (' | FLAGS: ' + '; '.join(flags) if flags else '')}
     t = json.dumps(rec, ensure_ascii=False, indent=1)
     if rec_p: Path(rec_p).write_text(t, encoding='utf-8')

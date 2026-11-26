@@ -3,7 +3,7 @@ name: photographic-studio
 description: 独立的非人像摄影后期工作流，面向任何能看图的 agent。用户发来一张或多张照片并要求修图（例如“修”“修一下这张”“修成成片”）时使用，适用于建筑、街景、风光、园林、夜景、室内、静物、展品等非人像照片。大模型读片、写导演单、定构图，宿主的图像编辑工具出片，确定性工具贴回关键细节、裁切、保护高光、拦下硬故障，直接交付一张成片；按宿主实际具备的工具分级执行。
 ---
 
-# Photographic Studio v1.5.0
+# Photographic Studio v1.6.0
 
 用户发来照片、说一句“修”，就得到一张成片：**有明显的摄影表现力、仍然像原片、符合真实的光、看不出 AI 痕迹**。表现力第一，其余三条同时成立。
 
@@ -61,7 +61,7 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 
 `python3 optional/pipeline.py 原片 G 参数.json 成片.png 回执.json --g-direct`（博物馆加 `--genre=museum`，夜景加 `--genre=night`；第 2 张 G 加 `--g-draw=2`）。它做对齐、keep 贴回、裁掉 G 没画到的窄边、构图裁切、高光保护，几秒钟跑完。**交不交付只看 `verdict`**：
 
-- `DELIVER_G_DIRECT`：交付。色彩倍数、物理检查、接缝数值、`small_flags` 都只是记录，不是失败。但回执 `physics_final.serious` 里有 halo、spotlight_glow 或 sky_glow，或者 `drift.verdict` 是 `REPORT: non-sky chroma ratio` 时，交付前在成片上对照原片复看那个位置：有假光或过艳就按硬伤处理，补抽第 2 张；没问题就照常交付，回执第二行写“复看了某处：无问题”。
+- `DELIVER_G_DIRECT`：交付。回执 `next` 里有“哨兵提醒”时（v1.6.0，只报不拦：G 的细纹理明显比原片强，或原片很暗处多出了细节），先按提醒去那个位置对照原片看一眼：确认是第④条硬伤就补抽第 2 张，没问题就照常交付，回执第二行写“复看了某处：无问题”。色彩倍数、物理检查、接缝数值、`small_flags` 都只是记录，不是失败。但回执 `physics_final.serious` 里有 halo、spotlight_glow 或 sky_glow，或者 `drift.verdict` 是 `REPORT: non-sky chroma ratio` 时，交付前在成片上对照原片复看那个位置：有假光或过艳就按硬伤处理，补抽第 2 张；没问题就照常交付，回执第二行写“复看了某处：无问题”。
 - `REDRAW_G: …`：G 返回了拼图或构图变了、对不上。按 `next` 补抽第 2 张，加 `--g-draw=2` 重跑。
 - `DELIVER_QUICK_N (…)`：两张 G 都有硬故障，命令已自动交付快速 N 直出。照常交付，标签写 `N 直出`。
 
@@ -69,7 +69,10 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 
 **第 5 步 交付**
 
-每张**只交付一张成片**：一张原生图片，加一行 `看点：……｜风格：……`，再加成片标签 `G 直出 + 细节贴回` 或 `N 直出`，裁过的加 `＋重构`。宿主自动显示了 G 稿时，在成片前写“上面那张是中间稿，以下是成片”。回执只记两行，用户说“看回执”时再读 JSON 汇报：第一行“keep：编号—内容，已在预览图上核对”（或“无需保护”）；第二行“四条硬伤：无”或看到的问题，以及用了第几张 G。
+每张给**一张成片**，加一行 `看点：……｜风格：……`，再加成片标签 `G 直出 + 细节贴回` 或 `N 直出`，裁过的加 `＋重构`。
+- **成片和中间稿都要能点开、能直接存进手机“照片”App**（v1.6.0，用户 2026-11-26 iPhone 实测：代码在对话里显示的图存不了，.jpg 链接点开后可以存）。所以：用 `python3 optional/to_jpeg.py 成片.png 成片_编号.jpg` 转成 JPEG（原尺寸、质量 95），以**可点击的 .jpg 链接**交付；用了 G 的，把实际用的那张 G 稿也同样转成 `中间稿_编号.jpg` 给链接，标明“中间稿”。不要用代码把图片显示在对话里代替链接。
+- 链接下面写一句：“点开链接 → 右上角分享 → 存储图像（存进照片，不是存储到文件）”。
+- 宿主自动显示了 G 稿时，在成片链接前写“上面那张是中间稿，以下是成片”。回执只记两行，用户说“看回执”时再读 JSON 汇报：第一行“keep：编号—内容，已在预览图上核对”（或“无需保护”）；第二行“四条硬伤：无”或看到的问题，以及用了第几张 G。
 
 ## 4. 非生成式 / 严格保真 / 没有 G（T2）
 
@@ -91,7 +94,9 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 | `optional/selfcheck.py` | 每条对话开头自检一次 |
 | `optional/keep_preview.py` | 把 keep 框和 0.1 网格画在原片上，调用 G 前核对 |
 | `optional/pipeline.py --g-direct` | 主线：对齐、贴回、裁窄边、构图、高光保护、硬故障时快速 N 直出 |
-| `optional/pipeline.py --quick-n`、`optional/quick_n.py` | 非生成式 / 没有 G：快速 N 直出 |
+| `optional/pipeline.py --quick-n`、`optional/quick_n.py` | 非生成式 / 没有 G：快速 N 直出（v1.6.0：极暗原片自动提一点层次） |
+| `optional/to_jpeg.py` | v1.6.0：成片、中间稿转 JPEG，作为可点击链接交付，iPhone 上能存进照片 App |
+| `optional/sentinel.py` | v1.6.0：g-direct 自动运行的两个只读哨兵（纹理重画、暗部脑补），结果写进回执 |
 | `references/reframe_rules.md` | 构图手法与必查项的完整版 |
 | `references/physics.md` | 自然光的物理原则 |
 | `references/capability_tiers.md`、`references/delivery.md` | 宿主分级、交付格式 |

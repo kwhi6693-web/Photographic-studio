@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 
 from keep_regions import regions_of
+import sentinel
 from look_transfer import confidence, cv2, register
 from pipeline import reframe_args, tool
 from ps_common import blur, box, load_rgb, save_png, sky_mask, srgb_to_lab, structure_mask
@@ -382,6 +383,12 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
         boxes = pixel_boxes(regions, original.shape)
         precheck['drift'] = measure_drift(lab_source, lab_g, ~sky, darkening_thresholds)
         if direct:
+            # v1.6.0: read-only sentinels (texture redraw, invented shadow detail): report and ask for a look, never stop
+            try:
+                precheck['sentinel'] = sentinel.measure(original, aligned, coverage)
+            except Exception as error:  # a sentinel must never cost a delivery
+                precheck['sentinel'] = {'verdict': f'ERROR: {error}'}
+        if direct:
             precheck['confidence'] = {'low_area_outside_keep': None, 'small_flags': [], 'verdict': 'SKIPPED_G_DIRECT'}
         else:
             precheck['confidence'] = check_confidence(lab_source[..., 0], lab_g[..., 0], sky, boxes,
@@ -402,6 +409,8 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
             precheck['drift']['verdict'] = 'REPORT: ' + precheck['drift']['verdict'].removeprefix('FALLBACK: ')
         if failures:
             return finish('precheck: ' + ', '.join(failures))
+        if direct and precheck.get('sentinel', {}).get('flags'):
+            steps['next'].append(sentinel.recheck_note(precheck['sentinel']))
 
         restored = folder / 'restored.png'
         steps['restore'] = restore_details(source_grid, current, restored, folder, regions, boxes,
