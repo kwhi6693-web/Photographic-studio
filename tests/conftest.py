@@ -7,15 +7,28 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 PKG = ROOT / 'photographic-studio'
 TOOLS = PKG / 'optional'
+# v1.6.2: the v1.4 default route (finish.py, settle.py, harmonize.py ... and the pre-slim pipeline.py / g_first.py)
+# lives in the repository's legacy/v1.4/optional, a complete pre-slim snapshot; its tests run it from there.
+LEGACY = ROOT / 'legacy' / 'v1.4' / 'optional'
+NEW_ROUTE = ('--g-direct', '--quick-n', '--help')
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(TOOLS))
+sys.path.append(str(LEGACY))      # legacy-only modules (settle, harmonize ...) import from here, after the package
 import synth  # noqa: E402
 from ps_common import srgb_to_lab  # noqa: E402
 
 
+def tool_dir(name, args=()):
+    """Packaged tools run from the package; archived ones, and pipeline.py / g_first.py on the old route, from legacy."""
+    if name in ('pipeline.py', 'g_first.py'):
+        return TOOLS if any(str(a) in NEW_ROUTE for a in args) else LEGACY
+    return TOOLS if (TOOLS / name).exists() else LEGACY
+
+
 def run_tool(name, *args):
-    """Run one packaged tool exactly as an agent would: a separate process, unmodified."""
-    return subprocess.run([sys.executable, '-B', str(TOOLS / name), *map(str, args)], capture_output=True, text=True)
+    """Run one tool exactly as an agent would: a separate process, unmodified."""
+    return subprocess.run([sys.executable, '-B', str(tool_dir(name, args) / name), *map(str, args)],
+                          capture_output=True, text=True)
 
 
 def load(p):
