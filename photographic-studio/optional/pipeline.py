@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""Photographic Studio v1.4.6 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
+"""Photographic Studio v1.5.0 - pipeline: SKILL.md steps 5-7 (everything after the G call) in one command.
 Usage: python3 pipeline.py SOURCE G_OUTPUT PARAMS_JSON OUT_PNG [RECEIPT_JSON]
-                              [--g-direct [--g-draw=2]] [--g-drift] [--lt-opts=FLAGS] [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
+                              [--g-direct [--g-draw=2] | --quick-n] [--g-drift] [--lt-opts=FLAGS] [--genre=museum|night] [--no-g] [--texture=auto|x0,y0,x1,y1;...] [--settled=PNG]
   SOURCE      the original photo;  G_OUTPUT  the host's generative edit (or SOURCE / --no-g when there is no G)
   PARAMS_JSON the director brief's parameters (grade.py, "moves", "keep", "auto"), plus optionally
               "reframe": {"rotate": deg, "persp": [8 numbers], "box": [l, t, r, b], "zoom": z, "center": [x, y],
                           "allow_aspect_change": true}   - the chosen crop (reframe_rules.md)
-  --g-direct  v1.4.4 opt-in: deliver G's own pixels with keep restore, reframe and highlight trim only (no texture
-              blend, no legacy grading). A problem a new draw can fix (serious optical problem, scene mismatch,
-              no alignment, non-sky chroma over 1.65x) in draw 1 stops with REDRAW_G (call G once more, rerun with
-              --g-draw=2). v1.4.6: any other failure, or draw 2 still failing, stops with FALLBACK_DEFAULT_ROUTE and
-              does NOT run the default route in the same command (2026-11-26: the default route after a fallback
-              pushed the phone host past its time limit); the agent writes the full brief and runs it separately.
-              (--ghost-residual-limit=F loosens/tightens the ghost gate; user or work order only)
-  v1.4.6: --g-first (the experimental light route) is removed; g-direct is the only G-pixel route.
+  --g-direct  v1.5.0 main route ("修"): G's own pixels with keep restore, reframe (keeps >= 75 % of the frame and a
+              long side >= 1000 px, else delivered uncropped) and highlight trim. Only hard failures count: a scene
+              mismatch (collage, new framing) or no alignment in draw 1 stops with REDRAW_G (call G once more, rerun
+              with --g-draw=2); draw 2 failing, or any other hard failure (unreadable input, museum without keep,
+              failed restore or reframe), delivers quick N in the same command. Colour ratio and physics are
+              report-only. (--ghost-residual-limit=F only changes the reported ghost check)
+  --quick-n   v1.5.0: deliver quick N only (non-generative / strictly faithful, or no G): quick_n.py, a few seconds.
+  Without --g-direct / --quick-n the legacy default route below still runs (kept, no longer in SKILL.md).
+  --g-first was removed in v1.4.6.
   --g-drift   save diagnostic snapshots in OUT_PNG.g-drift and measure appearance against aligned G
   --lt-opts   forward look_transfer options, e.g. --lt-opts=--no-sky-trend
   --texture   naturalness fix (naturalness.md section 2) after the agent's acceptance: auto, or boxes in fractions
@@ -165,8 +166,26 @@ def main():
     src, g, pj, out = a[:4]; rec_p = a[4] if len(a) > 4 else None
     genre = opt.get('genre')
     params = json.loads(Path(pj).read_text(encoding='utf-8') or '{}') if Path(pj).exists() else {}
-    rec = {'tool': 'pipeline.py v1.4.6', 'backend': backend(), 'steps': {}, 'next': []}
+    rec = {'tool': 'pipeline.py v1.5.0', 'backend': backend(), 'steps': {}, 'next': []}
     direct = '--g-direct' in sys.argv
+
+    def emit():
+        text = json.dumps(rec, ensure_ascii=False, indent=1)
+        if rec_p: Path(rec_p).write_text(text, encoding='utf-8')
+        print(text)
+        return 0
+
+    def deliver_quick_n(reason):
+        # v1.5.0: the fast non-generative safety net (seconds, not the legacy default route's minutes)
+        from quick_n import run as quick
+        rec['steps']['quick_n'] = quick(src, params, out)
+        ok = rec['steps']['quick_n']['verdict'] == 'DELIVER_QUICK_N'
+        rec['output'] = str(out) if ok else None
+        rec['verdict'] = ('DELIVER_QUICK_N' if ok else 'STOP: quick N failed') + (f' ({reason})' if reason else '')
+        return emit()
+
+    if '--quick-n' in sys.argv:
+        return deliver_quick_n(None)
     if '--g-first' in sys.argv:
         sys.exit('pipeline.py: --g-first was removed in v1.4.6; use --g-direct or the default route')
     if direct:
@@ -197,16 +216,10 @@ def main():
             if rec_p: Path(rec_p).write_text(text, encoding='utf-8')
             print(text)
             return 0
-        if trial['verdict'].startswith('FALLBACK') and not skip_reason:
-            # v1.4.6: stop here; the default route is a separate command with the full brief
+        if trial['verdict'].startswith('FALLBACK'):
+            # v1.5.0: a hard G failure delivers quick N in the same command (a few seconds)
             Path(out).unlink(missing_ok=True)
-            rec['output'] = None
-            rec['verdict'] = ('FALLBACK_DEFAULT_ROUTE: ' + trial['verdict'].removeprefix('FALLBACK: ')
-                              + ' | NEXT: ' + ' / '.join(rec['next']))
-            text = json.dumps(rec, ensure_ascii=False, indent=1)
-            if rec_p: Path(rec_p).write_text(text, encoding='utf-8')
-            print(text)
-            return 0
+            return deliver_quick_n('G hard failure: ' + trial['verdict'].removeprefix('FALLBACK: '))
         if trial['verdict'] in ('DELIVER_G_FIRST', 'DELIVER_G_DIRECT'):
             rec['output'] = str(out)
             degraded = trial['steps']['g_first']['degraded']
