@@ -23,12 +23,11 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 
 **第 1 步 读片，写进参数文件和一行记录**
 
-1. **看点与导演单**：一句“看点｜风格”（看点不只是叙事，还有几何、光影、色彩、质感、氛围），再写 **2–4 个具体的提升动作**，每个说清对谁、往哪个方向，例如：
-   - 光：让现有的侧光聚到主体上，四周和前景稍暗下去；
-   - 分离：主体与背景拉开明暗或冷暖；
-   - 色彩：理顺主色、压住抢眼的杂色、受光面暖、阴影偏冷；
-   - 纵深与氛围：远景更通透或更有雾感，天空从上往下自然加深。
+1. **看点与导演单**：先读所属题材的**一页** `references/genres/`（园林、建筑、室内、风光、夜景、静物、街头选一页；页里的 `clarity`、`regions` 等 N 参数属于旧路线，忽略），照它的看点和常见错误来写。一句“看点｜风格”（看点不只是叙事，还有几何、光影、色彩、质感、氛围），再写 **2–4 个具体的提升动作**，每个说清对谁、往哪个方向：
+   - **第 1 个固定写主光**：光聚到主角上，四周和暗部保持原片的暗，或者更暗；
+   - 其余 1–3 个按需要选：分离（主体与背景拉开明暗或冷暖）；色彩（理顺主色、压住抢眼的杂色、受光面暖、阴影偏冷）；纵深与氛围（远景更通透或更有雾感，天空从上往下自然加深）。
    只写方向，不写数字。动作要让成片在正常尺寸下一眼看得出比原片好。
+   **动作只动光和色**（光的方向、明暗分布、冷暖、主体分离、远近的明暗）。不要求 G 刻画材质细节、补出暗处看不清的纹理、加光束、星芒或光泽：这些会让 G 脑补，成片像渲染图。屋檐下、窗框、厅堂、暗角这类暗调本来就是气氛：保持暗而干净，不提亮成灰。
 2. **keep（要保护的局部）**：画面里所有看得到的文字和招牌（包括小招牌、价签、贴纸）、近景和中景里清晰的人、展品主体，一律 `{"what": …, "box": [x0, y0, x1, y1], "mode": "content"}`（0–1 的比例坐标）。**框要紧贴对象**，不要把大片天空、墙面框进去（贴回的是原片像素，框越大越容易看出补丁）。没有就写“无需保护”。博物馆展品必须有 keep。
 3. **构图（每张都要判断）**：按专业摄影师的眼光，写一行“看点 → 用到的一两种手法 → 裁或不裁、为什么”。不写理由的“不动”不算判断。
    - 手法：围绕看点取景；三分法或对称；引导线从边角进入、指向主体；给主体留白和呼吸；清掉边角的亮斑、半截杂物；地平线和建筑竖线拉直（`rotate`），竖线汇聚明显时做透视矫正（`persp`）；按主体选比例（高耸用竖幅、展开用横幅、集中用方形）。
@@ -49,13 +48,14 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
   Edit the provided photo into a finished, professional-grade photograph with strong but natural photographic impact.
   Output exactly one photo with the same framing, viewpoint and layout as this single input photo. Not a grid, collage, contact sheet or side-by-side.
   Make the light and colour work: <第 1 步的 2–4 个提升动作，用英文写具体的光和色>.
-  Natural photographic rendering: rich but believable colour, real depth and local contrast, clean highlights, shadows with detail.
+  Natural photographic rendering: rich but believable colour, real depth and local contrast, clean highlights; shadows keep only the detail already visible in the source.
+  Only change light, tone and colour. Dark shadows stay as dark and plain as in the source. Surfaces keep their real finish: matte wood, paint and stone stay matte. Small light points stay small soft glows. It should look like a real camera photo, not a 3D render.
   Follow real light physics: keep the existing light direction and time of day, shadows stay darker and cooler than sunlit areas, sky graded naturally, reflections dimmer than the objects, no added light sources, no halos. Do not add a spotlight or a glow around the subject; dark backgrounds stay as dark and clean as in the source.
   No HDR look: do not lift the shadows evenly; keep the foreground and the deepest shadows as dark as in the source, or darker, as the black anchor of the frame; put the light only on the lit subject and the real light patches, so the contrast between light and shade stays the same or grows.
   Do not create a poster or graphic design. Do not add text.
   ```
-  平的阴天、灰白天空：加一句 `keep the overcast sky smooth and soft, only a gentle gradient, do not add clouds`。不写“subtle / slightly”这类压低力度的词，也不写“颜色不要比原片浓”。
-- 在手机正常尺寸下**对照原片**看 G 稿的**三条硬伤**：①明显的假光、光圈，或者整体不如原片；②keep 救不回来的大面积画崩；③大片涂抹发糊、像油画。返回拼图、多格或构图明显改变的直接作废。有硬伤或作废才补抽第 2 张（G 最多两张）。
+  平的阴天、灰白天空：加一句 `keep the overcast sky smooth and soft, only a gentle gradient, do not add clouds`。原片一半以上很暗（逆光、屋檐下、暗角多的室内）：把 `real depth and local contrast` 改成 `real depth`。不写“subtle / slightly”这类压低力度的词，也不写“颜色不要比原片浓”。
+- 在手机正常尺寸下**对照原片**看 G 稿的**四条硬伤**：①明显的假光、光圈，或者整体不如原片；②keep 救不回来的大面积画崩；③大片涂抹发糊、像油画；④脑补或渲染感：原片里看不清的暗处出现了新纹理、新图案，或者出现原片没有的星芒、光束、塑料或镜面高光，整体像 3D 渲染；或者整张画面被刷成单一色调、时间感错乱，原本真实的冷暖并存、表面色差与自然旧痕被抹平洗净，像样板间或 3D 渲染图。只是变亮不算第④条；顺着原片已有光的方向、柔和自然地加强或延伸的光（例如斜阳落在墙面、地面上的光带）也不算。返回拼图、多格或构图明显改变的直接作废。有硬伤或作废才补抽第 2 张（G 最多两张）。
 
 **第 4 步 一条命令出片**
 
@@ -69,7 +69,7 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 
 **第 5 步 交付**
 
-每张**只交付一张成片**：一张原生图片，加一行 `看点：……｜风格：……`，再加成片标签 `G 直出 + 细节贴回` 或 `N 直出`，裁过的加 `＋重构`。宿主自动显示了 G 稿时，在成片前写“上面那张是中间稿，以下是成片”。回执只记两行，用户说“看回执”时再读 JSON 汇报：第一行“keep：编号—内容，已在预览图上核对”（或“无需保护”）；第二行“三条硬伤：无”或看到的问题，以及用了第几张 G。
+每张**只交付一张成片**：一张原生图片，加一行 `看点：……｜风格：……`，再加成片标签 `G 直出 + 细节贴回` 或 `N 直出`，裁过的加 `＋重构`。宿主自动显示了 G 稿时，在成片前写“上面那张是中间稿，以下是成片”。回执只记两行，用户说“看回执”时再读 JSON 汇报：第一行“keep：编号—内容，已在预览图上核对”（或“无需保护”）；第二行“四条硬伤：无”或看到的问题，以及用了第几张 G。
 
 ## 4. 非生成式 / 严格保真 / 没有 G（T2）
 
@@ -77,7 +77,7 @@ description: 独立的非人像摄影后期工作流，面向任何能看图的 
 
 ## 5. 必须遵守
 
-- **不造光，也不删光**：亮只落在原本有光的地方；暗背景保持干净，不出现光圈、聚光灯效果（`references/physics.md`）。
+- **不凭空造光，也不删光**：可以顺着原片已有光的方向、柔和地加强或延伸光；不凭空造新光源，不加星芒、光束、光圈、聚光灯效果；暗背景保持干净（`references/physics.md`；两者不一致时以本条为准）。
 - **人眼看不出即可**：所有判断以手机正常尺寸观看为准；1:1 下细碎枝叶略软可以接受。
 - **不得改动或替代工具**：工具报错就如实报告，不写临时脚本修改或绕开工具。
 - **如实标注**：N 直出不标成 G；没做的检查不说做了。
