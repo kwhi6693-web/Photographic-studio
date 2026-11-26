@@ -1,4 +1,4 @@
-"""The experimental route keeps G pixels and leaves default delivery available."""
+"""g-direct (and the standalone light route) keep G pixels; hard failures ask for a redraw or deliver quick N."""
 import json
 
 import numpy as np
@@ -60,7 +60,7 @@ def test_all_prechecks_run_even_when_scene_fails(tmp_path, monkeypatch):
     assert check['drift']['chroma_ratio_nonsky'] == pytest.approx(1)
     assert check['confidence']['low_area_outside_keep'] is not None
     assert receipt['verdict'].startswith('FALLBACK: precheck: scene correspondence')
-    assert '--g-first' in receipt['next'][0]
+    assert 'g_first.py' in receipt['next'][0]
     assert not target.exists()
 
 
@@ -97,8 +97,8 @@ def test_museum_with_keep_restores_and_frames_deterministically(tmp_path):
         'g_first': {'texture_strength': 0.85},
     }))
     output, receipt = tmp_path / 'light.png', tmp_path / 'light.json'
-    args = (source, generated, params, output, receipt, '--genre=museum', '--g-first')
-    result = run_cli('pipeline.py', *args)
+    args = (source, generated, params, output, receipt, '--genre=museum')
+    result = run_cli('g_first.py', *args)   # v1.4.6: the light route stays a standalone tool; pipeline --g-first is gone
     steps = result['steps']['g_first']
     assert set(result['steps']) == {'g_first'}
     assert steps['museum_gate'] == 'pass'
@@ -106,7 +106,7 @@ def test_museum_with_keep_restores_and_frames_deterministically(tmp_path):
     assert steps['reframe']['original_reframed_same_way']
     assert steps['restore']['boxes']
     if LITE:
-        assert 'G_FIRST_DEGRADED' in result['verdict']
+        assert 'texture_skipped_no_opencv' in steps['degraded']
         assert steps['restore']['tool'] == 'keep_regions_content'
         assert steps['texture'] == 'NOT_RUN_NO_OPENCV'
         assert 'texture_skipped_no_opencv' in steps['degraded']
@@ -125,7 +125,7 @@ def test_museum_with_keep_restores_and_frames_deterministically(tmp_path):
         assert steps['restore']['tool'] == 'text_restore'
         assert steps['texture']['strength'] == 0.5
     first = output.read_bytes(), receipt.read_bytes()
-    run_cli('pipeline.py', *args)
+    run_cli('g_first.py', *args)
     assert first == (output.read_bytes(), receipt.read_bytes())
 
 
@@ -133,7 +133,7 @@ def test_museum_with_keep_restores_and_frames_deterministically(tmp_path):
     'wrong_scene', 'edge_halo', 'ghost_edges', 'shifted_ghost', 'invented_spotlight',
     'wrong_composition', 'redrawn_texture', 'synth_rim_glow',
 ])
-def test_fallback_delivers_legacy_bytes(tmp_path, defect):
+def test_light_route_falls_back_on_defects(tmp_path, defect):
     real = FIXTURES / 'real'
     building, tower = real / '01_building.png', real / '02_night_tower.png'
     flags = ()
@@ -162,15 +162,12 @@ def test_fallback_delivers_legacy_bytes(tmp_path, defect):
     params = tmp_path / 'params.json'
     params.write_text('{}')
     output, receipt = tmp_path / 'final.png', tmp_path / 'receipt.json'
-    args = (source, generated, params, output, receipt, *flags)
-    legacy = run_cli('pipeline.py', *args)
-    old_bytes = output.read_bytes()
-    trial = run_cli('pipeline.py', *args, '--g-first')
-    steps = trial['steps'].pop('g_first')
+    output.write_bytes(b'previous delivery')
+    trial = run_cli('g_first.py', source, generated, params, output, receipt, *flags)
+    steps = trial['steps']['g_first']
     assert steps['verdict'].startswith('FALLBACK:')
-    assert '--g-first' in steps['next'][0]
-    assert legacy['steps'] == trial['steps']
-    assert output.read_bytes() == old_bytes
+    assert 'g_first.py' in steps['next'][0]
+    assert output.read_bytes() == b'previous delivery'
     if defect in ('ghost_edges', 'shifted_ghost'):
         physics = steps['precheck']['physics_g']
         assert 'ghost_edges' in physics['serious']
@@ -279,26 +276,26 @@ def test_command_line_limit_beats_params_through_pipeline(tmp_path):
     params = tmp_path / 'params.json'
     params.write_text(json.dumps({'g_first': {'ghost_residual_limit': 0}}))
     output, receipt = tmp_path / 'final.png', tmp_path / 'receipt.json'
-    result = run_cli('pipeline.py', source, draft, params, output, receipt, '--g-first',
+    result = run_cli('pipeline.py', source, draft, params, output, receipt, '--g-direct',
                      '--ghost-residual-limit=0.05')
     setting = result['steps']['g_first']['ghost_residual_limit']
     assert setting == {'value': 0.05, 'source': 'command_line'}
-    ghost = next(h for h in result['steps']['g_first']['precheck']['physics_g']['hints']
-                 if isinstance(h, dict) and 'ghost_raw' in h)
+    ghost = next(h for h in result['steps']['g_first']['physics_final']['hints']
+                 if isinstance(h, dict) and 'ghost_raw' in h)   # v1.5.0: g-direct reports only the final check
     assert ghost['ghost_residual_limit'] == 0.05
 
 
 @pytest.mark.parametrize('tool_name', ['pipeline.py', 'g_first.py'])
 def test_out_of_range_command_line_limit_exits_nonzero(tmp_path, tool_name):
     source, draft, params = real_g('b1_01')
-    extra = ('--g-first',) if tool_name == 'pipeline.py' else ()
+    extra = ('--g-direct',) if tool_name == 'pipeline.py' else ()
     process = run_tool(tool_name, source, draft, params, tmp_path / 'o.png', tmp_path / 'r.json',
                        *extra, '--ghost-residual-limit=1.5')
     assert process.returncode != 0
     assert 'ghost-residual-limit' in process.stderr
 
 
-# v1.4.4 --g-direct: G's own pixels, no texture blend, serious optical problems ask for a second draw.
+# --g-direct (v1.5.0): G's own pixels, no texture blend; only hard failures stop it.
 
 def test_direct_delivers_without_texture(tmp_path):
     source, generated, params = real_g('b1_02')
@@ -310,7 +307,10 @@ def test_direct_delivers_without_texture(tmp_path):
     assert steps['mode'] == 'g-direct' and steps['g_draw'] == 1
     assert steps['texture'] == 'OFF_G_DIRECT'
     assert steps['verdict'] == 'DELIVER_G_DIRECT'
-    assert load(output).shape == load(source).shape
+    # v1.5.0: only the thin margin G did not reach is trimmed
+    left, top, right, bottom = steps['edge_trim']['px_trimmed_left_top_right_bottom']
+    assert max(left, top, right, bottom) <= 0.02 * max(load(source).shape)
+    assert load(output).shape[:2] == (load(source).shape[0] - top - bottom, load(source).shape[1] - left - right)
 
 
 def serious_physics(monkeypatch, scene_ok=True, chroma=1.0):
@@ -326,38 +326,37 @@ def serious_physics(monkeypatch, scene_ok=True, chroma=1.0):
     monkeypatch.setattr(g_first, 'tool', tool)
 
 
-def test_direct_draw_one_optical_problem_asks_for_redraw(tmp_path, monkeypatch):
+def test_direct_optical_problems_are_report_only(tmp_path, monkeypatch):
+    """v1.5.0: physics never stops g-direct; the precheck is skipped and the final check only reports."""
     source, generated, _ = real_g('b1_02')
     serious_physics(monkeypatch)
-    target = tmp_path / 'out.png'
-    target.write_bytes(b'stale final from an earlier run')
-    receipt = g_first.run(source, generated, {}, target, direct=True, draw=1)
-    assert receipt['verdict'] == 'REDRAW_G: final physics: halo'
-    assert receipt['output'] is None and not target.exists()
-    assert any('--g-draw=2' in line for line in receipt['next'])
-    # v1.4.5: the pre-restore result is reported, not acted on
-    assert receipt['steps']['g_first']['precheck']['physics_g']['serious'] == ['halo']
-
-
-def test_direct_draw_two_optical_problem_falls_back(tmp_path, monkeypatch):
-    source, generated, _ = real_g('b1_02')
-    serious_physics(monkeypatch)
-    receipt = g_first.run(source, generated, {}, tmp_path / 'out.png', direct=True, draw=2)
-    assert receipt['verdict'] == 'FALLBACK: final physics (draw 2): halo'
-    assert not any('--g-draw=2' in line for line in receipt['next'])
+    for draw in (1, 2):
+        target = tmp_path / f'out{draw}.png'
+        receipt = g_first.run(source, generated, {}, target, direct=True, draw=draw)
+        steps = receipt['steps']['g_first']
+        assert receipt['verdict'] == 'DELIVER_G_DIRECT' and target.exists()
+        assert steps['precheck']['physics_g']['verdict'] == 'SKIPPED_G_DIRECT'
+        assert steps['precheck']['confidence']['verdict'] == 'SKIPPED_G_DIRECT'
+        assert steps['physics_final']['serious'] == ['halo']
+        assert steps['physics_final']['verdict'] == 'REPORT_ONLY_G_DIRECT'
 
 
 def test_direct_keeps_hard_fallbacks(tmp_path, monkeypatch):
     source, generated, _ = real_g('b1_02')
     museum = g_first.run(source, generated, {}, tmp_path / 'm.png', 'museum', direct=True)
     assert museum['verdict'] == 'FALLBACK: museum without keep'
+    assert any('快速 N 直出' in line for line in museum['next'])
     serious_physics(monkeypatch, scene_ok=False)
+    # a scene mismatch in draw 1 is the G's fault (collage, new framing) - ask for one more draw
     scene = g_first.run(source, generated, {}, tmp_path / 's.png', direct=True)
+    assert scene['verdict'].startswith('REDRAW_G: precheck: scene correspondence')
+    assert scene['output'] is None and any('拼图' in line for line in scene['next'])
+    scene = g_first.run(source, generated, {}, tmp_path / 's.png', direct=True, draw=2)
     assert scene['verdict'].startswith('FALLBACK: precheck: scene correspondence')
-    assert 'halo' not in scene['verdict']
 
 
-def test_direct_chroma_ceiling_still_falls_back(tmp_path):
+def test_direct_chroma_ratio_is_report_only(tmp_path):
+    """v1.5.0: on grey originals the 1.65x ratio rejected every good first draw (2026-11-26)."""
     source = synth.save(synth.day(), tmp_path / 'day.png')
     photo = load(source)
     grey = photo.mean(axis=-1, keepdims=True)
@@ -366,14 +365,39 @@ def test_direct_chroma_ceiling_still_falls_back(tmp_path):
     receipt = g_first.run(source, generated, {}, tmp_path / 'out.png', direct=True)
     drift = receipt['steps']['g_first']['precheck']['drift']
     assert drift['chroma_ratio_nonsky'] > 1.65
-    assert 'non-sky chroma ratio' in receipt['verdict']
+    assert drift['verdict'] == 'REPORT: non-sky chroma ratio'
+    assert receipt['verdict'] == 'DELIVER_G_DIRECT'
+    assert not any('颜色不要比原片浓' in line for line in receipt['next'])
+    light = g_first.run(source, generated, {}, tmp_path / 'light.png')
+    assert 'non-sky chroma ratio' in light['verdict']   # the standalone light route keeps its ceiling
+
+
+def test_covered_rect_trims_only_uncovered_lines():
+    coverage = np.ones((100, 80), np.float32)
+    coverage[-7:, :] = 0          # G did not reach the bottom 7 rows
+    coverage[:, :2] = 0.5         # nor fully the first two columns
+    assert g_first.covered_rect(coverage) == (2, 0, 80, 93)
+    assert g_first.covered_rect(np.ones((10, 10), np.float32)) == (0, 0, 10, 10)
+
+
+def test_direct_skips_too_tight_crop(tmp_path):
+    source, generated, _ = real_g('b1_02')
+    tight = {'reframe': {'box': [0.2, 0.2, 0.7, 0.7], 'allow_aspect_change': True}}
+    receipt = g_first.run(source, generated, tight, tmp_path / 'tight.png', direct=True)
+    reframe = receipt['steps']['g_first']['reframe']
+    assert receipt['verdict'] == 'DELIVER_G_DIRECT'
+    assert reframe['verdict'].startswith('SKIPPED_TOO_TIGHT')
+    assert load(tmp_path / 'tight.png').shape[0] > 0.9 * load(source).shape[0]
+    fine = {'reframe': {'box': [0, 0.1, 1, 1], 'allow_aspect_change': True}}
+    receipt = g_first.run(source, generated, fine, tmp_path / 'fine.png', direct=True)
+    assert receipt['steps']['g_first']['reframe']['verdict'] == 'REFRAMED'
 
 
 def test_pipeline_redraw_does_not_run_default_route(tmp_path, monkeypatch):
     import pipeline
     source, generated, params = real_g('b1_02')
     monkeypatch.setattr(g_first, 'run', lambda *a, **k: {
-        'verdict': 'REDRAW_G: G physics: halo', 'next': [g_first.REDRAW_DIRECT],
+        'verdict': 'REDRAW_G: precheck: scene correspondence', 'next': [g_first.REDRAW_HINTS['scene correspondence']],
         'steps': {'g_first': {'mode': 'g-direct'}}, 'output': None})
     receipt = tmp_path / 'r.json'
     monkeypatch.setattr('sys.argv', ['pipeline.py', str(source), str(generated), str(params),
@@ -408,3 +432,78 @@ def test_direct_restore_is_backend_independent(tmp_path, monkeypatch):
     assert 'text_restore.py' not in calls and 'keep_regions.py' in calls
     assert steps['restore']['tool'] == 'keep_regions_content'
     assert receipt['verdict'] in ('DELIVER_G_DIRECT',) or receipt['verdict'].startswith('REDRAW_G')
+
+
+def test_pipeline_fallback_delivers_quick_n(tmp_path, monkeypatch):
+    """v1.5.0: a hard G failure delivers quick N in the same command, never the legacy default route."""
+    import pipeline
+    source, generated, params = real_g('b1_02')
+    monkeypatch.setattr(g_first, 'run', lambda *a, **k: {
+        'verdict': 'FALLBACK: museum without keep', 'next': [g_first.QUICK_N],
+        'steps': {'g_first': {'mode': 'g-direct'}}, 'output': None})
+    receipt = tmp_path / 'r.json'
+    target = tmp_path / 'o.png'
+    target.write_bytes(b'stale')
+    monkeypatch.setattr('sys.argv', ['pipeline.py', str(source), str(generated), str(params),
+                                     str(target), str(receipt), '--g-direct'])
+    assert pipeline.main() == 0
+    result = json.loads(receipt.read_text())
+    assert set(result['steps']) == {'g_first', 'quick_n'}
+    assert result['verdict'] == 'DELIVER_QUICK_N (G hard failure: museum without keep)'
+    assert load(target).shape == load(source).shape
+
+
+def test_quick_n_is_fast_and_non_generative(tmp_path):
+    import time
+    source, _, _ = real_g('b1_02')
+    params = tmp_path / 'p.json'
+    params.write_text('{}')
+    start = time.time()
+    result = run_cli('pipeline.py', source, source, params, tmp_path / 'q.png', tmp_path / 'q.json', '--quick-n')
+    assert time.time() - start < 30
+    assert result['verdict'] == 'DELIVER_QUICK_N'
+    assert result['steps']['quick_n']['grade']['used'] == ['auto']
+    assert load(tmp_path / 'q.png').shape == load(source).shape
+
+
+def test_pipeline_rejects_removed_g_first(tmp_path):
+    source, generated, params = real_g('b1_02')
+    process = run_tool('pipeline.py', source, generated, params, tmp_path / 'o.png', tmp_path / 'r.json', '--g-first')
+    assert process.returncode != 0 and 'removed' in process.stderr
+
+
+def test_direct_drops_aspect_flag_after_alignment(tmp_path, monkeypatch):
+    """v1.4.6: hosts draw G at fixed sizes; once registered, a changed aspect is not a warning."""
+    source, generated, _ = real_g('b1_02')
+    real_tool = g_first.tool
+    flag = ' | FLAGS: ASPECT_CHANGED: check by eye that nothing important was cut or stretched'
+
+    def tool(name, *args):
+        if name == 'check_g_output.py':
+            report = real_tool(name, *args)
+            report.update(aspect_ok=False, verdict='PASS_AUTOMATIC_CHECKS (judge by eye at normal viewing; user decides)' + flag)
+            return report
+        return real_tool(name, *args)
+
+    monkeypatch.setattr(g_first, 'tool', tool)
+    direct = g_first.run(source, generated, {}, tmp_path / 'd.png', direct=True)['steps']['g_first']
+    assert 'ASPECT_CHANGED' not in direct['precheck']['check_g_output']['verdict']
+    assert direct['precheck']['check_g_output']['aspect_note']
+    light = g_first.run(source, generated, {}, tmp_path / 'l.png')['steps']['g_first']
+    assert 'ASPECT_CHANGED' in light['precheck']['check_g_output']['verdict']
+
+
+def test_keep_preview_draws_boxes_and_grid(tmp_path):
+    source, _, _ = real_g('b1_02')
+    params = tmp_path / 'p.json'
+    params.write_text(json.dumps({'keep': [{'what': 'sign', 'box': [0.1, 0.2, 0.3, 0.4], 'mode': 'content'}]}))
+    preview = tmp_path / 'preview.png'
+    report = run_cli('keep_preview.py', source, params, preview)
+    assert report['boxes'][0]['number'] == 1 and report['verdict'].startswith('LOOK')
+    image = load(preview)
+    assert max(image.shape[:2]) <= 1600
+    h, w = image.shape[:2]
+    edge = image[int(0.2 * h):int(0.4 * h), int(0.1 * w) + 1]
+    assert (edge[..., 0] > 0.9).mean() > 0.8   # the red box edge is drawn
+    params.write_text('{}')
+    assert run_cli('keep_preview.py', source, params, preview)['verdict'].startswith('NO_REGIONS')

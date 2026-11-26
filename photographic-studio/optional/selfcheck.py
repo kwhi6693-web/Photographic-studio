@@ -17,7 +17,7 @@ lite = bool(base and not mods['cv2'] and (Path(__file__).resolve().parent / 'cvl
 geo = bool(base and (mods['cv2'] or lite))
 r = {'python': sys.version.split()[0], 'modules': mods,
      'tools': {'measure.py': base, 'grade.py': base, 'settle.py': geo, 'full_res.py': geo, 'n_trim.py': geo, 'reframe.py': geo,
-               'check_g_output.py': geo, 'text_restore.py': full, 'texture_blend.py': full, 'intensity_check.py': base, 'physics_check.py': base, 'finish.py': geo, 'look_transfer.py': geo, 'keep_regions.py': base, 'improve_check.py': base, 'harmonize.py': base, 'pipeline.py': geo, 'g_drift.py': geo},
+               'check_g_output.py': geo, 'text_restore.py': full, 'texture_blend.py': full, 'intensity_check.py': base, 'physics_check.py': base, 'finish.py': geo, 'look_transfer.py': geo, 'keep_regions.py': base, 'improve_check.py': base, 'harmonize.py': base, 'pipeline.py': geo, 'g_drift.py': geo, 'keep_preview.py': bool(mods['PIL']), 'quick_n.py': geo},
      'opencv_stand_in': ('cvlite (numpy + Pillow): G alignment by scale search + phase correlation; text restore and texture blend skipped' if lite else None),
      'suggested_tier_if_host_has_image_editing': 'T1' if full else ('T1-lite (cvlite: no text restore, no texture blend)' if lite else ('T1-degraded (no automatic scene check, no restore)' if base else 'T3')),
      'suggested_tier_if_host_has_no_image_editing': 'T2' if base else 'T4',

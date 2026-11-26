@@ -15,11 +15,21 @@ from pipeline import reframe_args, tool
 from ps_common import blur, box, load_rgb, save_png, sky_mask, srgb_to_lab, structure_mask
 
 SERIOUS_PHYSICS = frozenset(('halo', 'ghost_edges', 'sky_glow', 'tone_order', 'spotlight_glow'))
-RETRY_G = '重抽一次 G 后再用 --g-first 重跑；第二次仍失败就交付旧链路结果。'
-# v1.4.4 --g-direct: G's own pixels are the photo; only hard failures fall back. A serious optical problem in
-# the first draw asks for a second G (at most two draws) instead of falling back.
-REDRAW_DIRECT = ('补抽第 2 张 G（提示词写明不要凭空加光、光晕、天空发亮），再用 --g-direct --g-draw=2 重跑；'
-                 '第 2 张仍有严重光学问题就交付旧链路。没有额度补抽时，用同一张 G 加 --g-draw=2 重跑即交付旧链路。')
+RETRY_G = '重抽一次 G 后再运行 g_first.py；第二次仍失败就走默认路线。'   # standalone light route (pipeline --g-first removed in v1.4.6)
+# v1.5.0 --g-direct: G's own pixels are the photo. Only hard failures stop it: scene mismatch (collage, new framing)
+# or no alignment ask for a second draw; in draw 2, or for any other hard failure (unreadable input, museum without
+# keep, failed restore or reframe), pipeline.py delivers quick N instead. Colour ratio, physics and confidence are
+# report-only (2026-11-26: the 1.65x ratio and physics false alarms rejected every good first draw on grey photos,
+# and the "no richer than the original" redraw prompt made every second draw greyer than the original).
+REDRAW_HINTS = {
+    'scene correspondence': '补抽第 2 张 G（只给这一张原片；提示词写明：只输出一张照片，构图与原片完全相同，不要拼图、多格、并排），'
+                            '再用 --g-direct --g-draw=2 重跑。',
+    'cannot align': '补抽第 2 张 G（只给这一张原片；提示词写明：只输出一张照片，构图与原片完全相同，不要拼图、多格、并排），'
+                    '再用 --g-direct --g-draw=2 重跑。',
+}
+QUICK_N = 'G 有硬故障，这张由快速 N 直出交付（几秒、不用 G 的像素，效果弱于 G）。'
+REFRAME_MIN_AREA = 0.75       # v1.5.0: a crop keeps at least 75 % of the frame
+REFRAME_MIN_LONG_SIDE = 1000  # and the long side stays >= 1000 px (phone uploads are only ~1150 x 1500)
 GHOST_RESIDUAL_LIMIT = 0.02
 GHOST_LIMITATION = (
     'G 稿局部鬼影（平移复制、重影）无法自动检测，尤其是暗部重复纹理和密集枝叶；'
@@ -45,7 +55,31 @@ def align_g(source, generated):
     aligned = cv2.warpPerspective(generated, homography, (width, height),
                                   flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
                                   borderMode=cv2.BORDER_REPLICATE)
+    # v1.5.0: where G does not reach the original's frame the border is smeared (repeated edge pixels);
+    # g-direct trims that margin off at the end
+    report['_coverage'] = cv2.warpPerspective(np.ones(generated.shape[:2], np.float32), homography, (width, height),
+                                              flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+                                              borderMode=cv2.BORDER_CONSTANT, borderValue=0)
     return aligned, report
+
+
+def covered_rect(coverage, limit=0.999):
+    """Frame-aligned rectangle inside the covered area: repeatedly drop the edge line (row or column) with the most
+    uncovered pixels until none is left."""
+    bad = coverage < limit
+    height, width = bad.shape
+    top, bottom, left, right = 0, height, 0, width
+    while bottom - top > 1 and right - left > 1:
+        block = bad[top:bottom, left:right]
+        sides = {'top': block[0].mean(), 'bottom': block[-1].mean(), 'left': block[:, 0].mean(), 'right': block[:, -1].mean()}
+        side = max(sides, key=sides.get)
+        if sides[side] == 0:
+            break
+        if side == 'top': top += 1
+        elif side == 'bottom': bottom -= 1
+        elif side == 'left': left += 1
+        else: right -= 1
+    return left, top, right, bottom
 
 
 def ghost_fields(source, edited, slope_limit):
@@ -249,6 +283,13 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
     optical problem in draw 1 returns REDRAW_G (no output, no fallback) and in draw 2 falls back. Hard
     fallbacks stay: unreadable input, no alignment, scene mismatch, non-sky chroma over 1.65x, museum
     without keep, failed restore or reframe.
+    v1.5.0: in direct mode only hard failures count: scene mismatch / no alignment ask for draw 2 (REDRAW_G), any
+    other hard failure or draw 2 failing returns FALLBACK (pipeline.py then delivers quick N). The G physics
+    precheck and the confidence check are skipped; colour drift and the final physics check are report-only; a
+    crop that keeps < 75 % of the frame or leaves the long side < 1000 px is skipped (reported).
+    v1.4.6: in direct mode a scene mismatch, failed alignment or non-sky chroma over 1.65x in draw 1 asks for
+    one more G (REDRAW_G with the prompt fix) instead of falling back; an aspect change after successful
+    alignment is no longer flagged.
     v1.4.5: in direct mode keep restore always uses keep_regions content mode (same result with or without
     OpenCV; never stops on a per-box match score), and optical problems are judged only by the final check,
     after keep restore has replaced what G broke; the pre-restore physics result is reported only."""
@@ -281,23 +322,23 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
     }
 
     def finish(reason=None):
+        hint = next((text for key, text in REDRAW_HINTS.items() if reason and key in reason), None)
+        if direct and hint and draw < 2:
+            # v1.4.6: a failure a new draw can fix asks for one more G instead of falling back
+            Path(output).unlink(missing_ok=True)
+            verdict = f'REDRAW_G: {reason}'
+            steps['verdict'] = verdict
+            steps['next'].append(hint)
+            return {'tool': 'g_first.py', 'steps': {'g_first': steps}, 'verdict': verdict,
+                    'next': steps['next'], 'output': None}
         verdict = f'FALLBACK: {reason}' if reason else ('DELIVER_G_DIRECT' if direct else 'DELIVER_G_FIRST')
         steps['verdict'] = verdict
+        if reason and direct:
+            steps['next'].append(QUICK_N)
         if reason and not direct:
             steps['next'].append(RETRY_G)
         return {'tool': 'g_first.py', 'steps': {'g_first': steps}, 'verdict': verdict,
                 'next': steps['next'], 'output': None if reason else str(output)}
-
-    def optical(problems, stage):
-        """--g-direct: serious optical problems ask for a second draw; in draw 2 they fall back."""
-        if draw < 2:
-            Path(output).unlink(missing_ok=True)   # v1.4.5: never leave an older final at the output path
-            verdict = f'REDRAW_G: {stage}: ' + ', '.join(problems)
-            steps['verdict'] = verdict
-            steps['next'].append(REDRAW_DIRECT)
-            return {'tool': 'g_first.py', 'steps': {'g_first': steps}, 'verdict': verdict,
-                    'next': steps['next'], 'output': None}
-        return finish(f'{stage} (draw 2): ' + ', '.join(problems))
 
     if steps['museum_gate'] != 'pass':
         return finish('museum without keep')
@@ -308,6 +349,7 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
     except (OSError, ValueError):
         return finish('cannot read source or G')
     aligned, steps['align'] = align_g(original, draft)
+    coverage = steps['align'].pop('_coverage', None)
     # The raw-draft scene check is independent of our registration.
     scene = tool('check_g_output.py', source, generated)
     precheck = steps['precheck']
@@ -317,36 +359,49 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
                                       if field in scene})
     if aligned is None:
         return finish('cannot align')
+    report = precheck['check_g_output']
+    if direct and report.get('aspect_ok') is False and isinstance(report.get('verdict'), str):
+        # v1.4.6: hosts draw G at fixed sizes (2:3 for a 3:4 photo); the draft is registered onto the original, so
+        # an aspect change is handled, not a warning - 2026-11-26: agents read the flag as a failure and threw
+        # away finals the tool had accepted
+        report['verdict'] = report['verdict'].replace(
+            ' | FLAGS: ASPECT_CHANGED: check by eye that nothing important was cut or stretched', '')
+        report['aspect_note'] = 'G drawn at another aspect; registered onto the original - not a problem'
 
     with tempfile.TemporaryDirectory() as folder_name:
         folder = Path(folder_name)
         source_grid, current = folder / 'source.png', folder / 'aligned.png'
         save_png(original, source_grid)
         save_png(aligned, current)
-        precheck['physics_g'] = physics(source_grid, current, ghost_residual_limit)
+        if direct:
+            precheck['physics_g'] = {'serious': None, 'hints': None, 'verdict': 'SKIPPED_G_DIRECT'}
+        else:
+            precheck['physics_g'] = physics(source_grid, current, ghost_residual_limit)
         lab_source, lab_g = srgb_to_lab(original), srgb_to_lab(load_rgb(current))
         sky = sky_mask(lab_source[..., 0])
         boxes = pixel_boxes(regions, original.shape)
         precheck['drift'] = measure_drift(lab_source, lab_g, ~sky, darkening_thresholds)
-        precheck['confidence'] = check_confidence(lab_source[..., 0], lab_g[..., 0], sky, boxes,
-                                                 confidence_fallback_area)
+        if direct:
+            precheck['confidence'] = {'low_area_outside_keep': None, 'small_flags': [], 'verdict': 'SKIPPED_G_DIRECT'}
+        else:
+            precheck['confidence'] = check_confidence(lab_source[..., 0], lab_g[..., 0], sky, boxes,
+                                                     confidence_fallback_area)
 
         failures = []
         if scene.get('scene_correspondence_ok') is not True:
             failures.append('scene correspondence')
-        if precheck['physics_g'].get('error'):
-            failures.append('G physics check unavailable')
         if not direct:
+            if precheck['physics_g'].get('error'):
+                failures.append('G physics check unavailable')
             failures.extend(precheck['physics_g']['serious'])
-        for name in ('drift', 'confidence'):
-            verdict = precheck[name]['verdict']
-            if verdict.startswith('FALLBACK: '):
-                failures.append(verdict.removeprefix('FALLBACK: '))
+            for name in ('drift', 'confidence'):
+                verdict = precheck[name]['verdict']
+                if verdict.startswith('FALLBACK: '):
+                    failures.append(verdict.removeprefix('FALLBACK: '))
+        elif precheck['drift']['verdict'].startswith('FALLBACK: '):
+            precheck['drift']['verdict'] = 'REPORT: ' + precheck['drift']['verdict'].removeprefix('FALLBACK: ')
         if failures:
             return finish('precheck: ' + ', '.join(failures))
-        if direct and precheck['physics_g']['serious']:
-            steps['next'].append('前置体检在贴回前发现严重光学问题（' + ', '.join(precheck['physics_g']['serious'])
-                                 + '），以贴回后的终检为准；终检通过时请目测这些位置。')
 
         restored = folder / 'restored.png'
         steps['restore'] = restore_details(source_grid, current, restored, folder, regions, boxes,
@@ -380,12 +435,38 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
             ok = bool(size and size == source_report.get('output_size') and framed.exists() and source_framed.exists())
             steps['reframe'] = {'verdict': 'REFRAMED' if ok else 'FAILED', 'args': geometry,
                                 'output_size': size, 'original_reframed_same_way': ok,
+                                'area_retained': frame_report.get('area_retained'),
                                 'warnings': frame_report.get('warnings', [])}
             if not ok:
                 return finish('reframe failed')
-            current, source_grid = framed, source_framed
+            too_much = direct and ((frame_report.get('area_retained') or 1) < REFRAME_MIN_AREA
+                                   or max(size) < REFRAME_MIN_LONG_SIDE)
+            if too_much:
+                steps['reframe']['verdict'] = ('SKIPPED_TOO_TIGHT: keeps < 75 % of the frame or long side < 1000 px; '
+                                               'delivered uncropped')
+            else:
+                current, source_grid = framed, source_framed
         else:
             steps['reframe'] = {'verdict': 'NO_REFRAME'}
+
+        if direct and coverage is not None:
+            cover_png = folder / 'coverage.png'
+            Image.fromarray(np.uint8(np.clip(coverage, 0, 1) * 255)).convert('RGB').save(cover_png)
+            if steps['reframe'].get('verdict') == 'REFRAMED':
+                tool('reframe.py', cover_png, folder / 'coverage_framed.png', *geometry)
+                cover_png = folder / 'coverage_framed.png'
+            image = load_rgb(current)
+            mask = load_rgb(cover_png)[..., 0] if cover_png.exists() else np.ones(image.shape[:2])
+            if mask.shape == image.shape[:2]:
+                left, top, right, bottom = covered_rect(mask, 0.99)
+                height, width = mask.shape
+                if (left, top, right, bottom) != (0, 0, width, height):
+                    trimmed_edge, source_edge = folder / 'edge.png', folder / 'source_edge.png'
+                    save_png(image[top:bottom, left:right], trimmed_edge)
+                    save_png(load_rgb(source_grid)[top:bottom, left:right], source_edge)
+                    current, source_grid = trimmed_edge, source_edge
+                steps['edge_trim'] = {'px_trimmed_left_top_right_bottom': [left, top, width - right, height - bottom],
+                                      'area_retained': round((right - left) * (bottom - top) / (width * height), 4)}
 
         trimmed = folder / 'trimmed.png'
         trim = tool('n_trim.py', current, trimmed)
@@ -400,12 +481,12 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
         candidate = folder / 'candidate.png'
         save_png(load_rgb(current), candidate)
         final = steps['physics_final'] = physics(source_grid, candidate, ghost_residual_limit)
-        if final.get('error'):
+        if final.get('error') and not direct:
             return finish('final physics check unavailable')
-        if final['serious']:
-            if direct:
-                return optical(final['serious'], 'final physics')
+        if final.get('serious') and not direct:
             return finish('final physics: ' + ', '.join(final['serious']))
+        if direct:
+            final['verdict'] = 'REPORT_ONLY_G_DIRECT'
         shutil.copyfile(candidate, output)
         return finish()
 
