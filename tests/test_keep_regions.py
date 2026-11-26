@@ -38,7 +38,12 @@ def test_colour_mode_stops_a_whole_frame_cast_inside_the_region(tmp_path):
     assert np.abs(region(k, corner) - region(e, corner)).max() < 0.5   # outside untouched
     # this box cuts straight through smooth sky, so keeping the old colour there leaves a step the eye can see: the
     # seam check must say so (a real brief draws the box around an object, whose own edge hides the step)
-    assert rec['flags'] and rec['flags'][0].startswith('KEEP_SEAM'), rec
+    # v1.6.0 (approved 2026-11-26): above 3 dE a wider transition is tried; only a step above 6 dE is flagged
+    seam = rec['regions'][0]['seam_dE']
+    assert seam > 3.0, rec
+    assert bool(rec['flags']) == (seam > 6.0), rec
+    if rec['flags']:
+        assert rec['flags'][0].startswith('KEEP_SEAM'), rec
 
 
 def test_content_mode_removes_what_g_repainted_and_keeps_the_scene_tone(tmp_path):

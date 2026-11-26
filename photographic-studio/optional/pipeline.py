@@ -103,12 +103,21 @@ def main():
                  'settle.py, harmonize.py ...) was removed from the package in v1.6.2; it is archived in the '
                  "repository's legacy/v1.4 folder.")
     if direct:
-        from g_first import run
+        from g_first import resolve_ghost_limit, run
 
         skip_reason = None
         if '--no-g' in sys.argv or Path(src).resolve() == Path(g).resolve():
             skip_reason = 'no G'
-        if skip_reason is None and int(opt.get('g-draw', 1)) == 1:
+        cli_limit = opt.get('ghost-residual-limit')
+        try:
+            cli_limit = None if cli_limit is None else float(cli_limit)
+            draw = int(opt.get('g-draw', 1))
+            if draw not in (1, 2):
+                raise ValueError('--g-draw must be 1 or 2')
+            resolve_ghost_limit(params, cli_limit)   # v1.6.3 fix: bad options fail before the look route as well
+        except ValueError as exc:
+            sys.exit(f'pipeline.py: {exc}')
+        if skip_reason is None and draw == 1:
             from look_route import triggers
             from keep_regions import regions_of
             rule = rec['steps']['look_trigger'] = triggers(src, regions_of(params))
@@ -117,12 +126,7 @@ def main():
                 done = deliver_look([g], why)
                 if done is not None:
                     return done
-        cli_limit = opt.get('ghost-residual-limit')
         try:
-            cli_limit = None if cli_limit is None else float(cli_limit)
-            draw = int(opt.get('g-draw', 1))
-            if draw not in (1, 2):
-                raise ValueError('--g-draw must be 1 or 2')
             trial = run(src, g, params, out, genre, skip_reason=skip_reason,
                         ghost_residual_limit_cli=cli_limit, direct=direct, draw=draw)
         except ValueError as exc:

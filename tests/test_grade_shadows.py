@@ -2,7 +2,10 @@ import numpy as np
 import pytest
 
 from grade import black_anchor
-from pipeline import final_verdict, gate_notes
+from conftest import load_legacy
+
+_v14 = load_legacy('pipeline')   # v1.6.2: the v1.4 route's verdict helpers live in legacy/v1.4
+final_verdict, gate_notes = _v14.final_verdict, _v14.gate_notes
 
 
 def test_shadows_only_mode_leaves_darkening_to_harmonize():

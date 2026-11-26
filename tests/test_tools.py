@@ -1,7 +1,7 @@
 """Every tool starts, and the grading tool is a deterministic function that respects its own limits."""
 import hashlib, json
 import synth
-from conftest import TOOLS, load, run_tool
+from conftest import LEGACY, TOOLS, load, run_tool
 
 
 def test_selfcheck_reports_all_tools_runnable():
@@ -9,7 +9,16 @@ def test_selfcheck_reports_all_tools_runnable():
     # v1.2.9: without OpenCV only text restore and texture blend cannot run (cvlite stands in for the rest)
     need_cv = {'text_restore.py', 'texture_blend.py'} if r['modules']['cv2'] is None else set()
     assert all(v for k, v in r['tools'].items() if k not in need_cv), r['tools']
-    assert set(r['tools']) | {'ps_common.py', 'selfcheck.py', 'cvlite.py', 'exposure_recovery.py', 'g_first.py'} == {p.name for p in TOOLS.glob('*.py')}
+    # v1.6.2 (approved 2026-11-26): exposure_recovery.py and the other v1.4-route tools left the package for legacy/v1.4
+    assert set(r['tools']) | {'ps_common.py', 'selfcheck.py', 'cvlite.py'} == {p.name for p in TOOLS.glob('*.py')}
+
+
+def test_legacy_selfcheck_reports_all_tools_runnable():
+    import subprocess, sys
+    r = json.loads(subprocess.run([sys.executable, '-B', str(LEGACY / 'selfcheck.py')], capture_output=True, text=True).stdout)
+    need_cv = {'text_restore.py', 'texture_blend.py'} if r['modules']['cv2'] is None else set()
+    assert all(v for k, v in r['tools'].items() if k not in need_cv), r['tools']
+    assert set(r['tools']) | {'ps_common.py', 'selfcheck.py', 'cvlite.py', 'exposure_recovery.py', 'g_first.py'} == {p.name for p in LEGACY.glob('*.py')}
 
 
 def test_g_first_help():

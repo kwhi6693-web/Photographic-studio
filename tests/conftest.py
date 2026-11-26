@@ -25,6 +25,23 @@ def tool_dir(name, args=()):
     return TOOLS if (TOOLS / name).exists() else LEGACY
 
 
+def load_legacy(name):
+    """Import a module of the legacy/v1.4 snapshot as its own copy (its imports resolve inside the snapshot); the
+    package's modules stay what every other test imports."""
+    import importlib
+    ours = lambda: [k for k in list(sys.modules) if (LEGACY / f'{k}.py').exists()]
+    saved = {k: sys.modules.pop(k) for k in ours()}
+    sys.path.insert(0, str(LEGACY))
+    try:
+        module = importlib.import_module(name)
+    finally:
+        sys.path.remove(str(LEGACY))
+        for k in ours():
+            sys.modules.pop(k)
+        sys.modules.update(saved)
+    return module
+
+
 def run_tool(name, *args):
     """Run one tool exactly as an agent would: a separate process, unmodified."""
     return subprocess.run([sys.executable, '-B', str(tool_dir(name, args) / name), *map(str, args)],
