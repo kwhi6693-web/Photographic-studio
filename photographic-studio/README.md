@@ -1,33 +1,26 @@
-# Photographic Studio v1.6.1
+# Photographic Studio v1.6.2
 
 **v1.0 规则文字已获用户批准（2026-11-12）；v1.0.1 是用户委托维护者做的一致性修订，不改变修图效果。** 独立的非人像摄影后期 Skill：用户从手机相册发一张照片、说一句“修”，就得到一张有明显摄影表现力、仍然高度像原片、符合自然光规律、看不出 AI 痕迹的成片。面向任何能看图的 agent；需要具备生图能力的大模型 agent；目前在 image2.6 上实测过（手机与网页版）。
 
-## 它怎么工作（v1.5.0）
+## 它怎么工作（v1.6.2）
 
 1. **大模型读片**：看点和风格、2–4 个具体的提升动作（光、分离、色彩、纵深）、要保护的文字和人（keep）、按专业构图手法决定裁不裁。
 2. **核对框位**：`keep_preview.py` 把 keep 框画在原片上，看一眼确认盖准。
 3. **G 出片**：一次只给 G 一张原片，提示词由提升动作和自然光要求组成；看四条硬伤，拼图或构图变了就补抽一次。
-4. **一条命令收尾**：`pipeline.py --g-direct` 对齐、把 keep 贴回原片像素、裁掉 G 没画到的窄边、构图裁切、高光保护，几秒钟完成。色彩倍数和物理检查只记录；只有硬故障（拼图、对不上、贴回或裁切失败、博物馆没有 keep）才拦，两张 G 都不行就自动交付快速 N 直出。
-5. **只交一张成片**，加一行“看点｜风格”和成片标签。要求非生成式时用 `--quick-n`，不用 G。
+4. **一条命令收尾**：`pipeline.py --g-direct` 对齐、两个只读哨兵（纹理重画、暗部脑补）、把 keep 贴回原片像素、裁掉 G 没画到的窄边、构图裁切、高光保护，几秒钟完成。色彩倍数和物理检查只记录；只有硬故障（拼图、对不上、贴回或裁切失败、博物馆没有 keep）才拦，两张 G 都不行就自动交付快速 N 直出。
+5. **交付一张成片 + 用到的中间稿**（.jpg 链接），加一行“看点｜风格”和成片标签。要求非生成式时用 `--quick-n`，不用 G。
+
+v1.4 的旧默认路线（光色迁移 + 多轮调色）已移出安装包，归档在仓库 `legacy/v1.4/`；下文更新记录里提到的 `finish.py`、`settle.py`、`harmonize.py` 等都在那里。
 
 ## 包里有什么
 
 - `SKILL.md`：唯一的执行说明。
-- `references/`：总则、读片和处方、七类题材、导演单、G 提示词、物理、力度、自然度、贴回、构图、交付、口味参照、验证批次。
-- `optional/`：工具（需要 numpy、Pillow；有 OpenCV 时更快，并多出文字贴回和补纹理两步，没有时由 `cvlite.py` 代替）。
-  - `pipeline.py --g-direct`：v1.5.0 主线；`quick_n.py`（`pipeline.py --quick-n`）：快速 N 直出；`keep_preview.py`：框位预览。
-  - 以下是 v1.4 旧默认路线的工具，代码保留，`SKILL.md` 不再使用：
-  - `finish.py`：默认路线一步完成，含自动重做阶梯。
-  - `look_transfer.py`：原片像素 + G 光色；拦下 G 凭空加的光和删掉的光。
-  - `grade.py`：按导演单调色。
-  - `physics_check.py`、`intensity_check.py`：物理与力度检查。
-  - `settle.py`：第 6 步，只去掉超出上限的部分。
-  - `keep_regions.py`：导演单里“不能动”的区域，颜色不被带偏、内容不被 G 重画（v1.1.0）。
-  - `improve_check.py`：导演单的每个提升动作在成片里是否看得出，以及动作边缘有没有在天空里留下光圈（v1.2.0）。
-  - `harmonize.py`：对待交付文件按“光 → 层次 → 颜色”收口并验收（v1.2.5）。
-  - `pipeline.py`：G 之后的工具一条命令跑完，构图时自动把原片裁成同一框（v1.2.7）。
-  - `full_res.py`：把小尺寸上的修图带回原图尺寸（引擎用）。
-  - `check_g_output.py`、`measure.py`、`selfcheck.py`、`reframe.py`、`n_trim.py`、`text_restore.py`、`texture_blend.py`、`ps_common.py`。
+- `references/`：读片（`story_style.md`、`craft_reading.md`）、七类题材（`genres/`）、构图（`reframe_rules.md`）、自然光物理（`physics.md`）、宿主分级（`capability_tiers.md`）、交付（`delivery.md`）。
+- `optional/`：工具（需要 numpy、Pillow；没有 OpenCV 时由 `cvlite.py` 代替，结果相同）。
+  - `pipeline.py --g-direct`：主线，内部调用 `g_first.py`（对齐、场景检查 `check_g_output.py`、哨兵 `sentinel.py`、贴回 `keep_regions.py`、构图 `reframe.py`、高光保护 `n_trim.py`、物理记录 `physics_check.py`；对齐用到 `look_transfer.py` 的配准函数）。
+  - `pipeline.py --quick-n`（`quick_n.py`）：快速 N 直出，内部调用 `grade.py`、`reframe.py`、`n_trim.py`。
+  - `keep_preview.py`：框位预览；`to_jpeg.py`：交付用 JPEG；`selfcheck.py`：自检；`ps_common.py`、`cvlite.py`：公用函数。
+- v1.4 旧默认路线的 11 个脚本和 12 份参考文件归档在仓库 `legacy/v1.4/`（v1.6.2），不随 Skill 安装。
 - 早期的成片对比、口味记录和 v0.1.1 – v0.3.8 的变更记录已移到仓库的 `docs/history/`（v1.2.4），不随 Skill 安装，默认流程本来也不读。
 - `SHA256SUMS.txt`：全部文件的校验值。
 - `LICENSE`：MIT（2026-11-14 起，此前为 AGPL-3.0），适用于执行说明、参考文件和工具；仓库里的照片版权归作者，不在许可范围内。
@@ -56,6 +49,13 @@
 ## v1.0 相对 v0.3.8
 
 工具输出与 v0.3.8 相同（回归 49 项逐像素一致）。`finish.py` 有两处小改：参数文件为空时按“不加调色”处理（之前会报错）；成片与原片几乎没有差别（平均像素差 < 1.5）时记为力度问题 `no_visible_change`，防止“改了等于没改”被当作合格（用户采纳的成片最小也有 4.9）。规则重写：`SKILL.md` 和 `principles.md` 按现在的实际行为重写，去掉历代补丁之间的矛盾（例如“N 不得替代 G”“交付 G 并标为 G”等旧条目）；退役 5 个过时的参考文件（`original_workflow.md`、`aesthetic_standard.md`、`scene_playbooks.md`、`generative_guardrails.md`、`quality_review.md`，有用的内容并入总则）；删掉“改用文件方式上传”的提示，写明只支持相册上传；口味参照新增 3 组用户采纳的成片。
+
+## v1.6.2 相对 v1.6.1（瘦身，结果不变）
+
+- 移出安装包、归档到仓库 `legacy/v1.4/`：11 个只服务于 v1.4 旧默认路线的脚本（finish、settle、harmonize、improve_check、exposure_recovery、g_drift、intensity_check、full_res、text_restore、texture_blend、measure）和 12 份参考文件（director_brief、craft_prescriptions、n_grade、n_trim、intensity、naturalness、detail_restore、g_post_check、g_prompt_template、principles、validation_protocol、flag_log_template）。按真实调用链判断（以 `pipeline.py --g-direct`、`--quick-n`、`selfcheck.py`、`keep_preview.py`、`to_jpeg.py` 为入口跟踪每个进程实际加载的文件），不按文件名。`look_transfer.py` 仍被对齐步骤调用，保留。
+- `pipeline.py` 只剩 `--g-direct` 和 `--quick-n` 两条路（364 → 约 130 行），不带参数会报错并指向归档；`g_first.py` 去掉非 direct 的旧分支。
+- 回归：11 组（g-direct 9 组含夜街 39 框、博物馆、REDRAW、第 2 张失败转快速 N；快速 N 2 组），有 OpenCV 和无 OpenCV 两种环境，成片逐像素与 v1.6.1 相同。回执里贴回工具名修正为实际使用的 `keep_regions_content`（以前有 OpenCV 时误记成 text_restore）。
+- 文档：`capability_tiers.md` 改写到 v1.6（自检不加 `-I`；T1/T2 走 `--g-direct` / `--quick-n`）；`delivery.md` 按宿主写存图方式（ChatGPT iPhone：G 中间稿可长按存；.jpg 链接先进“文件”，再“存储图像”进照片）；建筑、室内、静物题材页去掉 clarity、局部反差、intensity_check 等旧路线参数。
 
 ## v1.6.1 相对 v1.6.0（第一轮对比用，待盲选验收）
 
