@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.6-c8963e?style=flat-square" alt="version 1.2.6">
+  <img src="https://img.shields.io/badge/version-1.6.3-c8963e?style=flat-square" alt="version 1.6.3">
   <img src="https://img.shields.io/badge/engine-2.3.1%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.1">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
@@ -42,7 +42,7 @@ For people who **love taking photos but don't want to spend time on post-process
 - Doing it yourself (Lightroom and the like) takes skill and time for every photo.
 - One-tap enhance buttons either change almost nothing, or over-process: plastic textures, fake HDR, invented light, details the camera never saw.
 
-Photographic Studio sits in between: **one word, one finished photo**. It reads the photo first, then edits it so that it is clearly better, still the moment you captured (every pixel comes from your original), with light that obeys real physics, and no AI look. Architecture, street, landscape, night, interiors, still life and museum pieces — **not portraits**.
+Photographic Studio sits in between: **one word, one finished photo**. It reads the photo first, then edits it so that it is clearly better, still the moment you captured (nothing added or removed), with light that obeys real physics, and no AI look. Architecture, street, landscape, night, interiors, still life and museum pieces — **not portraits**.
 
 ---
 
@@ -113,9 +113,9 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 | **Skill** | the `photographic-studio/` folder: instructions plus tools that an AI agent follows |
 | **Agent / host** | the AI app you chat with. It must be an **LLM agent with image generation**: it can look at a photo and edit it with its own image model |
 | **G** | the image model of your agent (or of an API). It makes a draft; **only its light and colour are used** |
-| **N** | this project's own tools: fixed rules, no AI; they make the actual finished photo from your original's pixels |
+| **N** | this project's own tools: fixed rules, no AI; they align the draft, paste back protected details, crop and protect highlights — and make the photo on their own when no G draft is usable |
 | **Director's brief** | what the agent writes after reading the photo: the point of interest (a story is one kind; also geometry, light, colour, texture, mood, space, minimalism), diagnoses, subject, tone, colour, what must not change, crop |
-| **Label** | how a photo was made: `original pixels + G light & colour → N refine` (normal) · `N direct` (no usable G draft, N only) · `G + detail restore` (rare upgrade route) |
+| **Label** | how a photo was made (v1.6.3): `G direct + detail restore` (default) · `original pixels + G light & colour` (very dark photos, large protected areas, or when G direct fails) · `N direct` (no usable G draft) · `+ reframe` when cropped |
 | **Receipt** | the record of one photo: brief, prompt, parameters, check results. Hidden unless you say `show receipt` |
 | **Capability tiers** | what the skill does when your agent can't edit images or run Python (T1–T4, below) |
 | **Engine** | the same pipeline as a Python program, using model APIs with your own key (developers) |
@@ -125,6 +125,8 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 ---
 
 ## 🎬 How it edits a photo
+
+> **v1.6.3 note:** the steps below describe the v1.2.6 design. Since then the delivery route has changed: most photos are delivered as **G direct + detail restore** (the text, signs, people and exhibits you see are pasted back from your original); very dark photos, or photos whose protected areas cover over 40% of the frame, use **original pixels + G light & colour**. The step-4 refine-and-harmonize pass belongs to the old v1.4 route, now archived in `legacy/v1.4/`. See [Changes](#-changes).
 
 <p align="center">
   <img src="docs/images/pipeline.svg" alt="Read → Director's brief → Light & colour → Refine & check → One photo" width="100%">
@@ -144,7 +146,7 @@ Do not touch  : shape, patterns, finial, label, the real reflections in the glas
 Composition   : keep — the line drawing, the vase and the reflection tell the exhibition together
 ```
 
-**3 · Borrow only AI's light &amp; colour**　Your agent's image model (G) makes a version, but **only its light and colour are taken**. Every pixel of the result still comes from your original — the text, the people, the textures are the ones you actually captured.
+**3 · Use AI's draft, protect what matters**　Your agent's image model (G) makes a version. Usually that version is delivered after it is aligned and the text, signs, people and exhibits are pasted back from your original's pixels. For very dark photos, or when protected areas are large, **only its light and colour are taken** and every pixel comes from your original.
 
 **4 · Refine and check**　The project's deterministic tools (N) finish the brief, then the image has to pass three gates:
 
@@ -279,7 +281,7 @@ It looks at what the host can do first, then decides how to work:
 
 | Tier | Host can… | How the photo is made |
 |:--:|---|---|
-| **T1** | edit images with a model **and** run Python | original pixels + AI light &amp; colour → refine |
+| **T1** | edit images with a model **and** run Python | G direct + detail restore, or original pixels + AI light &amp; colour |
 | **T2** | run Python only | deterministic grading |
 | **T3** | edit images with a model only | the model's edit, honestly labelled |
 | **T4** | neither | a reading of the photo and editing advice |
@@ -294,13 +296,15 @@ It looks at what the host can do first, then decides how to work:
 
 **Can I use it on my phone?** Yes — the skill was developed and tested on image2.6 in an iPhone app.
 
+**How do I save the photos to my iPhone?** In the iPhone app it was tested in: long-press the G intermediate to save it to Photos. The finished photo comes as a .jpg link — tapping it saves it to Files; open it in Files, then **Share → Save Image** to put it in Photos.
+
 **How long does one photo take?** In the agent app, measured: about 3–4 minutes per photo, one after another for a batch. The engine's target is 2 minutes or less per photo.
 
 **Can I send several photos at once?** Yes. It edits them one by one and delivers one finished photo each.
 
 **Will it retouch portraits?** No. People as the main subject are out of scope.
 
-**Will it change what is in my photo?** No objects are added or removed, nothing outside your original frame is ever added (it may straighten, correct perspective or crop where that presents the photo better), and every pixel comes from your original.
+**Will it change what is in my photo?** No objects are added or removed, nothing outside your original frame is ever added (it may straighten, correct perspective or crop where that presents the photo better), and the text, signs, people and exhibits you see are kept from your original.
 
 **What if I don't like the result?** Say what's wrong in a few words (`too warm`, `a bit clearer`): it rewrites the brief and redoes the photo.
 
@@ -358,6 +362,15 @@ LICENSE                       ← MIT
 
 ---
 
+## 📝 Changes
+
+- **v1.6.3** — new route for very dark photos, protected areas over 40% of the frame, or a failed G direct: original pixels + G light & colour; quick N clears haze in dark areas before lifting them. Blind test against Lightroom Auto on 4 photos: 2 wins, 0 ties, 2 losses (lost both bright photos, won both dark ones).
+- **v1.6.2** — slimmer package: scripts and references used only by the v1.4 route moved to `legacy/v1.4/`; results unchanged (pixel-identical).
+- **v1.6.1** — step-1 reading restored to v1.4.1 depth (genre page, story style, craft reading); not separately blind-tested.
+- **v1.6.0** — report-only checks for redrawn texture and invented dark-area detail; better quick N on very dark photos; faster detail restore and safer small boxes; finished photo and G intermediate delivered as .jpg links.
+
+Earlier versions: see [Releases](https://github.com/kwhi6693-web/Photographic-studio/releases) and `photographic-studio/README.md`.
+
 ## 📜 License
 
 The skill — instructions, references and tools — is licensed under the [MIT License](LICENSE) (since 2026-11-14; earlier versions were AGPL-3.0).
@@ -366,5 +379,5 @@ The example and test photographs (`docs/gallery/`, `docs/history/taste/`, `tests
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.2.6 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
+  <sub>Photographic Studio v1.6.3 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
 </p>
