@@ -1,33 +1,27 @@
-# Photographic Studio v1.5.0
+# Photographic Studio v1.6.3
 
 **v1.0 规则文字已获用户批准（2026-11-12）；v1.0.1 是用户委托维护者做的一致性修订，不改变修图效果。** 独立的非人像摄影后期 Skill：用户从手机相册发一张照片、说一句“修”，就得到一张有明显摄影表现力、仍然高度像原片、符合自然光规律、看不出 AI 痕迹的成片。面向任何能看图的 agent；需要具备生图能力的大模型 agent；目前在 image2.6 上实测过（手机与网页版）。
 
-## 它怎么工作（v1.5.0）
+## 它怎么工作（v1.6.2）
 
 1. **大模型读片**：看点和风格、2–4 个具体的提升动作（光、分离、色彩、纵深）、要保护的文字和人（keep）、按专业构图手法决定裁不裁。
 2. **核对框位**：`keep_preview.py` 把 keep 框画在原片上，看一眼确认盖准。
 3. **G 出片**：一次只给 G 一张原片，提示词由提升动作和自然光要求组成；看四条硬伤，拼图或构图变了就补抽一次。
-4. **一条命令收尾**：`pipeline.py --g-direct` 对齐、把 keep 贴回原片像素、裁掉 G 没画到的窄边、构图裁切、高光保护，几秒钟完成。色彩倍数和物理检查只记录；只有硬故障（拼图、对不上、贴回或裁切失败、博物馆没有 keep）才拦，两张 G 都不行就自动交付快速 N 直出。
-5. **只交一张成片**，加一行“看点｜风格”和成片标签。要求非生成式时用 `--quick-n`，不用 G。
+4. **一条命令收尾**：`pipeline.py --g-direct` 对齐、两个只读哨兵（纹理重画、暗部脑补）、把 keep 贴回原片像素、裁掉 G 没画到的窄边、构图裁切、高光保护，几秒钟完成。色彩倍数和物理检查只记录；只有硬故障（拼图、对不上、贴回或裁切失败、博物馆没有 keep）才拦，两张 G 都不行就自动交付快速 N 直出。
+5. **交付一张成片 + 用到的中间稿**（.jpg 链接），加一行“看点｜风格”和成片标签。要求非生成式时用 `--quick-n`，不用 G。
+
+v1.4 的旧默认路线（光色迁移 + 多轮调色）已移出安装包，归档在仓库 `legacy/v1.4/`；下文更新记录里提到的 `finish.py`、`settle.py`、`harmonize.py` 等都在那里。
 
 ## 包里有什么
 
 - `SKILL.md`：唯一的执行说明。
-- `references/`：总则、读片和处方、七类题材、导演单、G 提示词、物理、力度、自然度、贴回、构图、交付、口味参照、验证批次。
-- `optional/`：工具（需要 numpy、Pillow；有 OpenCV 时更快，并多出文字贴回和补纹理两步，没有时由 `cvlite.py` 代替）。
-  - `pipeline.py --g-direct`：v1.5.0 主线；`quick_n.py`（`pipeline.py --quick-n`）：快速 N 直出；`keep_preview.py`：框位预览。
-  - 以下是 v1.4 旧默认路线的工具，代码保留，`SKILL.md` 不再使用：
-  - `finish.py`：默认路线一步完成，含自动重做阶梯。
-  - `look_transfer.py`：原片像素 + G 光色；拦下 G 凭空加的光和删掉的光。
-  - `grade.py`：按导演单调色。
-  - `physics_check.py`、`intensity_check.py`：物理与力度检查。
-  - `settle.py`：第 6 步，只去掉超出上限的部分。
-  - `keep_regions.py`：导演单里“不能动”的区域，颜色不被带偏、内容不被 G 重画（v1.1.0）。
-  - `improve_check.py`：导演单的每个提升动作在成片里是否看得出，以及动作边缘有没有在天空里留下光圈（v1.2.0）。
-  - `harmonize.py`：对待交付文件按“光 → 层次 → 颜色”收口并验收（v1.2.5）。
-  - `pipeline.py`：G 之后的工具一条命令跑完，构图时自动把原片裁成同一框（v1.2.7）。
-  - `full_res.py`：把小尺寸上的修图带回原图尺寸（引擎用）。
-  - `check_g_output.py`、`measure.py`、`selfcheck.py`、`reframe.py`、`n_trim.py`、`text_restore.py`、`texture_blend.py`、`ps_common.py`。
+- `references/`：读片（`story_style.md`、`craft_reading.md`）、七类题材（`genres/`）、构图（`reframe_rules.md`）、自然光物理（`physics.md`）、宿主分级（`capability_tiers.md`）、交付（`delivery.md`）。
+- `optional/`：工具（需要 numpy、Pillow；没有 OpenCV 时由 `cvlite.py` 代替，结果相同）。
+  - `pipeline.py --g-direct`：主线，内部调用 `g_first.py`（对齐、场景检查 `check_g_output.py`、哨兵 `sentinel.py`、贴回 `keep_regions.py`、构图 `reframe.py`、高光保护 `n_trim.py`、物理记录 `physics_check.py`；对齐用到 `look_transfer.py` 的配准函数）。
+  - `look_route.py`（v1.6.3）：“原片像素 + G 光色”，由 `pipeline.py --g-direct` 在极暗原片、大面积 keep 或 G 直出失败时自动调用（内部用 `look_transfer.py`）。
+  - `pipeline.py --quick-n`（`quick_n.py`）：快速 N 直出，内部调用 `grade.py`、`reframe.py`、`n_trim.py`。
+  - `keep_preview.py`：框位预览；`to_jpeg.py`：交付用 JPEG；`selfcheck.py`：自检；`ps_common.py`、`cvlite.py`：公用函数。
+- v1.4 旧默认路线的 11 个脚本和 12 份参考文件归档在仓库 `legacy/v1.4/`（v1.6.2），不随 Skill 安装。
 - 早期的成片对比、口味记录和 v0.1.1 – v0.3.8 的变更记录已移到仓库的 `docs/history/`（v1.2.4），不随 Skill 安装，默认流程本来也不读。
 - `SHA256SUMS.txt`：全部文件的校验值。
 - `LICENSE`：MIT（2026-11-14 起，此前为 AGPL-3.0），适用于执行说明、参考文件和工具；仓库里的照片版权归作者，不在许可范围内。
@@ -56,6 +50,39 @@
 ## v1.0 相对 v0.3.8
 
 工具输出与 v0.3.8 相同（回归 49 项逐像素一致）。`finish.py` 有两处小改：参数文件为空时按“不加调色”处理（之前会报错）；成片与原片几乎没有差别（平均像素差 < 1.5）时记为力度问题 `no_visible_change`，防止“改了等于没改”被当作合格（用户采纳的成片最小也有 4.9）。规则重写：`SKILL.md` 和 `principles.md` 按现在的实际行为重写，去掉历代补丁之间的矛盾（例如“N 不得替代 G”“交付 G 并标为 G”等旧条目）；退役 5 个过时的参考文件（`original_workflow.md`、`aesthetic_standard.md`、`scene_playbooks.md`、`generative_guardrails.md`、`quality_review.md`，有用的内容并入总则）；删掉“改用文件方式上传”的提示，写明只支持相册上传；口味参照新增 3 组用户采纳的成片。
+
+## v1.6.3 相对 v1.6.2（暗图走“原片像素 + G 光色”）
+
+起因：2026-11-26 实测 4 张（v1.6.2），亮图 G 直出两张都一次过（哨兵 0.85），两张暗图（02 暗柜玻璃向日葵、03 逆光檐下灯笼）两次 G 都被拦（纹理 1.59/1.66、暗部 2.40/4.04），退回的快速 N 一张平淡、一张把逆光雾提灰。把被废掉的 4 张 G 稿交给包里的 `look_transfer.py`（成片像素全是原片，只借 G 的光和颜色），两张都明显胜过快速 N（用户与第二审阅者：02 选 G1 光色，03 两张都好、G2 光色略佳），输出哨兵 1.02–1.17。
+- 新增 `look_route.py`，由 `pipeline.py --g-direct` 自动调用，判断全由代码算并写进回执（`look_trigger`）：
+  - 第 1 张 G 回来时，原片极暗（中位亮度 < 15 且六成以上低于 20）或 keep 框并集超过画面 40%，直接走这条，不再补抽第 2 张；
+  - G 直出彻底失败（第 2 张或其他硬故障）时，先走这条，再考虑快速 N；第 2 张时加 `--g-prev=第1张G`，用两张里 G 稿纹理哨兵更低的一张；
+  - 暗部下限：结果中位亮度不低于原片的 55%（03：3.1 → 4.0，留住格窗轮廓）；之后照常构图裁切和高光保护。
+- 修正（2026-11-27，仓库测试发现）：极暗原片直接走新路线时，命令行参数（`--g-draw`、`--ghost-residual-limit`）没有先校验，填错也不报错；现在先校验再分路线。
+- 快速 N 的欠曝分支先去暗部的逆光雾再提亮（03：原来中位 13.6、雾带发灰 → 9.5、雾带明显变淡）。
+- 回归：16 组 × 有/无 OpenCV。没有触发新规则的 9 组（夜街、西湖、老墙、博物馆、黄墙、回廊、庭院快速 N 等）与 v1.6.2 逐像素相同；触发的（灯笼、02、03、大 keep 测试）改走新路线，有/无 OpenCV 平均像素差 0.2–1.1。
+
+## v1.6.2 相对 v1.6.1（瘦身，结果不变）
+
+- 移出安装包、归档到仓库 `legacy/v1.4/`：11 个只服务于 v1.4 旧默认路线的脚本（finish、settle、harmonize、improve_check、exposure_recovery、g_drift、intensity_check、full_res、text_restore、texture_blend、measure）和 12 份参考文件（director_brief、craft_prescriptions、n_grade、n_trim、intensity、naturalness、detail_restore、g_post_check、g_prompt_template、principles、validation_protocol、flag_log_template）。按真实调用链判断（以 `pipeline.py --g-direct`、`--quick-n`、`selfcheck.py`、`keep_preview.py`、`to_jpeg.py` 为入口跟踪每个进程实际加载的文件），不按文件名。`look_transfer.py` 仍被对齐步骤调用，保留。
+- `pipeline.py` 只剩 `--g-direct` 和 `--quick-n` 两条路（364 → 约 130 行），不带参数会报错并指向归档；`g_first.py` 去掉非 direct 的旧分支。
+- 回归：11 组（g-direct 9 组含夜街 39 框、博物馆、REDRAW、第 2 张失败转快速 N；快速 N 2 组），有 OpenCV 和无 OpenCV 两种环境，成片逐像素与 v1.6.1 相同。回执里贴回工具名修正为实际使用的 `keep_regions_content`（以前有 OpenCV 时误记成 text_restore）。
+- 文档：`capability_tiers.md` 改写到 v1.6（自检不加 `-I`；T1/T2 走 `--g-direct` / `--quick-n`）；`delivery.md` 按宿主写存图方式（ChatGPT iPhone：G 中间稿可长按存；.jpg 链接先进“文件”，再“存储图像”进照片）；建筑、室内、静物题材页去掉 clarity、局部反差、intensity_check 等旧路线参数。
+
+## v1.6.1 相对 v1.6.0（第一轮对比用，待盲选验收）
+
+只改 `SKILL.md` 第 1 步的读片和写法，固定提示词（含 0003 的约束段）、工具和交付都不变。起因：大规模测试中只有 v1.4.1 的 G 稿质量最高；对比两版后，固定提示词之外的差别在于模型写给 G 的那句提升动作——v1.4.1 先读 story_style（风格方向表）和 craft_reading（光、色、影调、引导、空间），v1.5.0 起没有。
+- 读片恢复为三份参考：题材页一页、`story_style.md` 第 1–2 节、`craft_reading.md`；读完写“最值钱的一点、最大的毛病、不能丢的气质”。其中的旧路线参数（measure.py、clarity 等）忽略。不恢复 measure.py 和 director_brief.md（它们服务于旧的 N 路线，不进 G 提示词）。
+- 写法说明搬回：风格方向翻成具体光色手段并点出主角；主光英文示例分方向光、阴天漫射光两句；画面确有瓷釉、玻璃、金属、水面反光时才写保留真实高光那句。
+- 验收：5 张原片（3 张常规光影 + 2 张暗调或夜景），G 稿对 v1.4.1 盲选；打平或胜出才合并。输了再测第二轮（去掉 0003 的约束段，靠哨兵兜底）。
+
+## v1.6.0 相对 v1.5.0
+
+只改工具，不改提示词和规则；用 7 张固定回归原片（灯笼、黄墙、庭院、回廊、西湖、澳门夜街、树影老墙）整组验收。
+- 新增两个只读哨兵（`sentinel.py`，g-direct 自动运行，约 0.1 秒）：G 的细纹理比原片强超过 1.10 倍（材质被重画），或原片很暗的区域里细节多出 2.0 倍以上（暗部脑补），回执 `next` 写出位置、要求对照原片复看；只报不拦。16 组样本上：用户否掉的稿 1.14–1.69 / 2.65–3.94，通过的稿 0.90–1.06（一张 v1.4.1 灯笼稿 1.22）/ 0.98–1.62。偏色和“阴影新亮块”两项量不准，没有上。
+- 快速 N 给极暗原片补层次：中位亮度低于 15 且暗区超过六成时（7 张里只有灯笼），在 `grade.py` 之后加一层平滑的提亮（最暗 5% 不动、亮处和灯不动、四周比主体弱），提亮的暗部去掉一半蓝绿偏色。其余 6 张的快速 N 结果逐像素不变。
+- 交付改为可点击的 .jpg 链接（成片 + 用到的中间稿，`to_jpeg.py`，原尺寸、质量 95）：2026-11-26 iPhone 实测，代码在对话里显示的图存不进照片 App，.jpg / .png 链接点开后可以“存储图像”。JPEG 比 PNG 小数倍、清晰度相同。
+- keep 贴回提速：每个框只在自己周围的窗口里计算，结果逐像素不变；澳门夜街 39 框整条 g-direct 无 OpenCV 时 90 秒 → 24 秒（有 OpenCV 25 → 10 秒）。小于 16 像素的框改为以中心放大后贴回（以前会被静默丢掉）；接缝只在色差超过 6 时提示（3–6 在用户通过的成片里看不出），夜街提示从 12 条降到 3 条。
 
 ## v1.5.0 相对 v1.4.6（终版收口）
 

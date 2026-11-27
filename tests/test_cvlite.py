@@ -5,7 +5,7 @@ import json, os, subprocess, sys
 from pathlib import Path
 import numpy as np
 import pytest
-from conftest import TOOLS, load
+from conftest import LEGACY, TOOLS, load
 
 sys.path.insert(0, str(TOOLS))
 import cvlite as L
@@ -57,20 +57,21 @@ def test_alignment_refuses_another_scene():
 
 
 def test_pipeline_runs_with_opencv_blocked(tmp_path):
+    # v1.6.2: the v1.4 default route (pipeline.py without flags, texture_blend.py) lives in legacy/v1.4
     block = tmp_path / 'block'; block.mkdir()
     (block / 'cv2.py').write_text('raise ImportError("OpenCV blocked for this test")\n')
     env = {**os.environ, 'PYTHONPATH': str(block)}
     case = sorted(p for p in REALG.iterdir() if (p / 'g.png').exists())[0]
-    sc = json.loads(subprocess.run([sys.executable, '-B', str(TOOLS / 'selfcheck.py')], capture_output=True, text=True, env=env).stdout)
+    sc = json.loads(subprocess.run([sys.executable, '-B', str(LEGACY / 'selfcheck.py')], capture_output=True, text=True, env=env).stdout)
     assert sc['modules']['cv2'] is None and sc['tools']['pipeline.py'] and not sc['tools']['texture_blend.py']
     out = tmp_path / 'final.png'
-    p = subprocess.run([sys.executable, '-B', str(TOOLS / 'pipeline.py'), case / 'original.jpeg', case / 'g.png', case / 'params.json', out],
+    p = subprocess.run([sys.executable, '-B', str(LEGACY / 'pipeline.py'), case / 'original.jpeg', case / 'g.png', case / 'params.json', out],
                        capture_output=True, text=True, env=env)
     assert p.returncode == 0, p.stderr
     rec = json.loads(p.stdout)
     assert out.exists() and rec['verdict'].startswith('DELIVER')
     assert not str(rec['steps']['finish']['delivered']).startswith('n_direct'), rec['steps']['finish']   # G was used
-    t = subprocess.run([sys.executable, '-B', str(TOOLS / 'texture_blend.py'), case / 'original.jpeg', out, tmp_path / 't.png'],
+    t = subprocess.run([sys.executable, '-B', str(LEGACY / 'texture_blend.py'), case / 'original.jpeg', out, tmp_path / 't.png'],
                        capture_output=True, text=True, env=env)
     assert json.loads(t.stdout)['verdict'].startswith('SKIPPED_NO_OPENCV')
     assert np.array_equal(load(out), load(tmp_path / 't.png'))

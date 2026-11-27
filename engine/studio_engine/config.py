@@ -14,7 +14,7 @@ from pathlib import Path
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = ENGINE_DIR.parent
-DEFAULT_TOOLS = REPO_DIR / 'photographic-studio' / 'optional'
+DEFAULT_TOOLS = REPO_DIR / 'legacy' / 'v1.4' / 'optional'   # v1.6.2: the engine runs the v1.4 route, archived here
 
 
 @dataclass

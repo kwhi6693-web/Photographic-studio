@@ -10,12 +10,12 @@ import numpy as np
 from PIL import Image
 
 from keep_regions import regions_of
-from look_transfer import confidence, cv2, register
+import sentinel
+from look_transfer import cv2, register
 from pipeline import reframe_args, tool
-from ps_common import blur, box, load_rgb, save_png, sky_mask, srgb_to_lab, structure_mask
+from ps_common import blur, box, load_rgb, save_png, sky_mask, srgb_to_lab
 
 SERIOUS_PHYSICS = frozenset(('halo', 'ghost_edges', 'sky_glow', 'tone_order', 'spotlight_glow'))
-RETRY_G = '重抽一次 G 后再运行 g_first.py；第二次仍失败就走默认路线。'   # standalone light route (pipeline --g-first removed in v1.4.6)
 # v1.5.0 --g-direct: G's own pixels are the photo. Only hard failures stop it: scene mismatch (collage, new framing)
 # or no alignment ask for a second draw; in draw 2, or for any other hard failure (unreadable input, museum without
 # keep, failed restore or reframe), pipeline.py delivers quick N instead. Colour ratio, physics and confidence are
@@ -210,43 +210,14 @@ def pixel_boxes(regions, shape):
             for x0, y0, x1, y1 in (region['box'] for region in regions)]
 
 
-def check_confidence(source_l, generated_l, sky, boxes, fallback_area):
-    eligible = ~sky
-    for x0, y0, x1, y1 in boxes:
-        eligible[y0:y1, x0:x1] = False
-    low = (confidence(source_l, generated_l) < 0.3) & eligible
-    area = float(low.sum() / eligible.sum()) if eligible.any() else None
-    flags = []
-    if low.any():
-        _, labels, stats, _ = cv2.connectedComponentsWithStats(low.astype(np.uint8), connectivity=8)
-        contrast = structure_mask(source_l, sky)
-        contrast_by_label = np.bincount(labels.ravel(), weights=contrast.ravel(), minlength=len(stats))
-        for label, (x, y, w, h, count) in enumerate(stats[1:], 1):
-            share = float(count / low.size)
-            if share < 0.005 and contrast_by_label[label] / count >= 0.5:
-                flags.append({'box': [int(x), int(y), int(x + w), int(y + h)], 'area': share})
-        flags.sort(key=lambda flag: flag['box'])
-    if area is None:
-        verdict = 'NO_ELIGIBLE_PIXELS'
-    elif fallback_area is not None and area > fallback_area:
-        verdict = 'FALLBACK: low confidence area'
-    else:
-        verdict = 'WARN: low confidence pixels' if area else 'PASS'
-    return {'low_area_outside_keep': area, 'small_flags': flags, 'verdict': verdict}
-
-
-def restore_details(source, aligned, destination, folder, regions, boxes, lite):
-    tool_name = 'keep_regions_content' if lite else 'text_restore'
+def restore_details(source, aligned, destination, folder, regions, boxes):
+    tool_name = 'keep_regions_content'
     if not boxes:
         return {'tool': tool_name, 'boxes': [], 'verdict': 'NO_REGIONS', 'seam_flags': []}
-    if lite:
-        regions_file = folder / 'keep.json'
-        regions_file.write_text(json.dumps([{**region, 'mode': 'content'} for region in regions]),
-                                encoding='utf-8')
-        report = tool('keep_regions.py', source, aligned, destination, regions_file)
-    else:
-        report = tool('text_restore.py', source, aligned, destination, folder / 'restore.json',
-                      *(','.join(map(str, box)) for box in boxes))
+    regions_file = folder / 'keep.json'
+    regions_file.write_text(json.dumps([{**region, 'mode': 'content'} for region in regions]),
+                            encoding='utf-8')
+    report = tool('keep_regions.py', source, aligned, destination, regions_file)
     return {'tool': tool_name, 'boxes': boxes, 'verdict': report.get('verdict'),
             'seam_flags': report.get('flags', [])}
 
@@ -276,7 +247,7 @@ def resolve_ghost_limit(params, cli_value=None):
 
 def run(source, generated, params, output, genre=None, *, confidence_fallback_area=None,
         darkening_thresholds=(None, None), skip_reason=None, ghost_residual_limit_cli=None,
-        direct=False, draw=1):
+        direct=True, draw=1):
     """Return the light-route receipt. dL gates stay unset pending fixture review.
 
     direct (v1.4.4, --g-direct): no texture blend; low-confidence and darkening stay report-only; a serious
@@ -292,15 +263,18 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
     alignment is no longer flagged.
     v1.4.5: in direct mode keep restore always uses keep_regions content mode (same result with or without
     OpenCV; never stops on a per-box match score), and optical problems are judged only by the final check,
-    after keep restore has replaced what G broke; the pre-restore physics result is reported only."""
+    after keep restore has replaced what G broke; the pre-restore physics result is reported only.
+    v1.6.2: only the direct mode is left (the v1.4 g-first mode with texture blend and text_restore was removed)."""
+    if not direct:
+        raise ValueError('the non-direct g-first mode was removed in v1.6.2; use --g-direct')
     lite = getattr(cv2, 'LITE', False)
     regions = regions_of(params)
     ghost_setting = resolve_ghost_limit(params, ghost_residual_limit_cli)
     ghost_residual_limit = ghost_setting['value']
-    restore_tool = 'keep_regions_content' if lite else 'text_restore'
+    restore_tool = 'keep_regions_content'   # v1.4.5: direct mode always restores with keep_regions
     steps = {
-        'mode': 'g-direct' if direct else 'g-first',
-        'g_draw': draw if direct else None,
+        'mode': 'g-direct',
+        'g_draw': draw,
         'backend': 'cvlite' if lite else 'opencv',
         'keep': [{'what': region['what'], 'box': region['box'], 'mode': region['mode']} for region in regions],
         'ghost_residual_limit': ghost_setting,
@@ -331,12 +305,10 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
             steps['next'].append(hint)
             return {'tool': 'g_first.py', 'steps': {'g_first': steps}, 'verdict': verdict,
                     'next': steps['next'], 'output': None}
-        verdict = f'FALLBACK: {reason}' if reason else ('DELIVER_G_DIRECT' if direct else 'DELIVER_G_FIRST')
+        verdict = f'FALLBACK: {reason}' if reason else 'DELIVER_G_DIRECT'
         steps['verdict'] = verdict
-        if reason and direct:
+        if reason:
             steps['next'].append(QUICK_N)
-        if reason and not direct:
-            steps['next'].append(RETRY_G)
         return {'tool': 'g_first.py', 'steps': {'g_first': steps}, 'verdict': verdict,
                 'next': steps['next'], 'output': None if reason else str(output)}
 
@@ -373,58 +345,36 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
         source_grid, current = folder / 'source.png', folder / 'aligned.png'
         save_png(original, source_grid)
         save_png(aligned, current)
-        if direct:
-            precheck['physics_g'] = {'serious': None, 'hints': None, 'verdict': 'SKIPPED_G_DIRECT'}
-        else:
-            precheck['physics_g'] = physics(source_grid, current, ghost_residual_limit)
+        precheck['physics_g'] = {'serious': None, 'hints': None, 'verdict': 'SKIPPED_G_DIRECT'}
         lab_source, lab_g = srgb_to_lab(original), srgb_to_lab(load_rgb(current))
         sky = sky_mask(lab_source[..., 0])
         boxes = pixel_boxes(regions, original.shape)
         precheck['drift'] = measure_drift(lab_source, lab_g, ~sky, darkening_thresholds)
         if direct:
-            precheck['confidence'] = {'low_area_outside_keep': None, 'small_flags': [], 'verdict': 'SKIPPED_G_DIRECT'}
-        else:
-            precheck['confidence'] = check_confidence(lab_source[..., 0], lab_g[..., 0], sky, boxes,
-                                                     confidence_fallback_area)
+            # v1.6.0: read-only sentinels (texture redraw, invented shadow detail): report and ask for a look, never stop
+            try:
+                precheck['sentinel'] = sentinel.measure(original, aligned, coverage)
+            except Exception as error:  # a sentinel must never cost a delivery
+                precheck['sentinel'] = {'verdict': f'ERROR: {error}'}
+        precheck['confidence'] = {'low_area_outside_keep': None, 'small_flags': [], 'verdict': 'SKIPPED_G_DIRECT'}
 
         failures = []
         if scene.get('scene_correspondence_ok') is not True:
             failures.append('scene correspondence')
-        if not direct:
-            if precheck['physics_g'].get('error'):
-                failures.append('G physics check unavailable')
-            failures.extend(precheck['physics_g']['serious'])
-            for name in ('drift', 'confidence'):
-                verdict = precheck[name]['verdict']
-                if verdict.startswith('FALLBACK: '):
-                    failures.append(verdict.removeprefix('FALLBACK: '))
-        elif precheck['drift']['verdict'].startswith('FALLBACK: '):
+        if precheck['drift']['verdict'].startswith('FALLBACK: '):
             precheck['drift']['verdict'] = 'REPORT: ' + precheck['drift']['verdict'].removeprefix('FALLBACK: ')
         if failures:
             return finish('precheck: ' + ', '.join(failures))
+        if direct and precheck.get('sentinel', {}).get('flags'):
+            steps['next'].append(sentinel.recheck_note(precheck['sentinel']))
 
         restored = folder / 'restored.png'
-        steps['restore'] = restore_details(source_grid, current, restored, folder, regions, boxes,
-                                           lite or direct)
+        steps['restore'] = restore_details(source_grid, current, restored, folder, regions, boxes)
         if boxes:
             if not restored.exists() or str(steps['restore']['verdict']).startswith('STOP'):
                 return finish('keep restore failed')
             current = restored
-        if direct:
-            steps['texture'] = 'OFF_G_DIRECT'
-        elif lite:
-            steps['texture'] = 'NOT_RUN_NO_OPENCV'
-            steps['degraded'].append('texture_skipped_no_opencv')
-        else:
-            strength = float(np.clip(float((params.get('g_first') or {}).get('texture_strength', 0.5)), 0, 0.5))
-            textured = folder / 'textured.png'
-            texture = tool('texture_blend.py', source_grid, current, textured, '--mode=auto',
-                           f'--strength={strength}')
-            steps['texture'] = {'strength': strength, 'verdict': texture.get('verdict')}
-            if textured.exists():
-                current = textured
-            else:
-                steps['degraded'].append('texture_not_applied')
+        steps['texture'] = 'OFF_G_DIRECT'
 
         geometry = reframe_args(params.get('reframe') or {})
         if geometry:
@@ -481,12 +431,7 @@ def run(source, generated, params, output, genre=None, *, confidence_fallback_ar
         candidate = folder / 'candidate.png'
         save_png(load_rgb(current), candidate)
         final = steps['physics_final'] = physics(source_grid, candidate, ghost_residual_limit)
-        if final.get('error') and not direct:
-            return finish('final physics check unavailable')
-        if final.get('serious') and not direct:
-            return finish('final physics: ' + ', '.join(final['serious']))
-        if direct:
-            final['verdict'] = 'REPORT_ONLY_G_DIRECT'
+        final['verdict'] = 'REPORT_ONLY_G_DIRECT'
         shutil.copyfile(candidate, output)
         return finish()
 
@@ -496,7 +441,7 @@ def main():
     for name in ('source', 'g_output', 'params_json', 'out_png', 'receipt_json'):
         parser.add_argument(name)
     parser.add_argument('--genre', choices=('museum', 'night'))
-    parser.add_argument('--g-direct', action='store_true', help='v1.4.4 G-direct mode (opt-in)')
+    parser.add_argument('--g-direct', action='store_true', help='G-direct mode (the only mode since v1.6.2; kept for old command lines)')
     parser.add_argument('--g-draw', type=int, choices=(1, 2), default=1, help='which G draw this is (--g-direct)')
     parser.add_argument('--ghost-residual-limit', type=float, default=None,
                         help='loosen or tighten the ghost residual limit (0-1); only the user or a work order '
@@ -507,7 +452,7 @@ def main():
     try:
         receipt = run(args.source, args.g_output, params, args.out_png, args.genre,
                       ghost_residual_limit_cli=args.ghost_residual_limit,
-                      direct=args.g_direct, draw=args.g_draw)
+                      direct=True, draw=args.g_draw)
     except ValueError as exc:
         parser.error(str(exc))
     report = json.dumps(receipt, ensure_ascii=False, indent=1)

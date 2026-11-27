@@ -5,7 +5,11 @@ import numpy as np
 import pytest
 
 import g_first
-from conftest import ROOT, load, run_tool, synth
+from conftest import ROOT, load, load_legacy, run_tool, synth
+
+# v1.6.2: the standalone light route and the --g-first ghost gate were removed from the package's g_first.py; their
+# tests run on the pre-slim snapshot in legacy/v1.4 (same assertions).
+g_first_v14 = load_legacy('g_first')
 
 FIXTURES = ROOT / 'tests' / 'fixtures'
 LITE = getattr(g_first.cv2, 'LITE', False)
@@ -39,6 +43,7 @@ def test_alignment_uses_source_to_g_map_once(monkeypatch):
 
 
 def test_all_prechecks_run_even_when_scene_fails(tmp_path, monkeypatch):
+    g_first = g_first_v14
     source, generated, _ = real_g('b1_02')
     photo = load(source)
     monkeypatch.setattr(g_first, 'align_g', lambda *_: (photo, {'ok': True}))
@@ -206,7 +211,7 @@ def test_narrow_ghost_gate_accepts_supported_real_edges(tmp_path, name):
     source, draft, params_file = real_g(name)
     params = json.loads(params_file.read_text())
     assert 'ghost_residual_limit' not in params.get('g_first', {})
-    receipt = g_first.run(source, draft, params, tmp_path / 'out.png')
+    receipt = g_first_v14.run(source, draft, params, tmp_path / 'out.png')
     steps = receipt['steps']['g_first']
     physics = steps['precheck']['physics_g']
     ghost = next(h for h in physics['hints'] if isinstance(h, dict) and 'ghost_raw' in h)
@@ -220,7 +225,7 @@ def test_narrow_ghost_gate_accepts_supported_real_edges(tmp_path, name):
 def test_explicit_ghost_residual_limit_overrides_default(tmp_path):
     source, draft, _ = real_g('b1_01')
     params = {'g_first': {'ghost_residual_limit': 0}}
-    receipt = g_first.run(source, draft, params, tmp_path / 'out.png')
+    receipt = g_first_v14.run(source, draft, params, tmp_path / 'out.png')
     assert receipt['verdict'].startswith('FALLBACK: precheck: ghost_edges')
     report = receipt['steps']['g_first']['precheck']['physics_g']
     assert 'ghost_edges' in report['serious']
@@ -262,7 +267,7 @@ def test_out_of_range_ghost_limit_is_an_error(params, cli):
 
 def test_loosening_in_params_is_ignored_and_recorded(tmp_path):
     source, draft, _ = real_g('b1_01')
-    receipt = g_first.run(source, draft, {'g_first': {'ghost_residual_limit': 0.5}}, tmp_path / 'out.png')
+    receipt = g_first_v14.run(source, draft, {'g_first': {'ghost_residual_limit': 0.5}}, tmp_path / 'out.png')
     steps = receipt['steps']['g_first']
     setting = steps['ghost_residual_limit']
     assert setting['value'] == 0.02 and setting['source'] == 'default'
@@ -272,7 +277,7 @@ def test_loosening_in_params_is_ignored_and_recorded(tmp_path):
 
 
 def test_command_line_limit_beats_params_through_pipeline(tmp_path):
-    source, draft, _ = real_g('b1_01')
+    source, draft, _ = real_g('b1_04')   # v1.6.3: b1_01 is very dark and goes to the look route; b1_04 stays on G direct
     params = tmp_path / 'params.json'
     params.write_text(json.dumps({'g_first': {'ghost_residual_limit': 0}}))
     output, receipt = tmp_path / 'final.png', tmp_path / 'receipt.json'
@@ -298,11 +303,12 @@ def test_out_of_range_command_line_limit_exits_nonzero(tmp_path, tool_name):
 # --g-direct (v1.5.0): G's own pixels, no texture blend; only hard failures stop it.
 
 def test_direct_delivers_without_texture(tmp_path):
-    source, generated, params = real_g('b1_02')
+    source, generated, params = real_g('b1_05')   # v1.6.3: b1_02 is very dark and goes to the look route
     output, receipt = tmp_path / 'direct.png', tmp_path / 'direct.json'
     result = run_cli('pipeline.py', source, generated, params, output, receipt, '--g-direct')
     steps = result['steps']['g_first']
-    assert set(result['steps']) == {'g_first'}
+    assert set(result['steps']) == {'look_trigger', 'g_first'}   # v1.6.3: the trigger is computed and recorded
+    assert not result['steps']['look_trigger']['straight_to_look']
     assert result['backend'] == ('cvlite' if LITE else 'opencv')
     assert steps['mode'] == 'g-direct' and steps['g_draw'] == 1
     assert steps['texture'] == 'OFF_G_DIRECT'
@@ -368,7 +374,7 @@ def test_direct_chroma_ratio_is_report_only(tmp_path):
     assert drift['verdict'] == 'REPORT: non-sky chroma ratio'
     assert receipt['verdict'] == 'DELIVER_G_DIRECT'
     assert not any('颜色不要比原片浓' in line for line in receipt['next'])
-    light = g_first.run(source, generated, {}, tmp_path / 'light.png')
+    light = g_first_v14.run(source, generated, {}, tmp_path / 'light.png')
     assert 'non-sky chroma ratio' in light['verdict']   # the standalone light route keeps its ceiling
 
 
@@ -395,7 +401,7 @@ def test_direct_skips_too_tight_crop(tmp_path):
 
 def test_pipeline_redraw_does_not_run_default_route(tmp_path, monkeypatch):
     import pipeline
-    source, generated, params = real_g('b1_02')
+    source, generated, params = real_g('b1_05')   # v1.6.3: b1_02 is very dark and would go to the look route
     monkeypatch.setattr(g_first, 'run', lambda *a, **k: {
         'verdict': 'REDRAW_G: precheck: scene correspondence', 'next': [g_first.REDRAW_HINTS['scene correspondence']],
         'steps': {'g_first': {'mode': 'g-direct'}}, 'output': None})
@@ -404,7 +410,7 @@ def test_pipeline_redraw_does_not_run_default_route(tmp_path, monkeypatch):
                                      str(tmp_path / 'o.png'), str(receipt), '--g-direct'])
     assert pipeline.main() == 0
     result = json.loads(receipt.read_text())
-    assert set(result['steps']) == {'g_first'}
+    assert set(result['steps']) == {'look_trigger', 'g_first'}
     assert result['output'] is None and result['verdict'].startswith('REDRAW_G')
     assert not (tmp_path / 'o.png').exists()
 
@@ -435,9 +441,12 @@ def test_direct_restore_is_backend_independent(tmp_path, monkeypatch):
 
 
 def test_pipeline_fallback_delivers_quick_n(tmp_path, monkeypatch):
-    """v1.5.0: a hard G failure delivers quick N in the same command, never the legacy default route."""
+    """v1.5.0: a hard G failure delivers quick N in the same command, never the legacy default route.
+    v1.6.3 (approved 2026-11-26): the look route is tried first; quick N follows only when it cannot be done."""
     import pipeline
-    source, generated, params = real_g('b1_02')
+    import look_route
+    source, generated, params = real_g('b1_05')
+    monkeypatch.setattr(look_route, 'run', lambda *a, **k: {'verdict': 'FAILED: G cannot be aligned'})
     monkeypatch.setattr(g_first, 'run', lambda *a, **k: {
         'verdict': 'FALLBACK: museum without keep', 'next': [g_first.QUICK_N],
         'steps': {'g_first': {'mode': 'g-direct'}}, 'output': None})
@@ -448,7 +457,7 @@ def test_pipeline_fallback_delivers_quick_n(tmp_path, monkeypatch):
                                      str(target), str(receipt), '--g-direct'])
     assert pipeline.main() == 0
     result = json.loads(receipt.read_text())
-    assert set(result['steps']) == {'g_first', 'quick_n'}
+    assert set(result['steps']) == {'look_trigger', 'g_first', 'look', 'quick_n'}
     assert result['verdict'] == 'DELIVER_QUICK_N (G hard failure: museum without keep)'
     assert load(target).shape == load(source).shape
 
@@ -486,10 +495,11 @@ def test_direct_drops_aspect_flag_after_alignment(tmp_path, monkeypatch):
         return real_tool(name, *args)
 
     monkeypatch.setattr(g_first, 'tool', tool)
+    monkeypatch.setattr(g_first_v14, 'tool', tool)
     direct = g_first.run(source, generated, {}, tmp_path / 'd.png', direct=True)['steps']['g_first']
     assert 'ASPECT_CHANGED' not in direct['precheck']['check_g_output']['verdict']
     assert direct['precheck']['check_g_output']['aspect_note']
-    light = g_first.run(source, generated, {}, tmp_path / 'l.png')['steps']['g_first']
+    light = g_first_v14.run(source, generated, {}, tmp_path / 'l.png')['steps']['g_first']
     assert 'ASPECT_CHANGED' in light['precheck']['check_g_output']['verdict']
 
 
@@ -507,3 +517,27 @@ def test_keep_preview_draws_boxes_and_grid(tmp_path):
     assert (edge[..., 0] > 0.9).mean() > 0.8   # the red box edge is drawn
     params.write_text('{}')
     assert run_cli('keep_preview.py', source, params, preview)['verdict'].startswith('NO_REGIONS')
+
+
+def test_pipeline_fallback_tries_the_look_route_first(tmp_path, monkeypatch):
+    """v1.6.3 (approved 2026-11-26): a hard G failure on a normal photo delivers 'original pixels + G light/colour'."""
+    import pipeline
+    source, generated, params = real_g('b1_05')
+    monkeypatch.setattr(g_first, 'run', lambda *a, **k: {
+        'verdict': 'FALLBACK: museum without keep', 'next': [g_first.QUICK_N],
+        'steps': {'g_first': {'mode': 'g-direct'}}, 'output': None})
+    receipt, target = tmp_path / 'r.json', tmp_path / 'o.png'
+    monkeypatch.setattr('sys.argv', ['pipeline.py', str(source), str(generated), str(params),
+                                     str(target), str(receipt), '--g-direct'])
+    assert pipeline.main() == 0
+    result = json.loads(receipt.read_text())
+    assert result['verdict'] == 'DELIVER_LOOK (G hard failure: museum without keep)'
+    assert 'quick_n' not in result['steps'] and target.exists()
+
+
+def test_bad_options_fail_before_the_look_route(tmp_path):
+    """v1.6.3 fix: on a very dark original the look route ran before the options were checked."""
+    source, draft, params = real_g('b1_01')
+    process = run_tool('pipeline.py', source, draft, params, tmp_path / 'o.png', tmp_path / 'r.json',
+                       '--g-direct', '--g-draw=3')
+    assert process.returncode != 0 and 'g-draw' in process.stderr
