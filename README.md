@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.6.3-c8963e?style=flat-square" alt="version 1.6.3">
+  <img src="https://img.shields.io/badge/version-1.6.4-c8963e?style=flat-square" alt="version 1.6.4">
   <img src="https://img.shields.io/badge/engine-2.3.1%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.1">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/non--portrait-architecture·street·landscape·night·museum-3a5ba8?style=flat-square" alt="non-portrait">
@@ -115,7 +115,7 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 | **G** | the image model of your agent (or of an API). It makes a draft; **only its light and colour are used** |
 | **N** | this project's own tools: fixed rules, no AI; they align the draft, paste back protected details, crop and protect highlights — and make the photo on their own when no G draft is usable |
 | **Director's brief** | what the agent writes after reading the photo: the point of interest (a story is one kind; also geometry, light, colour, texture, mood, space, minimalism), diagnoses, subject, tone, colour, what must not change, crop |
-| **Label** | how a photo was made (v1.6.3): `G direct + detail restore` (default) · `original pixels + G light & colour` (very dark photos, large protected areas, or when G direct fails) · `N direct` (no usable G draft) · `+ reframe` when cropped |
+| **Label** | how a photo was made (v1.6.4): `G direct + detail restore` (default) · `original pixels + G light & colour` (very dark photos, large protected areas, or when G direct fails) · `N direct` (no usable G draft) · `+ reframe` when cropped |
 | **Receipt** | the record of one photo: brief, prompt, parameters, check results. Hidden unless you say `show receipt` |
 | **Capability tiers** | what the skill does when your agent can't edit images or run Python (T1–T4, below) |
 | **Engine** | the same pipeline as a Python program, using model APIs with your own key (developers) |
@@ -126,7 +126,7 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 
 ## 🎬 How it edits a photo
 
-> **v1.6.3 note:** the steps below describe the v1.2.6 design. Since then the delivery route has changed: most photos are delivered as **G direct + detail restore** (the text, signs, people and exhibits you see are pasted back from your original); very dark photos, or photos whose protected areas cover over 40% of the frame, use **original pixels + G light & colour**. The step-4 refine-and-harmonize pass belongs to the old v1.4 route, now archived in `legacy/v1.4/`. See [Changes](#-changes).
+> **v1.6.4 note:** the steps below describe the v1.2.6 design. Since then the delivery route has changed: most photos are delivered as **G direct + detail restore** (the text, signs, people and exhibits you see are pasted back from your original); very dark photos, or photos whose protected areas cover over 40% of the frame, use **original pixels + G light & colour**. The step-4 refine-and-harmonize pass belongs to the old v1.4 route, now archived in `legacy/v1.4/`. See [Changes](#-changes).
 
 <p align="center">
   <img src="docs/images/pipeline.svg" alt="Read → Director's brief → Light & colour → Refine & check → One photo" width="100%">
@@ -379,5 +379,5 @@ The example and test photographs (`docs/gallery/`, `docs/history/taste/`, `tests
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.6.3 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
+  <sub>Photographic Studio v1.6.4 · made for non-portrait photography · built together with Claude · code &amp; docs MIT · photos © the author</sub>
 </p>
