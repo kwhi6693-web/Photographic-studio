@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.6.3-c8963e?style=flat-square" alt="version 1.6.3">
+  <img src="https://img.shields.io/badge/version-1.6.4-c8963e?style=flat-square" alt="version 1.6.4">
   <img src="https://img.shields.io/badge/engine-2.3.1%20prototype-3a5ba8?style=flat-square" alt="engine 2.3.1">
   <img src="https://img.shields.io/badge/Agent%20Skill-SKILL.md-1d2f63?style=flat-square" alt="Agent Skill">
   <img src="https://img.shields.io/badge/非人像-建築·街景·風光·夜景·展品-3a5ba8?style=flat-square" alt="非人像">
@@ -115,7 +115,7 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 | **G** | 你的 agent（或 API）內建的影像模型。它先出一版草圖，**只取它的光線和色彩** |
 | **N** | 本專案自己的工具：固定規則、不是 AI；負責對齊、貼回要保護的細節、裁切和高光保護；G 稿不能用時由它單獨出片 |
 | **導演單** | agent 讀片後寫的方案：看點（敘事、幾何、光影、色彩、質感、氛圍……）、診斷、主角、影調、色彩、不能動的、構圖 |
-| **成片標籤** | 這張照片是怎麼做出來的（v1.6.3）：`G 直出 + 細節貼回`（預設）·`原片畫素 + G 光色`（原片極暗、保護區很大，或 G 直出失敗時）·`N 直出`（G 稿不能用時）·裁過的加 `＋重構` |
+| **成片標籤** | 這張照片是怎麼做出來的（v1.6.4）：`G 直出 + 細節貼回`（預設）·`原片畫素 + G 光色`（原片極暗、保護區很大，或 G 直出失敗時）·`N 直出`（G 稿不能用時）·裁過的加 `＋重構` |
 | **回執** | 一張照片的處理記錄：導演單、提示詞、參數、檢查結論。預設不顯示，說「看回執」才給 |
 | **能力分級** | 你的 agent 不能改圖或不能執行 Python 時，skill 怎麼做（T1–T4，見下文） |
 | **引擎** | 同一套流程寫成的 Python 程式，用你自己的金鑰呼叫模型 API（面向開發者） |
@@ -126,7 +126,7 @@ steps: measure 1.3 s · brief · G · finish 26.0 s · settle 33.4 s · n_trim 0
 
 ## 🎬 它怎麼修一張照片
 
-> **v1.6.3 說明：** 下面的步驟描述的是 v1.2.6 的設計。之後交付路線已經改變：多數照片以 **G 直出 + 細節貼回** 交付（你看到的文字、招牌、人物、展品從原片畫素貼回）；原片極暗、或保護區合起來超過畫面 40% 時，走 **原片畫素 + G 光色**。第 4 步的精修與協調屬於舊的 v1.4 路線，已歸檔在 `legacy/v1.4/`。見[更新紀錄](#-更新紀錄)。
+> **v1.6.4 說明：** 下面的步驟描述的是 v1.2.6 的設計。之後交付路線已經改變：多數照片以 **G 直出 + 細節貼回** 交付（你看到的文字、招牌、人物、展品從原片畫素貼回）；原片極暗、或保護區合起來超過畫面 40% 時，走 **原片畫素 + G 光色**。第 4 步的精修與協調屬於舊的 v1.4 路線，已歸檔在 `legacy/v1.4/`。見[更新紀錄](#-更新紀錄)。
 
 <p align="center">
   <img src="docs/images/pipeline.zh-TW.svg" alt="讀片 → 導演單 → 只借光與色 → 精修與檢查 → 一張成片" width="100%">
@@ -377,5 +377,5 @@ Skill 本身（執行說明、參考檔案和工具）採用 [MIT 授權條款](
 ---
 
 <p align="center">
-  <sub>Photographic Studio v1.6.3 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
+  <sub>Photographic Studio v1.6.4 · 為非人像攝影而做 · 與 Claude 共同打造 · 程式碼與文件 MIT · 照片 © 作者本人</sub>
 </p>
