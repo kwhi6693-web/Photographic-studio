@@ -10,3 +10,6 @@ engine/config.toml
 
 # Private photographic audit inputs and working evidence
 /audit_local/
+
+# Private blind-test photos and runs (tools/blindtest)
+/blindtest_data/
