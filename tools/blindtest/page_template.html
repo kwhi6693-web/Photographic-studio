@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__</title>
+<style>
+/* Same-position tap-to-toggle blind test (Photographic Studio tools/blindtest).
+   Neutral grey ground in every theme so colour judgement is not biased; the photo is the whole page. */
+:root{color-scheme:dark;--bg:#2b2b2b;--ink:#eee;--mut:#9a9a9a;--btn:#3a3a3a}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,"PingFang SC","Noto Sans SC",sans-serif;overflow-x:clip}
+main{max-width:760px;margin:0 auto;padding:12px 12px 40px}
+.top{display:flex;justify-content:space-between;align-items:baseline;margin:4px 2px 10px}
+h1{font-size:20px;margin:0}.mut{color:var(--mut);font-size:14px}
+.frame{position:relative;width:100%;background:#222;border-radius:6px;overflow:hidden;cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.frame img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+.frame img.h{visibility:hidden}
+.tag{display:flex;justify-content:center;gap:10px;margin:10px 0}
+.tag span{padding:8px 18px;border-radius:20px;background:var(--btn);color:var(--mut);font-size:17px;font-weight:600}
+.tag span.on{background:#e8e8e8;color:#111}
+.row{display:grid;gap:8px;margin-top:8px}.r3{grid-template-columns:repeat(3,minmax(0,1fr))}.r2{grid-template-columns:repeat(2,minmax(0,1fr))}
+button{min-height:48px;font:inherit;font-size:16px;border:0;border-radius:10px;background:var(--btn);color:var(--ink);cursor:pointer}
+button.sel{background:#e8e8e8;color:#111}button:disabled{opacity:.4}
+button:focus-visible,input:focus-visible{outline:2px solid #fff;outline-offset:2px}
+input{width:100%;min-height:48px;margin-top:10px;font-size:16px;padding:0 12px;border-radius:10px;border:1px solid #555;background:#1f1f1f;color:var(--ink)}
+.next{width:100%;margin-top:12px;background:#d9d9d9;color:#111;font-weight:600}
+.hint{font-size:14px;color:var(--mut);margin:8px 2px 0}
+pre{white-space:pre-wrap;background:#1f1f1f;padding:14px;border-radius:10px;font-size:16px}
+#usable[hidden]{display:none}
+</style></head><body><main id="app">
+<div class="top"><h1>__TITLE__</h1><span class="mut" id="cnt"></span></div>
+<div class="frame" id="frame"><img id="i1" alt="图 1"><img id="i2" alt="图 2" class="h"></div>
+<div class="tag"><span id="t1" class="on">图 1</span><span id="t2">图 2</span></div>
+<p class="hint">点照片在原位切换，两张都看过才能作答。分不出就选「无明显差异」。__HINT__</p>
+<div class="row r3"><button id="b1" disabled>图 1 更好</button><button id="b0" disabled>无明显差异</button><button id="b2" disabled>图 2 更好</button></div>
+<div class="row r2" id="usable" hidden><button id="u1">两张都能发</button><button id="u0">差的这张不想发</button></div>
+<input id="w" maxlength="8" placeholder="一个直觉词（如：通透、闷、假）" autocomplete="off">
+<button class="next" id="nx" disabled>下一题</button>
+</main>
+<script>
+{
+const IMG=__IMG__;
+const Q=__QS__;
+let i=0,show=1,seen=false,pick=null,use=null;const res=[];
+const $=id=>document.getElementById(id);
+for(const k in IMG){new Image().src=IMG[k]}
+function load(){const q=Q[i];$('cnt').textContent=(i+1)+' / '+Q.length;
+ $('frame').style.aspectRatio=q.ar;$('i1').src=IMG[q.a];$('i2').src=IMG[q.b];
+ show=1;seen=false;pick=null;use=null;$('w').value='';paint();}
+function paint(){$('i1').classList.toggle('h',show!==1);$('i2').classList.toggle('h',show!==2);
+ $('t1').classList.toggle('on',show===1);$('t2').classList.toggle('on',show===2);
+ for(const id of['b1','b0','b2']){$(id).disabled=!seen;$(id).classList.toggle('sel',pick===id)}
+ const needUse=pick==='b1'||pick==='b2';$('usable').hidden=!needUse;
+ for(const id of['u1','u0'])$(id).classList.toggle('sel',use===id);
+ $('nx').disabled=!pick||(needUse&&!use);}
+$('frame').addEventListener('click',()=>{show=show===1?2:1;if(show===2)seen=true;paint()});
+for(const id of['b1','b0','b2'])$(id).addEventListener('click',()=>{pick=id;if(id==='b0')use=null;paint()});
+for(const id of['u1','u0'])$(id).addEventListener('click',()=>{use=id;paint()});
+$('nx').addEventListener('click',()=>{const m={b1:'1',b0:'平',b2:'2'};
+ const u=pick==='b0'?'':(use==='u1'?' 都能发':' 不想发');
+ res.push(Q[i].q+' '+m[pick]+u+' '+($('w').value.trim().replace(/\s+/g,'')||'-'));i++;
+ if(i<Q.length){load();window.scrollTo(0,0);return}
+ const t=res.join('\n');const a=$('app');a.innerHTML='';
+ const h=document.createElement('h1');h.textContent='完成，复制下面的结果发回';
+ const p=document.createElement('pre');p.textContent=t;
+ const b=document.createElement('button');b.className='next';b.textContent='复制结果';
+ b.addEventListener('click',()=>{navigator.clipboard.writeText(t).then(()=>b.textContent='已复制',()=>b.textContent='请长按上面的文字复制')});
+ a.append(h,p,b);});
+load();
+}
+</script></body></html>
